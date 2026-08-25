@@ -5,11 +5,14 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
 from hashlib import sha256
+from pathlib import Path
 import unicodedata
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from .filters import FilterConfig, match_text
+from .metrics import MetricNames, MetricsSink, NoOpMetrics
 from .observability import log_event
 from .opportunity_analysis import (
     OPPORTUNITY_ANALYSIS_SCHEMA_VERSION,
@@ -20,6 +23,7 @@ from .persistence.jobs import DurableJobRepository, JobClaim
 from .persistence.message_prefilter import (
     MessagePrefilterRepository,
     PrefilterResultRecord,
+    ShadowPrefilterEvaluationRepository,
 )
 from .persistence.raw_messages import (
     RAW_MESSAGE_JOB_TYPE,
@@ -29,6 +33,7 @@ from .persistence.raw_messages import (
 
 
 PREFILTER_SCHEMA_VERSION = "message-prefilter.v1"
+SHADOW_PREFILTER_SCHEMA_VERSION = "legacy-filter-shadow.v1"
 OPPORTUNITY_ANALYSIS_JOB_TYPE = "opportunity.analysis.v1"
 LOGGER = logging.getLogger("freelancer_bot")
 
@@ -117,8 +122,12 @@ class RawMessagePrefilterProcessor:
         prefilter: CheapMessagePrefilter | None = None,
         messages: RawMessageRepository | None = None,
         results: MessagePrefilterRepository | None = None,
+        shadow_evaluations: ShadowPrefilterEvaluationRepository | None = None,
         jobs: DurableJobRepository | None = None,
         dedup_policy: ExactDedupPolicy | None = None,
+        shadow_filter_config: FilterConfig | None = None,
+        shadow_filter_config_sha256: str | None = None,
+        metrics: MetricsSink | None = None,
         analyzer_version: str = OPPORTUNITY_ANALYZER_VERSION,
         analysis_schema_version: str = OPPORTUNITY_ANALYSIS_SCHEMA_VERSION,
         logger: logging.Logger | None = None,
@@ -127,8 +136,29 @@ class RawMessagePrefilterProcessor:
         self._prefilter = prefilter or CheapMessagePrefilter()
         self._messages = messages or RawMessageRepository()
         self._results = results or MessagePrefilterRepository()
+        self._shadow_evaluations = (
+            shadow_evaluations or ShadowPrefilterEvaluationRepository()
+        )
         self._jobs = jobs or DurableJobRepository()
         self._dedup_policy = dedup_policy or ExactDedupPolicy()
+        self._shadow_filter_config = shadow_filter_config
+        if shadow_filter_config is not None and shadow_filter_config_sha256 is None:
+            raise ValueError(
+                "shadow_filter_config_sha256 is required with shadow_filter_config"
+            )
+        if shadow_filter_config is None and shadow_filter_config_sha256 is not None:
+            raise ValueError(
+                "shadow_filter_config is required with shadow_filter_config_sha256"
+            )
+        self._shadow_filter_config_sha256 = (
+            None
+            if shadow_filter_config_sha256 is None
+            else _required_sha256(
+                shadow_filter_config_sha256,
+                "shadow_filter_config_sha256",
+            )
+        )
+        self._metrics = metrics or NoOpMetrics()
         self._analyzer_version = _required_version(
             analyzer_version,
             "analyzer_version",
@@ -148,6 +178,7 @@ class RawMessagePrefilterProcessor:
         if claim.job_type != RAW_MESSAGE_JOB_TYPE:
             raise ValueError("Prefilter processor received an unsupported job type")
 
+        shadow_metric_accepted: bool | None = None
         async with self._database.transaction() as connection:
             raw = await self._messages.get_for_job(connection, claim.id)
             if raw is None:
@@ -170,6 +201,10 @@ class RawMessagePrefilterProcessor:
                 analysis_input_sha256 = None
                 dedup_relation = None
                 if evaluation.decision is PrefilterDecision.PASSED:
+                    shadow_metric_accepted = await self._record_shadow_evaluation(
+                        connection,
+                        raw,
+                    )
                     parent = await self._direct_parent(connection, raw)
                     parent_raw_message_id = None if parent is None else parent.id
                     route = await self._route_exact_content(
@@ -220,6 +255,11 @@ class RawMessagePrefilterProcessor:
                 result = outcome.result
                 created = outcome.created
 
+        if shadow_metric_accepted is not None:
+            self._metrics.increment(
+                MetricNames.PREFILTER_SHADOW_EVALUATIONS,
+                tags={"accepted": str(shadow_metric_accepted).lower()},
+            )
         log_event(
             self._logger,
             logging.INFO,
@@ -233,6 +273,30 @@ class RawMessagePrefilterProcessor:
             created=created,
         )
         return result
+
+    async def _record_shadow_evaluation(
+        self,
+        connection: AsyncConnection,
+        raw: RawMessageRecord,
+    ) -> bool | None:
+        if (
+            self._shadow_filter_config is None
+            or self._shadow_filter_config_sha256 is None
+        ):
+            return None
+        shadow = match_text(raw.content, self._shadow_filter_config)
+        outcome = await self._shadow_evaluations.record(
+            connection,
+            raw_message_id=raw.id,
+            schema_version=SHADOW_PREFILTER_SCHEMA_VERSION,
+            filter_config_sha256=self._shadow_filter_config_sha256,
+            min_score=self._shadow_filter_config.min_score,
+            accepted=shadow.accepted,
+            score=shadow.score,
+            matched_keywords=shadow.matched_keywords,
+            rejected_by=shadow.rejected_by,
+        )
+        return shadow.accepted if outcome.created else None
 
     async def _direct_parent(
         self,
@@ -427,4 +491,17 @@ def _required_version(value: str, name: str, limit: int) -> str:
         )
     ):
         raise ValueError(f"{name} must be a safe version identifier")
+    return normalized
+
+
+def filter_config_sha256(path: Path) -> str:
+    return sha256(path.read_bytes()).hexdigest()
+
+
+def _required_sha256(value: str, name: str) -> str:
+    normalized = value.strip().lower()
+    if len(normalized) != 64 or any(
+        character not in "0123456789abcdef" for character in normalized
+    ):
+        raise ValueError(f"{name} must be a lowercase SHA-256 hex digest")
     return normalized

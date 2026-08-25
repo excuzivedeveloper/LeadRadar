@@ -8,6 +8,7 @@ from uuid import UUID
 import sqlalchemy as sa
 
 from freelancer_bot.filters import FilterConfig, match_text
+from freelancer_bot.metrics import InMemoryMetrics, MetricNames
 from freelancer_bot.message_prefilter import (
     AnalyzerInputLoader,
     OPPORTUNITY_ANALYSIS_JOB_TYPE,
@@ -20,7 +21,10 @@ from freelancer_bot.observability import Redactor, configure_structured_logger
 from freelancer_bot.persistence.collector_accounts import CollectorAccountRepository
 from freelancer_bot.persistence.database import Database
 from freelancer_bot.persistence.jobs import DurableJobRepository, JobClaim
-from freelancer_bot.persistence.message_prefilter import MessagePrefilterRepository
+from freelancer_bot.persistence.message_prefilter import (
+    MessagePrefilterRepository,
+    ShadowPrefilterEvaluationRepository,
+)
 from freelancer_bot.persistence.raw_messages import (
     RAW_MESSAGE_JOB_TYPE,
     RawMessageIngestor,
@@ -30,6 +34,7 @@ from freelancer_bot.persistence.raw_messages import (
 from freelancer_bot.persistence.schema import (
     durable_jobs,
     message_prefilter_results,
+    message_prefilter_shadow_evaluations,
 )
 from freelancer_bot.persistence.source_repository import SourceRepository, SourceStatus
 from freelancer_bot.worker import DurableWorker, WorkerOptions
@@ -51,6 +56,7 @@ class MessagePrefilterPipelineTest(unittest.IsolatedAsyncioTestCase):
         self.accounts = CollectorAccountRepository()
         self.jobs = DurableJobRepository()
         self.results = MessagePrefilterRepository()
+        self.shadow_evaluations = ShadowPrefilterEvaluationRepository()
         self.source = None
         self.account = None
 
@@ -142,6 +148,109 @@ class MessagePrefilterPipelineTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(analysis_job["attempt_count"], 0)
         self.assertNotIn(content, stream.getvalue())
 
+    async def test_shadow_evaluation_is_recorded_for_normal_candidate(self):
+        content = "Нужно сделать Telegram-бота на FastAPI с REST API"
+        config = _shadow_filter_config()
+        processor = RawMessagePrefilterProcessor(
+            self.database,
+            shadow_filter_config=config,
+            shadow_filter_config_sha256=_shadow_hash(),
+        )
+        ingested = await self._ingest(704, content=content)
+        expected = match_text(content, config)
+
+        result = await processor.process(self._claim(ingested))
+
+        self.assertEqual(result.decision, PrefilterDecision.PASSED.value)
+        async with self.database.connect() as connection:
+            shadow = await self.shadow_evaluations.get_for_raw(
+                connection,
+                ingested.message.id,
+            )
+            analysis_count = await self._analysis_count(connection)
+        self.assertIsNotNone(shadow)
+        self.assertEqual(shadow.filter_config_sha256, _shadow_hash())
+        self.assertEqual(shadow.min_score, config.min_score)
+        self.assertEqual(shadow.accepted, expected.accepted)
+        self.assertEqual(shadow.score, expected.score)
+        self.assertEqual(shadow.matched_keywords, expected.matched_keywords)
+        self.assertEqual(shadow.rejected_by, expected.rejected_by)
+        self.assertEqual(analysis_count, 1)
+
+    async def test_legacy_false_negative_shadow_does_not_block_v2(self):
+        content = "Нужен Telegram-бот для учета склада и продаж"
+        config = _shadow_filter_config()
+        ingested = await self._ingest(705, content=content)
+        processor = RawMessagePrefilterProcessor(
+            self.database,
+            shadow_filter_config=config,
+            shadow_filter_config_sha256=_shadow_hash(),
+        )
+        legacy = match_text(content, config)
+        self.assertFalse(legacy.accepted)
+        self.assertEqual(legacy.rejected_by, ("склад",))
+
+        result = await processor.process(self._claim(ingested))
+
+        self.assertEqual(result.decision, PrefilterDecision.PASSED.value)
+        async with self.database.connect() as connection:
+            shadow = await self.shadow_evaluations.get_for_raw(
+                connection,
+                ingested.message.id,
+            )
+            analysis_count = await self._analysis_count(connection)
+        self.assertFalse(shadow.accepted)
+        self.assertEqual(shadow.rejected_by, ("склад",))
+        self.assertEqual(analysis_count, 1)
+
+    async def test_legacy_false_positive_hr_does_not_change_v2_routing(self):
+        content = "HR: ищем разработчика React TypeScript frontend"
+        config = _shadow_filter_config()
+        ingested = await self._ingest(706, content=content)
+        processor = RawMessagePrefilterProcessor(
+            self.database,
+            shadow_filter_config=config,
+            shadow_filter_config_sha256=_shadow_hash(),
+        )
+        legacy = match_text(content, config)
+
+        result = await processor.process(self._claim(ingested))
+
+        self.assertEqual(result.decision, PrefilterDecision.PASSED.value)
+        async with self.database.connect() as connection:
+            shadow = await self.shadow_evaluations.get_for_raw(
+                connection,
+                ingested.message.id,
+            )
+            analysis_count = await self._analysis_count(connection)
+        self.assertEqual(shadow.accepted, legacy.accepted)
+        self.assertEqual(shadow.matched_keywords, legacy.matched_keywords)
+        self.assertEqual(analysis_count, 1)
+
+    async def test_stack_only_shadow_does_not_change_v2_routing(self):
+        content = "Docker VPS Redis PostgreSQL"
+        config = _shadow_filter_config()
+        ingested = await self._ingest(707, content=content)
+        processor = RawMessagePrefilterProcessor(
+            self.database,
+            shadow_filter_config=config,
+            shadow_filter_config_sha256=_shadow_hash(),
+        )
+        legacy = match_text(content, config)
+
+        result = await processor.process(self._claim(ingested))
+
+        self.assertEqual(result.decision, PrefilterDecision.PASSED.value)
+        async with self.database.connect() as connection:
+            shadow = await self.shadow_evaluations.get_for_raw(
+                connection,
+                ingested.message.id,
+            )
+            analysis_count = await self._analysis_count(connection)
+        self.assertEqual(shadow.accepted, legacy.accepted)
+        self.assertEqual(shadow.score, legacy.score)
+        self.assertEqual(analysis_count, 1)
+
     async def test_empty_and_service_events_stop_before_analysis_queue(self):
         empty = await self._ingest(702, content="  ")
         service = await self._ingest(
@@ -149,7 +258,11 @@ class MessagePrefilterPipelineTest(unittest.IsolatedAsyncioTestCase):
             content="A member joined",
             metadata={"service_action_type": "MessageActionChatAddUser"},
         )
-        processor = RawMessagePrefilterProcessor(self.database)
+        processor = RawMessagePrefilterProcessor(
+            self.database,
+            shadow_filter_config=_shadow_filter_config(),
+            shadow_filter_config_sha256=_shadow_hash(),
+        )
 
         empty_result = await processor.process(self._claim(empty))
         service_result = await processor.process(self._claim(service))
@@ -170,7 +283,13 @@ class MessagePrefilterPipelineTest(unittest.IsolatedAsyncioTestCase):
                 .select_from(durable_jobs)
                 .where(durable_jobs.c.job_type == OPPORTUNITY_ANALYSIS_JOB_TYPE)
             )
+            shadow_count = await connection.scalar(
+                sa.select(sa.func.count()).select_from(
+                    message_prefilter_shadow_evaluations
+                )
+            )
         self.assertEqual(analysis_count, 0)
+        self.assertEqual(shadow_count, 0)
 
     async def test_retry_and_restart_reconstruct_only_current_and_direct_parent(self):
         await self._ingest(710, content="Unrelated history")
@@ -180,7 +299,13 @@ class MessagePrefilterPipelineTest(unittest.IsolatedAsyncioTestCase):
             content="Да, могу это сделать.",
             metadata={"reply_to_msg_id": 711},
         )
-        processor = RawMessagePrefilterProcessor(self.database)
+        metrics = InMemoryMetrics()
+        processor = RawMessagePrefilterProcessor(
+            self.database,
+            shadow_filter_config=_shadow_filter_config(),
+            shadow_filter_config_sha256=_shadow_hash(),
+            metrics=metrics,
+        )
 
         first = await processor.process(self._claim(reply))
         second = await processor.process(self._claim(reply))
@@ -202,7 +327,19 @@ class MessagePrefilterPipelineTest(unittest.IsolatedAsyncioTestCase):
                 .select_from(durable_jobs)
                 .where(durable_jobs.c.job_type == OPPORTUNITY_ANALYSIS_JOB_TYPE)
             )
-        self.assertEqual((result_count, analysis_count), (1, 1))
+            shadow_count = await connection.scalar(
+                sa.select(sa.func.count()).select_from(
+                    message_prefilter_shadow_evaluations
+                )
+            )
+        self.assertEqual((result_count, shadow_count, analysis_count), (1, 1, 1))
+        self.assertEqual(
+            metrics.counter(
+                MetricNames.PREFILTER_SHADOW_EVALUATIONS,
+                tags={"accepted": "false"},
+            ),
+            1,
+        )
 
         await self.database.close()
         self.database = Database(self.database_url)
@@ -222,9 +359,13 @@ class MessagePrefilterPipelineTest(unittest.IsolatedAsyncioTestCase):
                 await super().record(connection, **kwargs)
                 raise RuntimeError("forced prefilter rollback")
 
+        metrics = InMemoryMetrics()
         processor = RawMessagePrefilterProcessor(
             self.database,
             results=FailingResultRepository(),
+            shadow_filter_config=_shadow_filter_config(),
+            shadow_filter_config_sha256=_shadow_hash(),
+            metrics=metrics,
         )
         with self.assertRaisesRegex(RuntimeError, "forced prefilter rollback"):
             await processor.process(self._claim(ingested))
@@ -238,11 +379,20 @@ class MessagePrefilterPipelineTest(unittest.IsolatedAsyncioTestCase):
                 .select_from(durable_jobs)
                 .where(durable_jobs.c.job_type == OPPORTUNITY_ANALYSIS_JOB_TYPE)
             )
+            shadow_count = await connection.scalar(
+                sa.select(sa.func.count()).select_from(
+                    message_prefilter_shadow_evaluations
+                )
+            )
             raw_job = await self.jobs.get(
                 connection,
                 ingested.message.processing_job_id,
             )
-        self.assertEqual((result_count, analysis_count), (0, 0))
+        self.assertEqual((result_count, shadow_count, analysis_count), (0, 0, 0))
+        self.assertEqual(
+            metrics.counter(MetricNames.PREFILTER_SHADOW_EVALUATIONS),
+            0,
+        )
         self.assertEqual(raw_job["state"], "queued")
 
     async def _ingest(self, message_id, *, content, metadata=None):
@@ -273,6 +423,37 @@ class MessagePrefilterPipelineTest(unittest.IsolatedAsyncioTestCase):
             worker_id="prefilter-test",
             reclaimed=False,
         )
+
+    @staticmethod
+    async def _analysis_count(connection):
+        return await connection.scalar(
+            sa.select(sa.func.count())
+            .select_from(durable_jobs)
+            .where(durable_jobs.c.job_type == OPPORTUNITY_ANALYSIS_JOB_TYPE)
+        )
+
+
+def _shadow_filter_config() -> FilterConfig:
+    return FilterConfig(
+        min_score=5,
+        keywords={
+            "Telegram-бот": 5,
+            "FastAPI": 3,
+            "REST API": 2,
+            "React": 2,
+            "TypeScript": 2,
+            "frontend": 1,
+            "Docker": 2,
+            "VPS": 1,
+            "Redis": 1,
+            "PostgreSQL": 1,
+        },
+        stop_words=("склад",),
+    )
+
+
+def _shadow_hash() -> str:
+    return "a" * 64
 
 
 if __name__ == "__main__":

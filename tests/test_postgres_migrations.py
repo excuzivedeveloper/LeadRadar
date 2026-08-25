@@ -370,6 +370,7 @@ EXPECTED_TABLES = {
     "match_evaluation_runs",
     "match_traces",
     "message_prefilter_results",
+    "message_prefilter_shadow_evaluations",
     "opportunity_analysis_cache",
     "opportunities",
     "opportunity_analysis_links",

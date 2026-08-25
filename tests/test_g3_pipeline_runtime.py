@@ -6,6 +6,7 @@ import json
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
+from hashlib import sha256
 from pathlib import Path
 from time import monotonic
 from unittest.mock import patch
@@ -41,6 +42,7 @@ from freelancer_bot.persistence.raw_messages import (
 from freelancer_bot.persistence.schema import (
     durable_jobs,
     message_prefilter_results,
+    message_prefilter_shadow_evaluations,
     opportunities,
     opportunity_analysis_cache,
     raw_messages,
@@ -508,6 +510,57 @@ class G3PipelineRuntimeTest(unittest.IsolatedAsyncioTestCase):
             storage.stats(),
             {"leads": 0, "pending": 0, "subscribers": 1},
         )
+        storage.close()
+
+    async def test_runtime_prefilter_shadow_uses_configured_filter_file(self):
+        filters_path = Path(self.tempdir.name) / "shadow_filters.json"
+        filter_bytes = json.dumps(
+            {
+                "min_score": 7,
+                "keywords": {"runtime-shadow-keyword": 7},
+                "stop_words": ["runtime-shadow-stop"],
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        filters_path.write_bytes(filter_bytes)
+        config = self.config.model_copy(update={"filters_path": filters_path})
+        storage = Storage(config.database_path)
+        delivery = RecordingDelivery()
+        bot = self._bot(storage, delivery, user_client=FakeHistoryClient([]))
+        bot.config = config
+        runtime = TelegramIngestionRuntime(
+            self.database,
+            config,
+            logger=self.logger,
+            worker_id="g3-shadow-config-worker",
+        )
+
+        await runtime.start()
+        try:
+            await bot._dispatch_message(
+                self.source,
+                FakeMessage(276, "runtime-shadow-keyword", NOW),
+                origin="live",
+            )
+            await self._wait_for_raw_jobs(completed=1)
+        finally:
+            await runtime.stop()
+
+        async with self.database.connect() as connection:
+            shadow = (
+                await connection.execute(sa.select(message_prefilter_shadow_evaluations))
+            ).mappings().one()
+            analysis_count = await connection.scalar(
+                sa.select(sa.func.count())
+                .select_from(durable_jobs)
+                .where(durable_jobs.c.job_type == OPPORTUNITY_ANALYSIS_JOB_TYPE)
+            )
+        self.assertEqual(shadow["filter_config_sha256"], sha256(filter_bytes).hexdigest())
+        self.assertEqual(shadow["min_score"], 7)
+        self.assertTrue(shadow["accepted"])
+        self.assertEqual(shadow["matched_keywords"], ["runtime-shadow-keyword"])
+        self.assertEqual(analysis_count, 1)
         storage.close()
 
     async def test_configured_deepseek_pipeline_persists_opportunity_and_matching_boundary(self):

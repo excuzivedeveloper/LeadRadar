@@ -1562,6 +1562,51 @@ sa.Index(
     postgresql_where=message_prefilter_results.c.dedup_relation == "canonical",
 )
 
+message_prefilter_shadow_evaluations = sa.Table(
+    "message_prefilter_shadow_evaluations",
+    metadata,
+    sa.Column(
+        "raw_message_id",
+        UUID(as_uuid=True),
+        sa.ForeignKey("raw_messages.id", ondelete="RESTRICT"),
+        primary_key=True,
+    ),
+    sa.Column("schema_version", sa.String(32), nullable=False),
+    sa.Column("filter_config_sha256", sa.String(64), nullable=False),
+    sa.Column("min_score", sa.Integer(), nullable=False),
+    sa.Column("accepted", sa.Boolean(), nullable=False),
+    sa.Column("score", sa.Integer(), nullable=False),
+    sa.Column("matched_keywords", JSONB(), nullable=False),
+    sa.Column("rejected_by", JSONB(), nullable=False),
+    sa.Column(
+        "created_at",
+        sa.DateTime(timezone=True),
+        nullable=False,
+        server_default=sa.func.now(),
+    ),
+    sa.CheckConstraint(
+        "schema_version ~ '^[a-z][a-z0-9_.-]{0,31}$'",
+        name="schema_version_safe",
+    ),
+    sa.CheckConstraint(
+        "length(filter_config_sha256) = 64 "
+        "AND filter_config_sha256 ~ '^[0-9a-f]{64}$'",
+        name="filter_config_sha256_valid",
+    ),
+    sa.CheckConstraint("min_score > 0", name="min_score_positive"),
+    sa.CheckConstraint("score >= 0", name="score_nonnegative"),
+    sa.CheckConstraint(
+        "jsonb_typeof(matched_keywords) = 'array' "
+        "AND jsonb_array_length(matched_keywords) <= 64",
+        name="matched_keywords_array_bounded",
+    ),
+    sa.CheckConstraint(
+        "jsonb_typeof(rejected_by) = 'array' "
+        "AND jsonb_array_length(rejected_by) <= 64",
+        name="rejected_by_array_bounded",
+    ),
+)
+
 opportunity_analysis_cache = sa.Table(
     "opportunity_analysis_cache",
     metadata,

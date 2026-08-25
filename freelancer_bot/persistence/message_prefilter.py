@@ -10,7 +10,11 @@ import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from .schema import message_prefilter_results, opportunity_analysis_cache
+from .schema import (
+    message_prefilter_results,
+    message_prefilter_shadow_evaluations,
+    opportunity_analysis_cache,
+)
 
 
 class PrefilterResultConflict(RuntimeError):
@@ -18,6 +22,10 @@ class PrefilterResultConflict(RuntimeError):
 
 
 class AnalysisCacheConflict(RuntimeError):
+    pass
+
+
+class ShadowPrefilterEvaluationConflict(RuntimeError):
     pass
 
 
@@ -62,6 +70,25 @@ class AnalysisCacheRecord:
 @dataclass(frozen=True)
 class AnalysisCacheWriteOutcome:
     entry: AnalysisCacheRecord
+    created: bool
+
+
+@dataclass(frozen=True)
+class ShadowPrefilterEvaluationRecord:
+    raw_message_id: UUID
+    schema_version: str
+    filter_config_sha256: str
+    min_score: int
+    accepted: bool
+    score: int
+    matched_keywords: tuple[str, ...]
+    rejected_by: tuple[str, ...]
+    created_at: datetime
+
+
+@dataclass(frozen=True)
+class ShadowPrefilterEvaluationWriteOutcome:
+    evaluation: ShadowPrefilterEvaluationRecord
     created: bool
 
 
@@ -221,6 +248,71 @@ class MessagePrefilterRepository:
         )
 
 
+class ShadowPrefilterEvaluationRepository:
+    async def get_for_raw(
+        self,
+        connection: AsyncConnection,
+        raw_message_id: UUID,
+    ) -> ShadowPrefilterEvaluationRecord | None:
+        row = (
+            await connection.execute(
+                sa.select(message_prefilter_shadow_evaluations).where(
+                    message_prefilter_shadow_evaluations.c.raw_message_id
+                    == raw_message_id
+                )
+            )
+        ).mappings().one_or_none()
+        return None if row is None else _shadow_record(row)
+
+    async def record(
+        self,
+        connection: AsyncConnection,
+        *,
+        raw_message_id: UUID,
+        schema_version: str,
+        filter_config_sha256: str,
+        min_score: int,
+        accepted: bool,
+        score: int,
+        matched_keywords: Sequence[str],
+        rejected_by: Sequence[str],
+    ) -> ShadowPrefilterEvaluationWriteOutcome:
+        values = {
+            "raw_message_id": raw_message_id,
+            "schema_version": schema_version,
+            "filter_config_sha256": filter_config_sha256,
+            "min_score": min_score,
+            "accepted": accepted,
+            "score": score,
+            "matched_keywords": list(matched_keywords),
+            "rejected_by": list(rejected_by),
+        }
+        inserted_raw_id = await connection.scalar(
+            pg_insert(message_prefilter_shadow_evaluations)
+            .values(**values)
+            .on_conflict_do_nothing(
+                constraint="pk_message_prefilter_shadow_evaluations"
+            )
+            .returning(message_prefilter_shadow_evaluations.c.raw_message_id)
+        )
+        row = (
+            await connection.execute(
+                sa.select(message_prefilter_shadow_evaluations).where(
+                    message_prefilter_shadow_evaluations.c.raw_message_id
+                    == raw_message_id
+                )
+            )
+        ).mappings().one()
+        if inserted_raw_id is None and not _compatible(row, values):
+            raise ShadowPrefilterEvaluationConflict(
+                "Shadow prefilter evaluation already exists with a different payload"
+            )
+        return ShadowPrefilterEvaluationWriteOutcome(
+            evaluation=_shadow_record(row),
+            created=inserted_raw_id is not None,
+        )
+
+
 class OpportunityAnalysisCacheRepository:
     async def get_for_prefilter_result(
         self,
@@ -333,6 +425,20 @@ def _record(row: Mapping[str, Any]) -> PrefilterResultRecord:
         analysis_schema_version=row["analysis_schema_version"],
         dedup_relation=row["dedup_relation"],
         dedup_window_seconds=row["dedup_window_seconds"],
+        created_at=row["created_at"],
+    )
+
+
+def _shadow_record(row: Mapping[str, Any]) -> ShadowPrefilterEvaluationRecord:
+    return ShadowPrefilterEvaluationRecord(
+        raw_message_id=row["raw_message_id"],
+        schema_version=str(row["schema_version"]),
+        filter_config_sha256=str(row["filter_config_sha256"]),
+        min_score=int(row["min_score"]),
+        accepted=bool(row["accepted"]),
+        score=int(row["score"]),
+        matched_keywords=tuple(str(item) for item in row["matched_keywords"]),
+        rejected_by=tuple(str(item) for item in row["rejected_by"]),
         created_at=row["created_at"],
     )
 

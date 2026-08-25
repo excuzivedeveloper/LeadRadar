@@ -10,6 +10,7 @@ from uuid import uuid4
 from .ai_telemetry import AIModelPrice, AISpendGuardPolicy
 from .config import RuntimeConfig
 from .delivery import PersonalizedDeliveryJobProcessor, TelegramDeliverySender
+from .filters import load_filter_config
 from .global_source_library_runtime import (
     DiscoveryCampaignPlanProcessor,
     ProfileCoverageRecheckProcessor,
@@ -18,6 +19,7 @@ from .matching_delivery import MATCHING_DELIVERY_JOB_TYPE, MatchingDeliveryJobPr
 from .message_prefilter import (
     OPPORTUNITY_ANALYSIS_JOB_TYPE,
     RawMessagePrefilterProcessor,
+    filter_config_sha256,
 )
 from .opportunity_analysis import (
     OPPORTUNITY_ANALYSIS_PROMPT_VERSION,
@@ -135,9 +137,13 @@ def _build_worker(
         if analyzer is None
         else opportunity_analysis_cache_version(analyzer)
     )
+    filter_config = load_filter_config(config.filters_path)
+    filter_fingerprint = filter_config_sha256(config.filters_path)
     processor = RawMessagePrefilterProcessor(
         database,
         jobs=jobs,
+        shadow_filter_config=filter_config,
+        shadow_filter_config_sha256=filter_fingerprint,
         analyzer_version=analyzer_version,
         analysis_schema_version=(
             OPPORTUNITY_ANALYSIS_SCHEMA_VERSION

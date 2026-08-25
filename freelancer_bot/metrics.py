@@ -22,6 +22,7 @@ class MetricNames:
     ACTIVE_SOURCES = "pipeline.active_sources"
     MESSAGES = "pipeline.messages"
     CANDIDATES = "pipeline.candidates"
+    PREFILTER_SHADOW_EVALUATIONS = "pipeline.prefilter_shadow_evaluations"
     ANALYSES = "pipeline.analyses"
     OPPORTUNITIES = "pipeline.opportunities"
     MATCHES = "pipeline.matches"
