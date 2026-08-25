@@ -15,6 +15,7 @@ from freelancer_bot.message_prefilter import (
     AnalyzerInputLoader,
     RawMessagePrefilterProcessor,
 )
+from freelancer_bot.filters import FilterConfig
 from freelancer_bot.persistence.collector_accounts import CollectorAccountRepository
 from freelancer_bot.persistence.database import Database
 from freelancer_bot.persistence.jobs import DurableJobRepository, JobClaim
@@ -32,6 +33,7 @@ from freelancer_bot.persistence.raw_messages import (
 from freelancer_bot.persistence.schema import (
     durable_jobs,
     message_prefilter_results,
+    message_prefilter_shadow_evaluations,
     raw_messages,
 )
 from freelancer_bot.persistence.source_repository import SourceRepository, SourceStatus
@@ -85,7 +87,11 @@ class ExactDedupCacheTest(unittest.IsolatedAsyncioTestCase):
             901,
             "нужен бот ДЛЯ telegram",
         )
-        processor = RawMessagePrefilterProcessor(self.database)
+        processor = RawMessagePrefilterProcessor(
+            self.database,
+            shadow_filter_config=_shadow_filter_config(),
+            shadow_filter_config_sha256=_shadow_hash(),
+        )
 
         first_result = await processor.process(self._claim(first))
         duplicate_result = await processor.process(self._claim(duplicate))
@@ -109,9 +115,15 @@ class ExactDedupCacheTest(unittest.IsolatedAsyncioTestCase):
                 ).scalars()
             )
             analysis_count = await self._analysis_count(connection)
+            shadow_count = await connection.scalar(
+                sa.select(sa.func.count()).select_from(
+                    message_prefilter_shadow_evaluations
+                )
+            )
         self.assertEqual(len(linked), 2)
         self.assertEqual(source_ids, {self.source.id, self.other_source.id})
         self.assertEqual(analysis_count, 1)
+        self.assertEqual(shadow_count, 2)
 
     async def test_concurrent_reposts_converge_on_one_canonical_job(self):
         first = await self._ingest(self.source.id, 802, "Нужен Python разработчик")
@@ -308,6 +320,18 @@ class ExactDedupCacheTest(unittest.IsolatedAsyncioTestCase):
             .select_from(durable_jobs)
             .where(durable_jobs.c.job_type == OPPORTUNITY_ANALYSIS_JOB_TYPE)
         )
+
+
+def _shadow_filter_config() -> FilterConfig:
+    return FilterConfig(
+        min_score=5,
+        keywords={"нужен бот": 5, "telegram": 2},
+        stop_words=(),
+    )
+
+
+def _shadow_hash() -> str:
+    return "b" * 64
 
 
 @unittest.skipUnless(TEST_DATABASE_URL, "TEST_DATABASE_URL is not configured")

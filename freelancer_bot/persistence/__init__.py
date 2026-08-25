@@ -39,6 +39,10 @@ from .message_prefilter import (
     MessagePrefilterRepository,
     OpportunityAnalysisCacheRepository,
     PrefilterResultRecord,
+    ShadowPrefilterEvaluationConflict,
+    ShadowPrefilterEvaluationRecord,
+    ShadowPrefilterEvaluationRepository,
+    ShadowPrefilterEvaluationWriteOutcome,
 )
 from .payments import (
     PaymentPersistenceConflict,
@@ -195,6 +199,10 @@ __all__ = [
     "OpportunitySourceObservationRecord",
     "PostgresSourceCatalog",
     "PrefilterResultRecord",
+    "ShadowPrefilterEvaluationConflict",
+    "ShadowPrefilterEvaluationRecord",
+    "ShadowPrefilterEvaluationRepository",
+    "ShadowPrefilterEvaluationWriteOutcome",
     "PaymentPersistenceConflict",
     "PaymentProviderEventRecord",
     "PaymentRepository",

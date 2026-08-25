@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
+from hashlib import sha256
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -17,23 +18,44 @@ class FilterConfig:
     stop_words: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class FilterConfigSnapshot:
+    config: FilterConfig
+    sha256: str
+
+
 def _positive_int(value: Any, field: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
         raise ValueError(f"Filter config: '{field}' must be a positive integer")
     return value
 
 
-def load_filter_config(path: Path = DEFAULT_FILTERS_PATH) -> FilterConfig:
-    """Load and validate keyword scoring rules from a JSON file."""
+def load_filter_snapshot(path: Path = DEFAULT_FILTERS_PATH) -> FilterConfigSnapshot:
+    """Load filter rules and their fingerprint from one immutable byte snapshot."""
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        raw = path.read_bytes()
     except FileNotFoundError as exc:
         raise ValueError(f"Filters config was not found: {path}") from exc
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"Filters config is not valid JSON: {path}: {exc.msg}") from exc
     except OSError as exc:
         raise ValueError(f"Could not read filters config {path}: {exc}") from exc
 
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Filters config is not valid JSON: {path}: {exc.msg}") from exc
+
+    return FilterConfigSnapshot(
+        config=_parse_filter_config_payload(payload, path),
+        sha256=sha256(raw).hexdigest(),
+    )
+
+
+def load_filter_config(path: Path = DEFAULT_FILTERS_PATH) -> FilterConfig:
+    """Load and validate keyword scoring rules from a JSON file."""
+    return load_filter_snapshot(path).config
+
+
+def _parse_filter_config_payload(payload: Any, path: Path) -> FilterConfig:
     if not isinstance(payload, dict):
         raise ValueError(f"Filters config must contain a JSON object: {path}")
 
