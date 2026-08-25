@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import logging
+import unicodedata
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
 from hashlib import sha256
 from pathlib import Path
-import unicodedata
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncConnection
