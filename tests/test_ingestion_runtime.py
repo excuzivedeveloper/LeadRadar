@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import json
 import tempfile
 import unittest
-from hashlib import sha256
 from pathlib import Path
 from unittest.mock import Mock, patch
 
 from freelancer_bot.config import RuntimeConfig
+from freelancer_bot.filters import FilterConfig, FilterConfigSnapshot
 from freelancer_bot.ingestion_runtime import _build_worker
 
 
@@ -15,19 +14,20 @@ class IngestionRuntimeWorkerTest(unittest.TestCase):
     def test_prefilter_shadow_filter_is_loaded_from_runtime_config(self):
         with tempfile.TemporaryDirectory() as tempdir:
             filters_path = Path(tempdir) / "filters.json"
-            filter_bytes = json.dumps(
-                {
-                    "min_score": 7,
-                    "keywords": {"runtime-shadow-keyword": 7},
-                    "stop_words": ["runtime-shadow-stop"],
-                },
-                ensure_ascii=False,
-                separators=(",", ":"),
-            ).encode("utf-8")
-            filters_path.write_bytes(filter_bytes)
             config = RuntimeConfig(filters_path=filters_path, _env_file=None)
+            snapshot = FilterConfigSnapshot(
+                config=FilterConfig(
+                    min_score=7,
+                    keywords={"runtime-shadow-keyword": 7},
+                    stop_words=("runtime-shadow-stop",),
+                ),
+                sha256="a" * 64,
+            )
 
             with patch(
+                "freelancer_bot.ingestion_runtime.load_filter_snapshot",
+                return_value=snapshot,
+            ) as load_snapshot, patch(
                 "freelancer_bot.ingestion_runtime.RawMessagePrefilterProcessor"
             ) as processor:
                 _build_worker(
@@ -39,6 +39,7 @@ class IngestionRuntimeWorkerTest(unittest.TestCase):
                     delivery_sender=None,
                 )
 
+        load_snapshot.assert_called_once_with(filters_path)
         _, kwargs = processor.call_args
         self.assertEqual(kwargs["shadow_filter_config"].min_score, 7)
         self.assertEqual(
@@ -47,7 +48,7 @@ class IngestionRuntimeWorkerTest(unittest.TestCase):
         )
         self.assertEqual(
             kwargs["shadow_filter_config_sha256"],
-            sha256(filter_bytes).hexdigest(),
+            "a" * 64,
         )
 
 
