@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from datetime import datetime, timezone
@@ -214,6 +215,17 @@ class LegacyLeadFlowCharacterizationTest(unittest.IsolatedAsyncioTestCase):
             min_score=5,
             keywords={"телеграм бот": 5, "python": 2},
             stop_words=("smm",),
+        )
+        config.filters_path.write_text(
+            json.dumps(
+                {
+                    "min_score": filter_config.min_score,
+                    "keywords": filter_config.keywords,
+                    "stop_words": list(filter_config.stop_words),
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
         )
         patches = [
             patch("freelancer_bot.app.Storage", return_value=storage),
