@@ -51,6 +51,43 @@ class IngestionRuntimeWorkerTest(unittest.TestCase):
             "a" * 64,
         )
 
+    def test_delivery_worker_receives_telegram_allowlist(self):
+        snapshot = FilterConfigSnapshot(
+            config=FilterConfig(
+                min_score=1,
+                keywords={"python": 1},
+                stop_words=(),
+            ),
+            sha256="b" * 64,
+        )
+        config = RuntimeConfig(
+            telegram_allowed_user_ids=(7000001, 7000002),
+            _env_file=None,
+        )
+
+        with patch(
+            "freelancer_bot.ingestion_runtime.load_filter_snapshot",
+            return_value=snapshot,
+        ), patch(
+            "freelancer_bot.ingestion_runtime.RawMessagePrefilterProcessor"
+        ), patch(
+            "freelancer_bot.ingestion_runtime.PersonalizedDeliveryJobProcessor"
+        ) as delivery_processor:
+            _build_worker(
+                object(),
+                config,
+                logger=Mock(),
+                worker_id="delivery-allowlist-test",
+                analyzer=None,
+                delivery_sender=object(),
+            )
+
+        _, kwargs = delivery_processor.call_args
+        self.assertEqual(
+            kwargs["telegram_allowed_user_ids"],
+            (7000001, 7000002),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -166,6 +166,7 @@ def _build_worker(
             database,
             delivery_sender,
             logger=logger,
+            telegram_allowed_user_ids=config.telegram_allowed_user_ids,
         )
         handlers[MATCHING_DELIVERY_JOB_TYPE] = MatchingDeliveryJobProcessor(
             database,

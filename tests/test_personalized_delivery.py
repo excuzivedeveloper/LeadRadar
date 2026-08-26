@@ -193,6 +193,52 @@ class TelethonPersonalizedDeliverySenderTest(unittest.IsolatedAsyncioTestCase):
         )
 
 
+class PersonalizedDeliveryAllowlistTest(unittest.IsolatedAsyncioTestCase):
+    async def test_authorized_recipient_delivery_is_sent(self):
+        delivery = _delivery_record()
+        deliveries = _FakeDeliveryRepository(
+            recipient_chat_id=7000001,
+            delivery=delivery,
+        )
+        sender = _RecordingSender()
+        processor = PersonalizedDeliveryJobProcessor(
+            _FakeDatabase(),
+            sender,
+            deliveries=deliveries,
+            telegram_allowed_user_ids=(7000001,),
+        )
+
+        result = await processor.process(_delivery_claim())
+
+        self.assertIs(result, delivery)
+        self.assertEqual(sender.success_count, 1)
+        self.assertEqual(sender.calls[0]["recipient_chat_id"], 7000001)
+        self.assertEqual(deliveries.suppressed, [])
+        self.assertEqual(deliveries.sent_count, 1)
+
+    async def test_unauthorized_recipient_delivery_is_suppressed_before_send(self):
+        delivery = _delivery_record()
+        deliveries = _FakeDeliveryRepository(
+            recipient_chat_id=7000002,
+            delivery=delivery,
+        )
+        sender = _RecordingSender()
+        processor = PersonalizedDeliveryJobProcessor(
+            _FakeDatabase(),
+            sender,
+            deliveries=deliveries,
+            telegram_allowed_user_ids=(7000001,),
+        )
+
+        result = await processor.process(_delivery_claim())
+
+        self.assertIs(result, delivery)
+        self.assertEqual(sender.success_count, 0)
+        self.assertEqual(sender.calls, [])
+        self.assertEqual(deliveries.sent_count, 0)
+        self.assertEqual(deliveries.suppressed, ["RecipientNotAllowlisted"])
+
+
 @unittest.skipUnless(TEST_DATABASE_URL, "TEST_DATABASE_URL is not configured")
 class PersonalizedDeliveryPostgresTest(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
@@ -1412,6 +1458,44 @@ class _RecordingSender:
         return TelegramSendReceipt(message_id=1000 + self.success_count)
 
 
+class _FakeDatabase:
+    def transaction(self):
+        return _FakeTransaction()
+
+
+class _FakeTransaction:
+    async def __aenter__(self):
+        return object()
+
+    async def __aexit__(self, exc_type, exc, traceback):
+        return None
+
+
+class _FakeDeliveryRepository:
+    def __init__(self, *, recipient_chat_id: int, delivery) -> None:
+        self.recipient_chat_id = recipient_chat_id
+        self.delivery = delivery
+        self.sent_count = 0
+        self.suppressed: list[str] = []
+
+    async def prepare_attempt(self, connection, claim):
+        return SimpleNamespace(
+            delivery=self.delivery,
+            recipient_chat_id=self.recipient_chat_id,
+        )
+
+    async def mark_sent(self, connection, claim, *, telegram_message_id: int):
+        self.sent_count += 1
+        self.delivery.telegram_message_id = telegram_message_id
+        return self.delivery
+
+    async def mark_attempt_suppressed(self, connection, claim, *, failure_code: str):
+        self.suppressed.append(failure_code)
+        self.delivery.status = DeliveryStatus.SUPPRESSED
+        self.delivery.failure_code = failure_code
+        return self.delivery
+
+
 class _FakeBotClient:
     def __init__(self) -> None:
         self.calls = []
@@ -1428,6 +1512,33 @@ def _term(value: str) -> dict[str, str]:
         "origin": "explicit",
         "evidence": value,
     }
+
+
+def _delivery_record():
+    return SimpleNamespace(
+        id=uuid4(),
+        match_trace_id=uuid4(),
+        match_run_id=uuid4(),
+        opportunity_id=uuid4(),
+        search_profile_id=uuid4(),
+        user_id=uuid4(),
+        card_body_html="<b>Private lead</b>",
+        parse_mode="html",
+        link_preview=False,
+        idempotency_key="b" * 64,
+        source_url="https://t.me/source/42",
+        status=DeliveryStatus.SENDING,
+        failure_code=None,
+    )
+
+
+def _delivery_claim():
+    return SimpleNamespace(
+        id=uuid4(),
+        job_type=PERSONALIZED_DELIVERY_JOB_TYPE,
+        attempt_count=1,
+        max_attempts=3,
+    )
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from decimal import Decimal
-from typing import Any, Self
+from typing import Annotated, Any, Self
 
 from pydantic import (
     AliasChoices,
@@ -14,7 +14,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class RuntimeMode(str, Enum):
@@ -86,6 +86,11 @@ class RuntimeConfig(BaseSettings):
         None,
         sensitivity=Sensitivity.SECRET,
         validation_alias=AliasChoices("TELEGRAM_BOT_TOKEN", "BOT_TOKEN"),
+    )
+    telegram_allowed_user_ids: Annotated[tuple[int, ...], NoDecode] = classified_field(
+        (),
+        sensitivity=Sensitivity.SENSITIVE,
+        validation_alias="TELEGRAM_ALLOWED_USER_IDS",
     )
     target_chat_id: int | None = classified_field(
         None,
@@ -1022,6 +1027,35 @@ class RuntimeConfig(BaseSettings):
         if normalized != "month":
             raise ValueError("must be month")
         return normalized
+
+    @field_validator("telegram_allowed_user_ids", mode="before")
+    @classmethod
+    def validate_telegram_allowed_user_ids(cls, value: Any) -> tuple[int, ...]:
+        if value is None or value == "":
+            return ()
+        if isinstance(value, str):
+            raw_items = value.split(",")
+        else:
+            try:
+                raw_items = list(value)
+            except TypeError:
+                raise ValueError("must be comma-separated positive integer IDs") from None
+
+        normalized: list[int] = []
+        seen: set[int] = set()
+        for raw_item in raw_items:
+            item = str(raw_item).strip()
+            if not item:
+                raise ValueError("must not contain empty items")
+            if not item.isdecimal():
+                raise ValueError("must contain only positive integer IDs")
+            identifier = int(item)
+            if identifier <= 0:
+                raise ValueError("must contain only positive integer IDs")
+            if identifier not in seen:
+                seen.add(identifier)
+                normalized.append(identifier)
+        return tuple(normalized)
 
     @field_validator("log_level")
     @classmethod

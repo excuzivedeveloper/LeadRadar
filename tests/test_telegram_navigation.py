@@ -2,9 +2,12 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 import unittest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
+from uuid import UUID
 
 from freelancer_bot.app import LeadBot
+from freelancer_bot.delivery_actions import encode_delivery_action_callback
+from freelancer_bot.persistence.delivery_actions import DeliveryActionType
 from freelancer_bot.persistence.database import Database
 from freelancer_bot.profile_confirmation import ProfileConfirmationService
 from freelancer_bot.profile_onboarding import OnboardingProfileError
@@ -37,10 +40,10 @@ class _RecordingProfileOnboarding:
 
 
 class _TelegramEvent(SimpleNamespace):
-    def __init__(self, *, text: str | None = None):
+    def __init__(self, *, text: str | None = None, sender_id: int = 4242):
         super().__init__(
-            sender_id=4242,
-            chat_id=4242,
+            sender_id=sender_id,
+            chat_id=sender_id,
             raw_text=text,
             answer=AsyncMock(),
             respond=AsyncMock(),
@@ -53,6 +56,129 @@ class _UnavailableAI:
 
 
 class TelegramNavigationHandlerTest(unittest.IsolatedAsyncioTestCase):
+    async def test_authorized_start_can_subscribe_legacy_chat(self):
+        bot = LeadBot.__new__(LeadBot)
+        bot.bot_client = _HandlerClient()
+        bot.config = SimpleNamespace(
+            telegram_allowed_user_ids=(4242,),
+            legacy_delivery_enabled=True,
+        )
+        bot._background_enabled = True
+        bot.storage = SimpleNamespace(add_subscriber=Mock())
+        bot.navigation = SimpleNamespace(home=Mock())
+        bot._register_bot_commands()
+
+        start = next(
+            handler
+            for _, handler in bot.bot_client.handlers
+            if handler.__name__ == "start"
+        )
+        event = _TelegramEvent(sender_id=4242)
+
+        await start(event)
+
+        bot.storage.add_subscriber.assert_called_once_with(4242)
+        event.respond.assert_awaited_once()
+        bot.navigation.home.assert_not_called()
+
+    async def test_unauthorized_start_has_no_user_or_subscriber_side_effects(self):
+        bot = LeadBot.__new__(LeadBot)
+        bot.bot_client = _HandlerClient()
+        bot.config = SimpleNamespace(
+            telegram_allowed_user_ids=(4242,),
+            legacy_delivery_enabled=True,
+        )
+        bot._background_enabled = True
+        bot.storage = SimpleNamespace(add_subscriber=Mock())
+        bot.navigation = SimpleNamespace(home=Mock())
+        bot._register_bot_commands()
+
+        start = next(
+            handler
+            for _, handler in bot.bot_client.handlers
+            if handler.__name__ == "start"
+        )
+        event = _TelegramEvent(sender_id=4343)
+
+        await start(event)
+
+        bot.storage.add_subscriber.assert_not_called()
+        bot.navigation.home.assert_not_called()
+        event.respond.assert_not_awaited()
+
+    async def test_authorized_delivery_action_callback_records_action(self):
+        delivery_id = UUID("11111111-1111-1111-1111-111111111111")
+        bot = LeadBot.__new__(LeadBot)
+        bot.bot_client = _HandlerClient()
+        bot.config = SimpleNamespace(telegram_allowed_user_ids=(4242,))
+        bot.delivery_actions = SimpleNamespace(
+            record=AsyncMock(
+                return_value=SimpleNamespace(
+                    event=SimpleNamespace(source_url="https://t.me/source/42")
+                )
+            )
+        )
+        bot._register_callback_handlers()
+        record_delivery_action = next(
+            handler
+            for _, handler in bot.bot_client.handlers
+            if handler.__name__ == "record_delivery_action"
+        )
+        event = _TelegramEvent(sender_id=4242)
+        event.data = encode_delivery_action_callback(
+            delivery_id,
+            DeliveryActionType.NOT_SUITABLE,
+        )
+
+        await record_delivery_action(event)
+
+        bot.delivery_actions.record.assert_awaited_once()
+        event.answer.assert_awaited_once_with("Понял, учту")
+
+    async def test_unauthorized_delivery_action_callback_has_no_mutation(self):
+        bot = LeadBot.__new__(LeadBot)
+        bot.bot_client = _HandlerClient()
+        bot.config = SimpleNamespace(telegram_allowed_user_ids=(4242,))
+        bot.delivery_actions = SimpleNamespace(record=AsyncMock())
+        bot._register_callback_handlers()
+        record_delivery_action = next(
+            handler
+            for _, handler in bot.bot_client.handlers
+            if handler.__name__ == "record_delivery_action"
+        )
+        event = _TelegramEvent(sender_id=4343)
+        event.data = encode_delivery_action_callback(
+            UUID("11111111-1111-1111-1111-111111111111"),
+            DeliveryActionType.NOT_SUITABLE,
+        )
+
+        await record_delivery_action(event)
+
+        bot.delivery_actions.record.assert_not_awaited()
+        event.answer.assert_not_awaited()
+
+    async def test_unauthorized_free_text_does_not_invoke_onboarding(self):
+        bot = LeadBot.__new__(LeadBot)
+        bot.bot_client = _HandlerClient()
+        bot.config = SimpleNamespace(telegram_allowed_user_ids=(4242,))
+        bot._pending_navigation_inputs = {
+            "4343": SimpleNamespace(kind="profile_ai"),
+        }
+        bot.profile_onboarding = SimpleNamespace(begin=AsyncMock())
+        bot._register_bot_commands()
+
+        text_input = next(
+            handler
+            for _, handler in bot.bot_client.handlers
+            if handler.__name__ == "navigation_text_input"
+        )
+        event = _TelegramEvent(text="Python Telegram automation", sender_id=4343)
+
+        await text_input(event)
+
+        bot.profile_onboarding.begin.assert_not_awaited()
+        event.respond.assert_not_awaited()
+
     async def test_new_search_routes_natural_text_to_ai_onboarding_handler(self):
         bot = LeadBot.__new__(LeadBot)
         bot.bot_client = _HandlerClient()

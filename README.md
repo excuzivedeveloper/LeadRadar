@@ -78,6 +78,18 @@ TELEGRAM_BOT_TOKEN=...
 DATABASE_URL=<your-postgresql-dsn>
 ```
 
+For a private single-operator deployment, set:
+
+```dotenv
+TELEGRAM_ALLOWED_USER_IDS=<owner numeric Telegram ID>
+```
+
+BotFather cannot make a one-user private bot, and hiding the bot username is not
+an access-control boundary. When `TELEGRAM_ALLOWED_USER_IDS` is non-empty, the
+application ignores bot UI interactions from other Telegram users and suppresses
+personalized deliveries to non-allowlisted recipients. The collector user
+session and source ingestion are not restricted by this bot allowlist.
+
 `DATABASE_URL` must use the `postgresql+psycopg://` scheme. The production application does not create or alter PostgreSQL schema at startup; run Alembic first.
 
 ## Configuration by mode
