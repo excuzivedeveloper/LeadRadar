@@ -1868,15 +1868,16 @@ def _is_bot_event_authorized(config: object, event: object) -> bool:
     if not allowed:
         return True
     identifier = getattr(event, "sender_id", None)
-    if identifier is None:
-        identifier = getattr(event, "chat_id", None)
-    if not isinstance(identifier, int) or identifier <= 0:
+    if type(identifier) is not int or identifier <= 0:
         LOGGER.warning("Blocked bot event without an allowlisted Telegram sender")
         return False
-    if identifier in allowed:
-        return True
-    LOGGER.warning("Blocked bot event from non-allowlisted Telegram sender")
-    return False
+    if identifier not in allowed:
+        LOGGER.warning("Blocked bot event from non-allowlisted Telegram sender")
+        return False
+    if getattr(event, "is_private", False) is not True:
+        LOGGER.warning("Blocked allowlisted bot event outside a private Telegram chat")
+        return False
+    return True
 
 
 _PROFILE_INPUT_ERRORS = (
