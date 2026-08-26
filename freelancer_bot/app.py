@@ -6,7 +6,8 @@ import logging
 import signal
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Iterable
+from functools import wraps
+from typing import Awaitable, Callable, Iterable
 from uuid import UUID
 
 from pydantic import SecretStr
@@ -111,10 +112,19 @@ class _PendingNavigationInput:
 
 
 class TelethonLegacyLeadDelivery:
-    def __init__(self, bot_client: TelegramClient):
+    def __init__(
+        self,
+        bot_client: TelegramClient,
+        *,
+        telegram_allowed_user_ids: Iterable[int] = (),
+    ):
         self.bot_client = bot_client
+        self._telegram_allowed_user_ids = frozenset(telegram_allowed_user_ids)
 
     async def deliver_lead(self, chat_id: int, body: str, lead_id: int) -> int | None:
+        if self._telegram_allowed_user_ids and chat_id not in self._telegram_allowed_user_ids:
+            LOGGER.warning("Blocked legacy delivery to non-allowlisted Telegram chat")
+            return None
         buttons = [
             [
                 Button.inline("Сделать отклик", data=f"draft:{lead_id}".encode("utf-8")),
@@ -262,7 +272,10 @@ class LeadBot:
         self.reply_draft_provider = reply_draft_provider
         if self.reply_draft_provider is None and config.ai_reply_enabled:
             self.reply_draft_provider = _build_reply_draft_provider(config)
-        self.legacy_delivery = TelethonLegacyLeadDelivery(self.bot_client)
+        self.legacy_delivery = TelethonLegacyLeadDelivery(
+            self.bot_client,
+            telegram_allowed_user_ids=config.telegram_allowed_user_ids,
+        )
         self.legacy_processor = (
             LegacyLeadProcessor(
                 self.filter_config,
@@ -273,6 +286,20 @@ class LeadBot:
             if self.storage is not None
             else None
         )
+
+    def _on_bot_event(self, event_builder):
+        def register(
+            handler: Callable[[object], Awaitable[None]],
+        ) -> Callable[[object], Awaitable[None]]:
+            @wraps(handler)
+            async def authorized_handler(event: object) -> None:
+                if not _is_bot_event_authorized(getattr(self, "config", None), event):
+                    return
+                await handler(event)
+
+            return self.bot_client.on(event_builder)(authorized_handler)
+
+        return register
 
     async def run(self) -> None:
         background_enabled = getattr(self, "_background_enabled", True)
@@ -409,7 +436,7 @@ class LeadBot:
                 self._session_lock = None
 
     def _register_bot_commands(self) -> None:
-        @self.bot_client.on(
+        @self._on_bot_event(
             events.NewMessage(
                 pattern=r"^(Мой поиск|Настройки|Подписка|Главное меню|Отмена)$"
             )
@@ -439,7 +466,7 @@ class LeadBot:
             self._pending_navigation_inputs.pop(_telegram_user_id(event), None)
             await _respond_navigation(event, response)
 
-        @self.bot_client.on(events.NewMessage(pattern=r"^/start"))
+        @self._on_bot_event(events.NewMessage(pattern=r"^/start"))
         async def start(event: events.NewMessage.Event) -> None:
             chat_id = int(event.chat_id)
             if (
@@ -458,13 +485,13 @@ class LeadBot:
                 return
             await _respond_navigation(event, self.navigation.home())
 
-        @self.bot_client.on(events.NewMessage(pattern=r"^/stop"))
+        @self._on_bot_event(events.NewMessage(pattern=r"^/stop"))
         async def stop(event: events.NewMessage.Event) -> None:
             if self.storage is not None:
                 self.storage.remove_subscriber(int(event.chat_id))
             await event.respond("Ок, этот чат отписан от уведомлений.")
 
-        @self.bot_client.on(events.NewMessage(pattern=r"^/status"))
+        @self._on_bot_event(events.NewMessage(pattern=r"^/status"))
         async def status(event: events.NewMessage.Event) -> None:
             if self.storage is None:
                 await event.respond(
@@ -480,12 +507,12 @@ class LeadBot:
                 f"- ожидают повторной отправки: {stats['pending']}"
             )
 
-        @self.bot_client.on(events.NewMessage(pattern=r"^/sources"))
+        @self._on_bot_event(events.NewMessage(pattern=r"^/sources"))
         async def sources(event: events.NewMessage.Event) -> None:
             lines = [f"{index}. {source.handle} — {source.title}" for index, source in enumerate(self.sources, 1)]
             await event.respond("Активные источники:\n" + "\n".join(lines))
 
-        @self.bot_client.on(events.NewMessage(pattern=r"^/keywords"))
+        @self._on_bot_event(events.NewMessage(pattern=r"^/keywords"))
         async def keywords(event: events.NewMessage.Event) -> None:
             keyword_preview = ", ".join(list(self.filter_config.keywords)[:35])
             stop_preview = ", ".join(self.filter_config.stop_words[:35])
@@ -497,7 +524,7 @@ class LeadBot:
                 f"Минимальный score: {self.filter_config.min_score}"
             )
 
-        @self.bot_client.on(events.NewMessage(pattern=r"^/test(?:\s+(.+))?"))
+        @self._on_bot_event(events.NewMessage(pattern=r"^/test(?:\s+(.+))?"))
         async def test_filter(event: events.NewMessage.Event) -> None:
             text = event.pattern_match.group(1)
             if not text:
@@ -517,7 +544,7 @@ class LeadBot:
                 )
                 await event.respond(f"Не пройдет фильтр: {reason}")
 
-        @self.bot_client.on(events.NewMessage(pattern=r"^/profile(?:\s+([\s\S]+))?$"))
+        @self._on_bot_event(events.NewMessage(pattern=r"^/profile(?:\s+([\s\S]+))?$"))
         async def profile(event: events.NewMessage.Event) -> None:
             response = await self.profile_onboarding.begin(
                 external_user_id=_telegram_user_id(event),
@@ -525,7 +552,7 @@ class LeadBot:
             )
             await _respond_onboarding(event, response)
 
-        @self.bot_client.on(
+        @self._on_bot_event(
             events.NewMessage(pattern=r"^/profile_manual(?:\s+([\s\S]+))?$")
         )
         async def profile_manual(event: events.NewMessage.Event) -> None:
@@ -546,7 +573,7 @@ class LeadBot:
                 return
             await _respond_onboarding(event, response)
 
-        @self.bot_client.on(
+        @self._on_bot_event(
             events.NewMessage(
                 pattern=(
                     r"^/profile_edit\s+([0-9a-f-]{36})\s+(\d+)\s+"
@@ -568,7 +595,7 @@ class LeadBot:
                 return
             await _respond_onboarding(event, response)
 
-        @self.bot_client.on(
+        @self._on_bot_event(
             events.NewMessage(pattern=r"^/profile_show\s+([0-9a-f-]{36})$")
         )
         async def profile_show(event: events.NewMessage.Event) -> None:
@@ -582,7 +609,7 @@ class LeadBot:
                 return
             await _respond_onboarding(event, response)
 
-        @self.bot_client.on(
+        @self._on_bot_event(
             events.NewMessage(
                 pattern=(
                     r"^/profile_setting\s+([0-9a-f-]{36})\s+(\d+)\s+"
@@ -605,7 +632,7 @@ class LeadBot:
                 return
             await _respond_onboarding(event, response)
 
-        @self.bot_client.on(
+        @self._on_bot_event(
             events.NewMessage(
                 pattern=r"^/profile_activate\s+([0-9a-f-]{36})\s+(\d+)$"
             )
@@ -622,7 +649,7 @@ class LeadBot:
                 return
             await _respond_onboarding(event, response)
 
-        @self.bot_client.on(
+        @self._on_bot_event(
             events.NewMessage(
                 pattern=r"^/profile_deactivate\s+([0-9a-f-]{36})\s+(\d+)$"
             )
@@ -639,7 +666,7 @@ class LeadBot:
                 return
             await _respond_onboarding(event, response)
 
-        @self.bot_client.on(events.NewMessage())
+        @self._on_bot_event(events.NewMessage())
         async def navigation_text_input(event: events.NewMessage.Event) -> None:
             text = _event_text(event)
             if (
@@ -740,19 +767,19 @@ class LeadBot:
             )
 
     def _register_callback_handlers(self) -> None:
-        @self.bot_client.on(
+        @self._on_bot_event(
             events.CallbackQuery(pattern=DELIVERY_ACTION_CALLBACK_PATTERN)
         )
         async def record_delivery_action(event: events.CallbackQuery.Event) -> None:
             await self._handle_delivery_action_callback(event)
 
-        @self.bot_client.on(events.CallbackQuery(pattern=rb"^nav:home$"))
+        @self._on_bot_event(events.CallbackQuery(pattern=rb"^nav:home$"))
         async def navigation_home(event: events.CallbackQuery.Event) -> None:
             self._pending_navigation_inputs.pop(_telegram_user_id(event), None)
             await event.answer()
             await _respond_navigation(event, self.navigation.home())
 
-        @self.bot_client.on(events.CallbackQuery(pattern=rb"^nav:search$"))
+        @self._on_bot_event(events.CallbackQuery(pattern=rb"^nav:search$"))
         async def navigation_search(event: events.CallbackQuery.Event) -> None:
             self._pending_navigation_inputs.pop(_telegram_user_id(event), None)
             await event.answer()
@@ -763,7 +790,7 @@ class LeadBot:
                 ),
             )
 
-        @self.bot_client.on(events.CallbackQuery(pattern=rb"^nav:settings$"))
+        @self._on_bot_event(events.CallbackQuery(pattern=rb"^nav:settings$"))
         async def navigation_settings(event: events.CallbackQuery.Event) -> None:
             self._pending_navigation_inputs.pop(_telegram_user_id(event), None)
             await event.answer()
@@ -774,7 +801,7 @@ class LeadBot:
                 ),
             )
 
-        @self.bot_client.on(
+        @self._on_bot_event(
             events.CallbackQuery(pattern=rb"^nav:subscription$")
         )
         async def navigation_subscription(
@@ -789,7 +816,7 @@ class LeadBot:
                 ),
             )
 
-        @self.bot_client.on(
+        @self._on_bot_event(
             events.CallbackQuery(pattern=rb"^nav:profile:new$")
         )
         async def navigation_new_profile(
@@ -805,7 +832,7 @@ class LeadBot:
                 buttons=[[Button.inline(CANCEL_LABEL, data=b"nav:cancel")]],
             )
 
-        @self.bot_client.on(events.CallbackQuery(pattern=rb"^nav:cancel$"))
+        @self._on_bot_event(events.CallbackQuery(pattern=rb"^nav:cancel$"))
         async def navigation_cancel(event: events.CallbackQuery.Event) -> None:
             self._pending_navigation_inputs.pop(
                 _telegram_user_id(event),
@@ -814,7 +841,7 @@ class LeadBot:
             await event.answer("Изменение отменено")
             await _respond_navigation(event, self.navigation.home())
 
-        @self.bot_client.on(
+        @self._on_bot_event(
             events.CallbackQuery(pattern=rb"^nav:profile:([0-9a-f-]{36})$")
         )
         async def navigation_profile(event: events.CallbackQuery.Event) -> None:
@@ -830,7 +857,7 @@ class LeadBot:
             await event.answer()
             await _respond_navigation(event, response)
 
-        @self.bot_client.on(
+        @self._on_bot_event(
             events.CallbackQuery(
                 pattern=rb"^nav:settings:([0-9a-f-]{36}):(\d+)$"
             )
@@ -850,7 +877,7 @@ class LeadBot:
             await event.answer()
             await _respond_navigation(event, response)
 
-        @self.bot_client.on(
+        @self._on_bot_event(
             events.CallbackQuery(
                 pattern=(
                     rb"^nav:edit:([0-9a-f-]{36}):(\d+):"
@@ -876,7 +903,7 @@ class LeadBot:
                 buttons=[[Button.inline(CANCEL_LABEL, data=b"nav:cancel")]],
             )
 
-        @self.bot_client.on(
+        @self._on_bot_event(
             events.CallbackQuery(
                 pattern=rb"^nav:toggle:([0-9a-f-]{36}):([opvc]):(\d+)$"
             )
@@ -904,7 +931,7 @@ class LeadBot:
             await event.answer("Настройка сохранена")
             await _respond_navigation(event, navigation_response)
 
-        @self.bot_client.on(
+        @self._on_bot_event(
             events.CallbackQuery(
                 pattern=rb"^nav:confirm:([0-9a-f-]{36}):(\d+)$"
             )
@@ -929,7 +956,7 @@ class LeadBot:
             await event.answer("Профиль подтверждён")
             await _respond_navigation(event, response)
 
-        @self.bot_client.on(
+        @self._on_bot_event(
             events.CallbackQuery(
                 pattern=rb"^nav:(activate|deactivate):([0-9a-f-]{36}):(\d+)$"
             )
@@ -969,7 +996,7 @@ class LeadBot:
             await event.answer(answer)
             await _respond_navigation(event, response)
 
-        @self.bot_client.on(
+        @self._on_bot_event(
             events.CallbackQuery(
                 pattern=rb"^profile:activate:([0-9a-f-]{36}):(\d+)$"
             )
@@ -987,7 +1014,7 @@ class LeadBot:
             await event.answer("Поиск активирован")
             await _respond_onboarding(event, response)
 
-        @self.bot_client.on(
+        @self._on_bot_event(
             events.CallbackQuery(
                 pattern=rb"^profile:deactivate:([0-9a-f-]{36}):(\d+)$"
             )
@@ -1005,7 +1032,7 @@ class LeadBot:
             await event.answer("Поиск остановлен")
             await _respond_onboarding(event, response)
 
-        @self.bot_client.on(
+        @self._on_bot_event(
             events.CallbackQuery(
                 pattern=rb"^pwt:([0-9a-f-]{36}):([opvc]):(\d+)$"
             )
@@ -1028,7 +1055,7 @@ class LeadBot:
             await event.answer("Настройка сохранена")
             await _respond_onboarding(event, response)
 
-        @self.bot_client.on(
+        @self._on_bot_event(
             events.CallbackQuery(pattern=rb"^pset:([0-9a-f-]{36}):(\d+)$")
         )
         async def explain_profile_settings(
@@ -1039,7 +1066,7 @@ class LeadBot:
             await event.answer()
             await event.respond(settings_help(profile_id, revision))
 
-        @self.bot_client.on(
+        @self._on_bot_event(
             events.CallbackQuery(
                 pattern=rb"^profile:confirm:([0-9a-f-]{36}):(\d+)$"
             )
@@ -1057,7 +1084,7 @@ class LeadBot:
             await event.answer("Профиль подтверждён")
             await _respond_onboarding(event, response)
 
-        @self.bot_client.on(
+        @self._on_bot_event(
             events.CallbackQuery(
                 pattern=(
                     rb"^profile:edit:([0-9a-f-]{36}):"
@@ -1077,7 +1104,7 @@ class LeadBot:
                 "значение 1, значение 2"
             )
 
-        @self.bot_client.on(events.CallbackQuery(pattern=rb"^draft:(\d+)$"))
+        @self._on_bot_event(events.CallbackQuery(pattern=rb"^draft:(\d+)$"))
         async def draft_reply(event: events.CallbackQuery.Event) -> None:
             if self.storage is None:
                 await event.answer("Legacy-отклики выключены", alert=True)
@@ -1119,7 +1146,7 @@ class LeadBot:
             self.storage.save_ai_draft(lead_id, draft.as_dict())
             await self._send_draft_response(event, lead, format_reply_draft(lead, draft))
 
-        @self.bot_client.on(events.CallbackQuery(pattern=rb"^ignore:(\d+)$"))
+        @self._on_bot_event(events.CallbackQuery(pattern=rb"^ignore:(\d+)$"))
         async def ignore_lead(event: events.CallbackQuery.Event) -> None:
             if self.storage is None:
                 await event.answer("Legacy-доставка выключена", alert=True)
@@ -1834,6 +1861,23 @@ def _telegram_user_id(event) -> str:
     if identifier is None:
         raise ValueError("Telegram user identity is unavailable")
     return str(identifier)
+
+
+def _is_bot_event_authorized(config: object, event: object) -> bool:
+    allowed = tuple(getattr(config, "telegram_allowed_user_ids", ()) or ())
+    if not allowed:
+        return True
+    identifier = getattr(event, "sender_id", None)
+    if type(identifier) is not int or identifier <= 0:
+        LOGGER.warning("Blocked bot event without an allowlisted Telegram sender")
+        return False
+    if identifier not in allowed:
+        LOGGER.warning("Blocked bot event from non-allowlisted Telegram sender")
+        return False
+    if getattr(event, "is_private", False) is not True:
+        LOGGER.warning("Blocked allowlisted bot event outside a private Telegram chat")
+        return False
+    return True
 
 
 _PROFILE_INPUT_ERRORS = (

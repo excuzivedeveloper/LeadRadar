@@ -57,6 +57,48 @@ class RuntimeConfigTest(unittest.TestCase):
         self.assertEqual(config.sources_path, Path("custom/sources.json"))
         self.assertEqual(config.filters_path, Path("custom/filters.json"))
 
+    def test_telegram_allowed_user_ids_parse_and_deduplicate(self):
+        cases = (
+            ("123", (123,)),
+            ("123,456", (123, 456)),
+            (" 123 , 456 ", (123, 456)),
+            ("123,456,123", (123, 456)),
+        )
+        for raw, expected in cases:
+            with self.subTest(raw=raw):
+                env = self._telegram_env()
+                env["TELEGRAM_ALLOWED_USER_IDS"] = raw
+
+                config = self._load(env)
+
+                self.assertEqual(config.telegram_allowed_user_ids, expected)
+
+    def test_telegram_allowed_user_ids_reject_invalid_values(self):
+        for raw in ("abc", "0", "-42"):
+            with self.subTest(raw=raw):
+                env = self._telegram_env()
+                env["TELEGRAM_ALLOWED_USER_IDS"] = raw
+
+                with self.assertRaisesRegex(
+                    ConfigurationError,
+                    "TELEGRAM_ALLOWED_USER_IDS",
+                ):
+                    self._load(env)
+
+    def test_collector_only_accepts_valid_allowlist_without_bot_token(self):
+        config = self._load(
+            {
+                "TELEGRAM_API_ID": "111",
+                "TELEGRAM_API_HASH": "hash",
+                "DATABASE_URL": "postgresql+psycopg://test:test@localhost/test",
+                "TELEGRAM_ALLOWED_USER_IDS": "123",
+            },
+            mode=RuntimeMode.COLLECTOR_ONLY,
+        )
+
+        self.assertEqual(config.telegram_allowed_user_ids, (123,))
+        self.assertIsNone(config.bot_token)
+
     def test_subscription_plan_is_configurable_without_payment_credentials(self):
         env = self._telegram_env()
         env.update(

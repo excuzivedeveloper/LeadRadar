@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 import logging
 from time import monotonic
-from typing import Protocol
+from typing import Iterable, Protocol
 from uuid import UUID
 
 from .billing import EntitlementChecker
@@ -227,6 +227,7 @@ class PersonalizedDeliveryJobProcessor:
         entitlement_checker: EntitlementChecker | None = None,
         metrics: MetricsSink | None = None,
         logger: logging.Logger | None = None,
+        telegram_allowed_user_ids: Iterable[int] = (),
     ) -> None:
         self._database = database
         self._sender = sender
@@ -236,6 +237,7 @@ class PersonalizedDeliveryJobProcessor:
         )
         self._metrics = metrics or NoOpMetrics()
         self._logger = logger or logging.getLogger(__name__)
+        self._telegram_allowed_user_ids = frozenset(telegram_allowed_user_ids)
 
     async def __call__(self, claim: JobClaim) -> None:
         await self.process(claim)
@@ -268,6 +270,34 @@ class PersonalizedDeliveryJobProcessor:
             return current
 
         delivery = attempt.delivery
+        if (
+            self._telegram_allowed_user_ids
+            and attempt.recipient_chat_id not in self._telegram_allowed_user_ids
+        ):
+            async with self._database.transaction() as connection:
+                suppressed = await self._deliveries.mark_attempt_suppressed(
+                    connection,
+                    claim,
+                    failure_code="RecipientNotAllowlisted",
+                )
+            self._metrics.increment(
+                MetricNames.DELIVERIES_SUPPRESSED,
+                tags={"reason": "RecipientNotAllowlisted"},
+            )
+            log_event(
+                self._logger,
+                logging.WARNING,
+                "delivery.suppressed",
+                delivery_id=suppressed.id,
+                match_trace_id=suppressed.match_trace_id,
+                opportunity_id=suppressed.opportunity_id,
+                search_profile_id=suppressed.search_profile_id,
+                user_id=suppressed.user_id,
+                attempt=claim.attempt_count,
+                reason="RecipientNotAllowlisted",
+            )
+            return suppressed
+
         started = monotonic()
         try:
             receipt = await self._sender.send(

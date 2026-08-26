@@ -472,6 +472,36 @@ class PersonalizedDeliveryRepository:
             raise DeliveryPersistenceConflict("delivery failure lost ownership")
         return _record(row)
 
+    async def mark_attempt_suppressed(
+        self,
+        connection: AsyncConnection,
+        claim: JobClaim,
+        *,
+        failure_code: str,
+    ) -> PersonalizedDeliveryRecord:
+        code = _safe_failure_code(failure_code)
+        row = (
+            await connection.execute(
+                personalized_deliveries.update()
+                .where(
+                    personalized_deliveries.c.job_id == claim.id,
+                    personalized_deliveries.c.status
+                    == DeliveryStatus.SENDING.value,
+                    personalized_deliveries.c.attempt_count
+                    == claim.attempt_count,
+                )
+                .values(
+                    status=DeliveryStatus.SUPPRESSED.value,
+                    failure_code=code,
+                    updated_at=sa.func.now(),
+                )
+                .returning(personalized_deliveries)
+            )
+        ).mappings().one_or_none()
+        if row is None:
+            raise DeliveryPersistenceConflict("delivery suppression lost ownership")
+        return _record(row)
+
 
 def delivery_idempotency_key(
     match: MatchTraceRecord,
