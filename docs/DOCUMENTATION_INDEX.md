@@ -9,22 +9,24 @@ historical/reference material.
 
 ## Start here
 
-For a new engineer or AI agent, read in this exact order:
+`AGENTS.md` is the unconditional repository entry point. If you arrived at this
+index directly, read [`../AGENTS.md`](../AGENTS.md) first.
 
-1. [`../AGENTS.md`](../AGENTS.md) — execution rules and precedence.
-2. [`CURRENT_STATE.md`](CURRENT_STATE.md) — exact current implementation and
+After `AGENTS.md`, continue in this exact order:
+
+1. [`CURRENT_STATE.md`](CURRENT_STATE.md) — exact current implementation and
    deployment stage.
-3. [`ARCHITECTURE.md`](ARCHITECTURE.md) — runtime identities, modes, data flow,
+2. [`ARCHITECTURE.md`](ARCHITECTURE.md) — runtime identities, modes, data flow,
    persistence and security boundaries.
-4. [`ACTIVE_PLAN.md`](ACTIVE_PLAN.md) — ordered next work and gates.
-5. [`DEPLOYMENT.md`](DEPLOYMENT.md) — current server topology and operational
+3. [`ACTIVE_PLAN.md`](ACTIVE_PLAN.md) — ordered next work and gates.
+4. [`DEPLOYMENT.md`](DEPLOYMENT.md) — current server topology and operational
    constraints.
-6. [`DECISIONS.md`](DECISIONS.md) — architectural decisions that must not be
+5. [`DECISIONS.md`](DECISIONS.md) — architectural decisions that must not be
    casually reversed.
-7. [`../SECURITY.md`](../SECURITY.md) — credentials, sessions, allowlist and
+6. [`../SECURITY.md`](../SECURITY.md) — credentials, sessions, allowlist and
    incident response.
-8. [`COST_SAFETY.md`](COST_SAFETY.md) — AI/network spend and bounded-work rules.
-9. [`KNOWN_LIMITATIONS.md`](KNOWN_LIMITATIONS.md) — what is still unverified or
+7. [`COST_SAFETY.md`](COST_SAFETY.md) — AI/network spend and bounded-work rules.
+8. [`KNOWN_LIMITATIONS.md`](KNOWN_LIMITATIONS.md) — what is still unverified or
    incomplete.
 
 After that, inspect code and tests for the task at hand.

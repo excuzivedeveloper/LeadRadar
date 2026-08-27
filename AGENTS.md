@@ -10,7 +10,8 @@ history.
 
 ## Mandatory reading order
 
-Read these files before proposing implementation or server work:
+After reading this file, continue in this exact order before proposing
+implementation or server work:
 
 1. `docs/DOCUMENTATION_INDEX.md`
 2. `docs/CURRENT_STATE.md`

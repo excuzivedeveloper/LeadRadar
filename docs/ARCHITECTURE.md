@@ -47,7 +47,7 @@ A separate Telegram bot serves the UI and sends personalized cards.
 
 The bot uses a separate Telethon session path from the collector.
 
-## Runtime modes
+## Runtime modes and network diagnostics
 
 ### No arguments
 
@@ -80,6 +80,27 @@ Important consequence:
 
 **PR #2 legacy-filter shadow telemetry is not collected by
 `--collector-only`.**
+
+### `--check-sources`
+
+A bounded **networked Telegram diagnostic**, not an offline config check.
+
+It:
+
+- loads `RuntimeMode.CHECK_SOURCES`;
+- uses the Telegram user credentials/session;
+- acquires the user-session lock;
+- reads enabled entries from `config/sources.json` (or the configured
+  `SOURCES_PATH`);
+- resolves those entries through Telegram with `get_entity()`-style network
+  calls;
+- reports source accessibility;
+- does **not** start the full ingestion runtime, durable raw-message processing,
+  or PR #2 shadow telemetry.
+
+Because it performs real Telegram requests with the collector session,
+`--check-sources` requires explicit authorization as a bounded external-work
+operation.
 
 ### `--run`
 

@@ -78,7 +78,7 @@ uv run --frozen python -m freelancer_bot
 
 It prints help and exits.
 
-Explicit network modes:
+Explicit network modes and Telegram diagnostics:
 
 ```bash
 # Bot UI only; no collector/full ingestion runtime.
@@ -87,9 +87,17 @@ uv run --frozen python -m freelancer_bot --bot-only
 # Dedicated collector/source-side runtime without the full ingestion runtime.
 uv run --frozen python -m freelancer_bot --collector-only
 
+# Bounded networked source-access diagnostic. Uses the Telegram user session,
+# takes its session lock, and resolves enabled config/sources.json entries via
+# Telegram. It does not start the full ingestion/shadow runtime.
+uv run --frozen python -m freelancer_bot --check-sources
+
 # Full collector + bot + durable ingestion/matching runtime.
 uv run --frozen python -m freelancer_bot --run
 ```
+
+`--check-sources` is not a local/offline config check. It performs real Telegram
+network operations and requires an explicitly authorized bounded task/session.
 
 `--run` does not itself authorize AI, discovery, catch-up or persistent
 deployment. Those remain explicit configuration/plan gates.

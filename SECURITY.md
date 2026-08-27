@@ -94,8 +94,16 @@ The bot allowlist must not restrict the dedicated collector.
 - `config/sources.json` is seed/diagnostic input, not a permissive runtime
   fallback.
 - no-argument CLI is safe help only;
-- `--bot-only`, `--collector-only`, `--run` are explicit network modes;
+- `--bot-only`, `--collector-only`, and `--run` are explicit network runtime
+  modes;
+- `--check-sources` is a bounded **networked Telegram diagnostic**: it uses the
+  Telegram user session, takes that session lock, and resolves enabled
+  `config/sources.json` entries through Telegram; it does not start full
+  ingestion/shadow runtime and requires explicit authorization;
 - AI/discovery/catch-up flags are independent opt-ins.
+
+Do not treat `--check-sources` as an offline configuration check. It performs
+real Telegram network operations with the collector identity.
 
 Missing provider credentials must fail closed or make the optional feature
 unavailable. They must not cause an unbounded retry loop.

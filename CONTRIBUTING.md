@@ -26,7 +26,9 @@ uv run --frozen python -m freelancer_bot
 The no-argument command is intentionally safe help.
 
 Use `--bot-only`, `--collector-only` or `--run` only for an explicitly
-controlled test.
+controlled network test. Treat `--check-sources` the same way for authorization
+purposes: it is a bounded Telegram network diagnostic using the user session,
+not an offline config check.
 
 ## Verification
 
