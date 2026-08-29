@@ -1,28 +1,29 @@
 # LeadRadar — Current Deployment
 
 **Status:** CANONICAL  
-**Snapshot date:** 2026-08-27  
-**Deployment code baseline:** `f9884b196ed6a424ec69352597de66c1eeca331c`
+**Snapshot date:** 2026-08-29  
+**Deployment code baseline:** `f9884b196ed6a424ec69352597de66c1eeca331c`  
+**Repository head before this docs sync:** `e44a3a7f11ebe463e7222cc3a10eca29ff51c062`
 
 This document records the current shared-server LeadRadar layout. It contains no
 credential values.
 
 ## Server isolation
 
-LeadRadar is installed under:
+LeadRadar checkout:
 
 ```text
 /opt/leadradar/LeadRadar
 ```
 
-Runtime state is outside the Git checkout:
+Runtime state outside Git checkout:
 
 ```text
 /opt/leadradar/runtime/.env
 /opt/leadradar/runtime/sessions/
 ```
 
-Project-local tools/state include:
+Project-local tooling:
 
 ```text
 /opt/leadradar/LeadRadar/.venv
@@ -36,12 +37,11 @@ Project Python:
 3.14.7
 ```
 
-The shared host's global Python is unrelated to LeadRadar and must not be
-modified.
+Do not modify shared-host global Python for LeadRadar work.
 
 ## PostgreSQL
 
-Current isolated database topology:
+Current isolated topology:
 
 ```text
 container=leadradar-postgres
@@ -53,21 +53,17 @@ database=leadradar
 role=leadradar
 ```
 
-Resource limits were created specifically for LeadRadar.
-
-Current expected health:
+Expected state:
 
 ```text
 POSTGRES_HEALTH=healthy
 ALEMBIC_CURRENT=20260825_0037
 ```
 
-Never print the PostgreSQL password or full credentialed `DATABASE_URL`.
+Never print PostgreSQL credentials or the full credentialed `DATABASE_URL`.
+Earlier exposed credentials were rotated and historical values are invalid.
 
-Credentials exposed during setup/diagnostics were rotated. Historical values
-must be treated as invalid.
-
-## Telegram sessions
+## Telegram identities and sessions
 
 Runtime session directory:
 
@@ -82,29 +78,21 @@ freelancer_user          -> dedicated collector account
 freelancer_delivery_bot  -> bot identity
 ```
 
-The old main-account collector session was preserved only as rollback evidence
-and is not the active collector path.
+The owner's main Telegram account is the bot user/recipient, not the collector.
+The old main-account collector session is rollback-only and is not active.
 
-Session files are bearer credentials and must remain private with restrictive
-permissions.
+Session files are bearer credentials. Collector and bot must use separate paths,
+and two LeadRadar processes must not use the same session concurrently.
 
-Do not run two LeadRadar processes against the same session path.
+## Owner-only bot boundary
 
-## Bot owner boundary
+Runtime configuration has exactly one `TELEGRAM_ALLOWED_USER_IDS` entry: the
+owner's main Telegram account. Its numeric value must not be recorded in docs or
+reports.
 
-Runtime configuration has:
-
-```text
-TELEGRAM_ALLOWED_USER_IDS configured
-entry count = 1
-```
-
-The single entry is the owner's main Telegram account.
-
-Do not record its numeric value in documentation or reports.
-
-The merged access policy requires a private 1:1 chat and valid allowlisted
-`sender_id`; group/supergroup events are rejected.
+With non-empty allowlist, inbound bot use requires an allowlisted positive
+`sender_id` from a private 1:1 chat. Group/supergroup events fail closed.
+Personalized delivery has an independent recipient allowlist check.
 
 ## Source catalog
 
@@ -120,14 +108,59 @@ disabled=2
 PostgreSQL runtime state:
 
 ```text
-repository_seed approved=13
-repository_seed candidate=2
+approved=13
+candidate=2
 ```
 
-All 13 approved sources were accessible during setup validation.
+PostgreSQL lifecycle/access state controls the monitored runtime snapshot.
+`config/sources.json` is seed/diagnostic input, not a permissive fallback.
 
-The current runtime does not read JSON as a permissive fallback for monitored
-sources. PostgreSQL lifecycle/access state controls the approved snapshot.
+## Collector membership prerequisite
+
+A critical deployment prerequisite is now proven:
+
+> The dedicated collector must be a Telegram participant/member of an approved
+> channel to receive that channel's live `NewMessage` updates.
+
+Public-source resolution/history access is not enough. During investigation the
+collector could resolve/read all approved sources while being a participant in
+0/13; six natural messages occurred in three monitored sources during a
+3600-second canary, yet no live callback fired.
+
+After a controlled three-source join pilot, a natural message traversed:
+
+```text
+Telegram live update
+-> raw_messages
+-> cheap V2 prefilter
+-> legacy-filter shadow
+```
+
+with valid schema/filter SHA and zero AI calls/Opportunities/deliveries.
+
+Membership rollout is now complete:
+
+```text
+APPROVED_SOURCE_COUNT=13
+MEMBER_AFTER_COUNT=13
+NON_MEMBER_AFTER_COUNT=0
+NEW_JOIN_SUCCESS_COUNT=10
+NEW_JOIN_FAILURE_COUNT=0
+COLLECTOR_MEMBERSHIP_ROLLOUT=COMPLETE
+COLLECTOR_DEPLOYMENT_READY=YES
+```
+
+Membership is external Telegram account state. It is not stored as the source
+lifecycle authority in PostgreSQL, so deployment/preflight procedures must
+verify both:
+
+```text
+source APPROVED in PostgreSQL
+AND
+collector is Telegram member/participant
+```
+
+Do not add automatic join behavior without a separately reviewed design.
 
 ## Runtime flags
 
@@ -153,13 +186,14 @@ DEEPSEEK_API_KEY=not configured
 TOKENROUTER_API_KEY=not configured
 ```
 
-Do not infer an API key value from these status statements.
+`READY_FOR_AI_SETUP=YES` means the pre-AI ingestion gate passed. It does **not**
+mean an AI key/provider is already configured.
 
 ## Process state
 
 There is currently **no persistent LeadRadar runtime**.
 
-Expected outside a bounded test:
+Expected outside bounded tasks:
 
 ```text
 application process=not running
@@ -168,33 +202,49 @@ bot=not running
 user session lock=not held
 ```
 
-No LeadRadar systemd unit has been authorized.
-
-A bounded canary starts the repository process in the foreground and must stop it
-again before the task is considered complete.
+No LeadRadar systemd unit is authorized.
 
 ## Current live validation
 
-A 600-second `--run` canary completed with graceful shutdown and no runtime
-error, but no natural Telegram messages arrived.
-
-Therefore:
+Validated:
 
 ```text
-startup/shutdown safety=validated
-live raw ingestion evidence=absent
-live shadow evidence=absent
-AI setup authorization=no
-persistent runtime authorization=no
+collector membership prerequisite=YES
+approved source membership=13/13
+live raw ingestion=YES
+live cheap prefilter=YES
+live legacy shadow=YES
+shadow schema match=YES
+shadow filter SHA match=YES
+AI provider calls=0
+live Opportunities=0
+live deliveries=0
+READY_FOR_AI_SETUP=YES
+PERSISTENT_RUNTIME_AUTHORIZED=NO
 ```
 
-The next bounded run is defined by `docs/ACTIVE_PLAN.md`.
+The next gate is AI provider/model configuration, defined in
+`docs/ACTIVE_PLAN.md`.
+
+## Evidence references
+
+Safe report hashes:
+
+```text
+investigation report:
+cf5f14807005319ddf4862c36746904670ca04a1e9aa69a480650a792865eb12
+
+membership pilot report:
+f60769f6dcfbe65b7094ba7fba901fea9bc1e9a2278481c49265f83a9c50c623
+
+membership rollout report:
+dfbf1d19b29963c43e01eb9512e6817343a2274182be4c0d562466f0898cec5e
+```
 
 ## Shared-server no-touch boundary
 
-LeadRadar shares the host with unrelated projects.
-
-LeadRadar tasks must not modify:
+LeadRadar shares the host with unrelated projects. LeadRadar tasks must not
+modify:
 
 - WayFound;
 - Hermes;
@@ -203,52 +253,30 @@ LeadRadar tasks must not modify:
 - firewall;
 - system time/NTP;
 - global Python;
-- unrelated PostgreSQL databases.
+- unrelated databases.
 
-A known unrelated Hermes service problem predates LeadRadar work and remains out
-of scope unless separately authorized.
-
-## System clock
-
-The host has previously reported NTP synchronization as unavailable/not
-synchronized, with only small observed Telegram setup skew.
-
-Do not change system time or NTP as part of normal LeadRadar work without
-separate authorization.
+A known Hermes restart-loop predates LeadRadar work and remains out of scope.
 
 ## Promotion rules
 
-Before updating the server checkout:
+Before updating server checkout:
 
-1. verify current server HEAD;
-2. verify tracked worktree is clean;
+1. verify current HEAD;
+2. verify tracked worktree clean;
 3. fetch exact reviewed `origin/main`;
-4. verify merge provenance if relevant;
+4. verify provenance/diff;
 5. fast-forward only;
 6. verify Alembic state;
-7. do not overwrite `/opt/leadradar/runtime`.
+7. preserve `/opt/leadradar/runtime`.
 
-Code promotion and runtime feature enablement are separate actions.
+Code promotion, Telegram membership provisioning and runtime feature enablement
+are separate actions.
 
 ## Secrets/reporting rules
 
-Safe reports may contain:
+Safe reports may contain commit SHAs, migration revisions, counts, booleans,
+non-secret file hashes, public source handles and membership status.
 
-- commit SHAs;
-- migration revision;
-- counts;
-- booleans;
-- file modes;
-- hashes of non-secret config snapshots;
-- source handles when already public.
-
-Reports must not contain:
-
-- bot token;
-- API hash;
-- DB password/full DSN;
-- owner numeric Telegram ID;
-- session contents;
-- Telegram login/2FA codes;
-- live message bodies;
-- AI provider keys.
+Reports must not contain bot token, API hash, DB password/full DSN, owner numeric
+Telegram ID, session contents, Telegram login/2FA codes, live message bodies or
+AI provider keys.

@@ -1,7 +1,7 @@
 # LeadRadar — Accepted Decisions
 
 **Status:** CANONICAL  
-**Last verified:** 2026-08-27
+**Last verified:** 2026-08-29
 
 These decisions explain why the current architecture and execution order look
 the way they do. Reversing one should be an explicit reviewed decision, not an
@@ -13,10 +13,10 @@ LeadRadar is a fork/adaptation, not a clean-sheet rewrite.
 
 The upstream Telegram filter accumulated useful anti-spam/anti-noise behavior.
 Codence adaptation changed positive signal/profile configuration while
-deliberately preserving most stop-word behavior.
+preserving most stop-word behavior.
 
-Known matcher imperfections are tolerated until measured with real shadow
-evidence.
+Known matcher imperfections are tolerated until enough real shadow evidence
+supports a narrow change.
 
 **Consequence:** do not replace the legacy filter wholesale merely because the
 V2 pipeline exists.
@@ -28,17 +28,15 @@ matching and personalized delivery are PostgreSQL-backed.
 
 SQLite remains legacy compatibility storage only.
 
-**Consequence:** new V2 state or schema belongs in PostgreSQL/Alembic, not in
-SQLite.
+**Consequence:** new V2 state/schema belongs in PostgreSQL/Alembic, not SQLite.
 
 ## D-003 — Dedicated collector account is separate from the owner
 
-The active Telethon collector uses a dedicated Telegram account.
+The active Telethon collector uses a dedicated Telegram account. The owner's
+main account is the bot user/recipient.
 
-The owner's main account is the bot user/recipient.
-
-**Reason:** reduce operational risk to the owner's main Telegram account and
-separate collector session risk from bot ownership/recovery.
+**Reason:** reduce operational risk to the owner's main account and separate
+collector session risk from bot ownership/recovery.
 
 **Consequence:** do not switch collection back to the main account without a new
 explicit decision.
@@ -47,65 +45,53 @@ explicit decision.
 
 Current deployment uses exactly one allowlisted user: the owner.
 
-Inbound authorization requires both valid allowlisted sender identity and
-private 1:1 context. Outbound delivery has a separate allowlist boundary.
+Inbound authorization requires valid allowlisted sender identity and private 1:1
+context. Outbound delivery has a separate allowlist boundary.
 
-**Reason:** BotFather cannot make a one-user security boundary, and hiding a bot
-username is not access control.
-
-**Consequence:** `TELEGRAM_TARGET_CHAT_ID` alone is not sufficient authorization.
+**Reason:** BotFather cannot create a one-user application authorization
+boundary, and hiding a username is not access control.
 
 ## D-005 — Source JSON is seed input, PostgreSQL is runtime authority
 
 `config/sources.json` is useful for repository configuration, seed import and
-diagnostics.
+diagnostics. Collector runtime source lifecycle/access authority is PostgreSQL.
 
-The collector runtime must use PostgreSQL source lifecycle/access state.
-
-**Reason:** auditable lifecycle, collector access control and no permissive JSON
-fallback.
+**Reason:** auditable lifecycle and no permissive JSON fallback.
 
 ## D-006 — Legacy filter runs in shadow, not as the V2 gate
 
-The V2 cheap prefilter is high-recall. The legacy keyword/stop-word filter is
-evaluated after a cheap-prefilter pass and persisted as observational telemetry.
-
-**Reason:** collect evidence before deciding how much legacy anti-noise logic
-should influence later V2 behavior.
+The V2 cheap prefilter is high-recall. Legacy keyword/stop-word `match_text()` is
+evaluated after cheap-prefilter pass and persisted as observational telemetry.
 
 **Consequence:** `--collector-only` is insufficient to collect PR #2 shadow
 evidence; bounded full `--run` is required.
 
 ## D-007 — Do not use catch-up to manufacture canary evidence
 
-Current live validation uses only naturally arriving new Telegram messages.
+Current live validation uses naturally arriving new Telegram messages.
 
-**Reason:** the first goal is to prove steady-state live dispatch and shadow
-behavior without adding historical load, duplicate ambiguity or unexpected
-delivery/AI cost.
+**Reason:** prove steady-state live dispatch/shadow behavior without historical
+load, duplicate ambiguity or unexpected downstream cost.
 
-**Consequence:** a no-message canary is inconclusive, not a reason to
-automatically set `SEND_CATCH_UP=true`.
+**Consequence:** a no-message canary is inconclusive, not permission to set
+`SEND_CATCH_UP=true`.
 
 ## D-008 — AI is a separate gate
 
-AI code exists, but current deployment has no AI key configured.
+AI code exists, but pre-AI collection/prefilter/shadow validation must pass first.
+That gate is now complete; provider/model/key configuration is the next separate
+stage.
 
-**Reason:** first prove collection/prefilter/shadow safety, then choose a
-provider/model and budget explicitly.
-
-**Consequence:** no AI provider should be called during shadow canaries.
+**Consequence:** configuration readiness and first live AI provider call remain
+separate authorizations.
 
 ## D-009 — Bounded validation precedes persistent runtime
 
-Every external-work stage is first tested in a bounded foreground window with
+Every external-work stage is first exercised in a bounded foreground task with
 explicit stop conditions.
 
-**Reason:** reduce Telegram/account/cost/shared-server risk and produce
-reproducible evidence.
-
-**Consequence:** a successful bounded run does not authorize a daemon/systemd
-deployment.
+**Consequence:** a successful bounded run does not authorize daemon/systemd
+operation.
 
 ## D-010 — LeadRadar is isolated on a shared server
 
@@ -121,5 +107,51 @@ If a bot token, DB credential, session credential, provider key or other bearer
 secret appears in chat/log output, it is treated as compromised and replaced
 before the next live stage.
 
-**Consequence:** historical exposed values are invalid; current replacement
-values must never be copied into documentation.
+**Consequence:** historical exposed values are invalid; replacements must never
+be copied into documentation.
+
+## D-012 — Telegram membership is a collector deployment prerequisite
+
+A PostgreSQL-approved public source being resolvable/readable does **not** prove
+that Telegram will deliver live channel updates to the dedicated collector.
+
+This was experimentally established:
+
+```text
+collector membership=0/13
+natural messages during canary=6
+live raw callbacks=0
+```
+
+After joining three approved channels, a natural message traversed:
+
+```text
+live NewMessage
+-> raw_messages
+-> cheap prefilter
+-> legacy shadow
+```
+
+The remaining approved public sources were then joined successfully, producing:
+
+```text
+approved sources=13
+collector memberships=13
+non-members=0
+```
+
+**Decision:** deployment readiness for a monitored source requires both:
+
+```text
+PostgreSQL lifecycle=APPROVED
+AND
+collector Telegram membership=YES
+```
+
+**Consequence:** source seeding/access checks and Telegram membership
+provisioning are separate operations. `--check-sources` is not a membership or
+live-update readiness proof.
+
+Automatic join behavior is **not** accepted by this decision. Adding auto-join
+would introduce new external side effects/rate-limit risk and requires its own
+reviewed design.
