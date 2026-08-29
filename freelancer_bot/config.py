@@ -1102,6 +1102,10 @@ class RuntimeConfig(BaseSettings):
                 "WEB_DISCOVERY_MAX_BACKOFF_SECONDS must be >= "
                 "WEB_DISCOVERY_BASE_BACKOFF_SECONDS"
             )
+        # Keep the bounded production audit sampler capable of satisfying the
+        # existing Source Audit v1 rejection evidence floor. Import lazily to
+        # avoid making the settings module depend on the audit module at import
+        # time while still deriving the invariant from the canonical policy.
         from .source_audit import SourceAuditDecisionPolicy
 
         rejection_evidence_floor = (
