@@ -1,7 +1,7 @@
 # LeadRadar — Current Architecture
 
 **Status:** CANONICAL  
-**Last verified:** 2026-08-27  
+**Last verified:** 2026-08-29  
 **Implementation baseline:** `f9884b196ed6a424ec69352597de66c1eeca331c`
 
 ## Purpose
@@ -19,33 +19,21 @@ upstream Telegram lead bot. The V2 architecture separates:
 - personalized delivery;
 - source discovery/audit.
 
-The project intentionally preserves useful legacy anti-noise behavior while
-moving V2 routing and persistence to separate, auditable boundaries.
+Useful legacy anti-noise behavior is preserved while V2 routing and persistence
+remain separate, auditable boundaries.
 
 ## Runtime identities
 
-There are three distinct Telegram identities in the current deployment design.
+Current deployment uses three distinct Telegram identities:
 
-### Dedicated collector account
+```text
+dedicated Telegram user account -> collector
+owner main Telegram account     -> bot user/recipient
+Telegram bot                    -> UI/delivery identity
+```
 
-A dedicated Telegram user account owns the active Telethon user session and
-reads approved source channels.
-
-It is not the bot owner/user and is not required to be in the bot allowlist.
-
-### Main owner account
-
-The owner's main Telegram account is the only configured bot user/recipient in
-the current private deployment.
-
-Its numeric Telegram ID is stored only in runtime configuration and must not be
-printed in reports or committed.
-
-### Bot identity
-
-A separate Telegram bot serves the UI and sends personalized cards.
-
-The bot uses a separate Telethon session path from the collector.
+The collector is independent from the bot owner allowlist and uses a separate
+Telethon session.
 
 ## Runtime modes and network diagnostics
 
@@ -55,131 +43,130 @@ The bot uses a separate Telethon session path from the collector.
 python -m freelancer_bot
 ```
 
-Safe help-only behavior. It must not start network runtime.
+Safe help-only behavior; no network runtime.
 
 ### `--bot-only`
 
-Starts the user-facing bot UI only.
-
-It does **not** start:
-
-- collector user client;
-- raw ingestion;
-- durable ingestion/matching workers;
-- source discovery;
-- catch-up.
-
-It still needs Telegram bot/API credentials and PostgreSQL.
+Starts bot UI only. It does not start collector/raw ingestion, durable
+matching/ingestion workers, discovery or catch-up.
 
 ### `--collector-only`
 
-Starts the authenticated collector/source side without constructing the full
-Telegram ingestion runtime used by `--run`.
+Starts authenticated collector/source-side runtime without constructing the
+full ingestion runtime used by `--run`.
 
 Important consequence:
 
-**PR #2 legacy-filter shadow telemetry is not collected by
-`--collector-only`.**
+```text
+--collector-only does not collect PR #2 shadow telemetry
+```
 
 ### `--check-sources`
 
-A bounded **networked Telegram diagnostic**, not an offline config check.
+A bounded networked Telegram diagnostic. It uses the collector user session,
+takes its session lock and resolves enabled `config/sources.json` (or configured
+`SOURCES_PATH`) entries through Telegram.
 
-It:
-
-- loads `RuntimeMode.CHECK_SOURCES`;
-- uses the Telegram user credentials/session;
-- acquires the user-session lock;
-- reads enabled entries from `config/sources.json` (or the configured
-  `SOURCES_PATH`);
-- resolves those entries through Telegram with `get_entity()`-style network
-  calls;
-- reports source accessibility;
-- does **not** start the full ingestion runtime, durable raw-message processing,
-  or PR #2 shadow telemetry.
-
-Because it performs real Telegram requests with the collector session,
-`--check-sources` requires explicit authorization as a bounded external-work
-operation.
+It does not start full ingestion/shadow runtime and requires explicit external-
+work authorization.
 
 ### `--run`
 
-Full runtime. It starts:
+Full runtime starts:
 
 - dedicated user collector;
 - Telegram bot;
-- PostgreSQL-backed ingestion runtime/durable workers;
-- matching/delivery components that are enabled/configured.
+- PostgreSQL-backed ingestion/durable workers;
+- enabled matching/delivery components.
 
-Catch-up, discovery, AI and legacy delivery remain separately controlled by
-configuration and are not implied merely by choosing `--run`.
+Catch-up, discovery, AI and legacy delivery remain independently gated by
+configuration.
 
 ## Persistence boundaries
 
-### PostgreSQL — V2 source of truth
+PostgreSQL is V2 source of truth for collector/source state, raw messages,
+prefilter/shadow evidence, durable jobs, AI telemetry/cache, Opportunities,
+SearchProfiles, matching, deliveries, feedback and entitlement state.
 
-V2 state includes, among other things:
-
-- collector accounts and source access;
-- sources/lifecycle/audit evidence;
-- raw messages;
-- prefilter results;
-- shadow evaluations;
-- durable jobs;
-- AI telemetry/cache;
-- canonical Opportunities;
-- SearchProfiles;
-- match decisions/traces;
-- personalized deliveries/actions;
-- feedback;
-- subscription/entitlement evidence.
-
-Alembic is the schema change path.
-
-Current deployment migration head:
+Alembic is the V2 schema path. Current deployment revision:
 
 ```text
 20260825_0037
 ```
 
-### SQLite — legacy compatibility only
+SQLite remains legacy compatibility only. `LEGACY_DELIVERY_ENABLED=false` in the
+current deployment.
 
-SQLite remains for legacy V1 compatibility surfaces. It is not the V2 source of
-truth.
+## Source lifecycle vs Telegram membership
 
-`LEGACY_DELIVERY_ENABLED=false` in the current deployment.
+These are separate conditions and must not be conflated.
 
-Do not migrate V2 state back into SQLite or treat SQLite as current product
-storage.
+### PostgreSQL source authority
 
-## Source lifecycle
+`config/sources.json` is seed/diagnostic input. Runtime collector source authority
+comes from PostgreSQL lifecycle/access state.
 
-`config/sources.json` is repository seed/diagnostic input.
-
-At runtime the collector binds its real Telegram account to PostgreSQL and loads
-only sources allowed by the PostgreSQL lifecycle/access model.
-
-Current deployment seed state:
+Current deployment:
 
 ```text
-15 total
-13 approved/enabled
-2 candidate/disabled
+15 total source rows
+13 APPROVED
+2 CANDIDATE
 ```
 
-The 13 enabled sources were validated as accessible by the dedicated collector.
+### Telegram membership prerequisite
 
-Discovery or audit must not bypass lifecycle approval.
+For live channel updates, an APPROVED source is not sufficient by itself.
+The dedicated collector account must also be a Telegram participant/member of
+the channel.
+
+The project experimentally proved this distinction:
+
+```text
+0/13 memberships
++ public history readable
++ 6 natural messages during canary
+=> 0 live raw callbacks
+```
+
+After joining three approved channels:
+
+```text
+membership
+-> live NewMessage update
+-> raw_messages
+-> cheap V2 prefilter
+-> legacy shadow row
+```
+
+The rollout then completed membership for all approved public sources:
+
+```text
+APPROVED_SOURCE_COUNT=13
+MEMBER_AFTER_COUNT=13
+NON_MEMBER_AFTER_COUNT=0
+```
+
+Therefore a deployment-ready source requires both:
+
+```text
+PostgreSQL lifecycle=APPROVED
+AND
+collector Telegram membership=YES
+```
+
+Do not interpret `--check-sources`/history readability as proof of live-update
+readiness. Do not add automatic joining without a separately reviewed design.
 
 ## Live ingestion flow
 
-Conceptually:
+Current steady-state flow:
 
 ```text
-approved Telegram source
+approved + joined Telegram source
         |
         v
-dedicated Telethon collector
+dedicated Telethon collector receives NewMessage
         |
         v
 raw_messages + telegram.raw_message.v1 durable job
@@ -206,101 +193,75 @@ canonical Opportunity
 matching against active SearchProfiles
         |
         v
-personalized delivery job
-        |
-        v
-owner-allowlisted Telegram bot send
+personalized owner-allowlisted delivery
 ```
+
+The first four live stages through shadow telemetry have now been observed with a
+natural Telegram message. AI analysis and later stages have not yet been live-
+validated in this deployment.
 
 ## V2 cheap prefilter vs legacy filter
 
-These must not be conflated.
-
-### Cheap V2 prefilter
-
-Designed for high recall. It rejects only:
+The cheap V2 prefilter is intentionally high-recall and rejects only:
 
 - empty/whitespace content;
 - Telegram service events.
 
-All other normal text remains eligible for downstream analysis.
-
-### Legacy filter shadow
-
-After the cheap V2 prefilter passes, the current full ingestion runtime evaluates
-the legacy keyword/stop-word `match_text()` logic and records the result in
-PostgreSQL.
+After cheap-prefilter pass, the full runtime evaluates legacy keyword/stop-word
+`match_text()` and persists the result as observational shadow telemetry.
 
 The legacy shadow:
 
-- is observational;
 - records exact config SHA and decision details;
 - does not block V2 routing;
-- exists so the project can compare accumulated anti-noise behavior against the
-  V2 pipeline before redesigning the legacy matcher.
+- is used to measure preserved anti-noise behavior before redesign.
+
+Current filter snapshot used by the successful live pilot:
+
+```text
+FILTERS_SHA256=bfb6eac3f964fc6778af65be82eb55016bcf1be22d59a928df8bb098bf30a2c8
+min_score=7
+schema=legacy-filter-shadow.v1
+```
+
+No filter relaxation was required to prove ingestion/shadow operation.
 
 ## AI Opportunity analysis
 
 Opportunity analysis is global per canonical raw/dedup identity, not one model
 call per user.
 
-When a compatible provider is configured, analysis can classify and materialize
-canonical Opportunities. Exact compatible analysis cache entries can be reused.
+When no analyzer is configured:
 
-When no Opportunity analyzer is configured:
-
-- raw ingestion/prefilter/shadow can still operate;
+- raw ingestion/prefilter/shadow can operate;
 - `opportunity.analysis.v1` jobs may remain pending;
 - no provider call should occur.
 
-The current deployment intentionally has no AI keys configured.
+The pre-AI gate has passed, but current deployment still has no AI provider key
+configured. Provider/model configuration is the next separate gate.
 
 ## SearchProfiles
 
-V2 user matching is based on PostgreSQL SearchProfiles.
+V2 matching uses PostgreSQL SearchProfiles. Natural-language onboarding can use a
+configured OpenAI-compatible provider to produce a draft profile, which the user
+confirms/activates.
 
-Natural-language onboarding can use a configured OpenAI-compatible provider to
-produce a draft profile, which the user confirms/activates.
-
-Multiple profiles per user are supported with ownership checks.
-
-The legacy `freelancer_profile.json` is a separate reply-generation style/profile
-surface and must not be confused with the V2 SearchProfile used for matching.
-
-See `docs/profile-setup.md`.
+The legacy `freelancer_profile.json` is a separate reply-generation profile/style
+surface and must not be confused with the V2 matching SearchProfile.
 
 ## Matching and delivery
 
-Canonical Opportunities enter the matching/delivery path.
+Canonical Opportunities enter deterministic/structured matching. Zero matches is
+a valid result.
 
-Matching is deterministic/structured with optional semantic data and explicit
-thresholds. Zero matches is a valid result.
+Personalized delivery is PostgreSQL-backed and protected by the owner allowlist.
+Blocked non-allowlisted personalized deliveries are terminally suppressed.
 
-Personalized delivery is per recipient and PostgreSQL-backed.
-
-The current private deployment adds defense in depth:
-
-```text
-allowlist non-empty
-AND recipient not allowlisted
-=> no Telegram send
-```
-
-Blocked personalized deliveries are terminally suppressed rather than retried
-forever.
+No live lead delivery has yet been authorized in the current deployment.
 
 ## Owner-only bot boundary
 
-Configuration:
-
-```text
-TELEGRAM_ALLOWED_USER_IDS=<comma-separated positive Telegram user IDs>
-```
-
-An empty value preserves the repository's backward-compatible public-bot
-behavior.
-
-With a non-empty allowlist, inbound bot authorization requires:
+With non-empty `TELEGRAM_ALLOWED_USER_IDS`, inbound authorization requires:
 
 ```text
 type(sender_id) is int
@@ -309,40 +270,38 @@ sender_id in allowlist
 event.is_private is True
 ```
 
-No `chat_id` fallback is allowed for authorization.
+No `chat_id` fallback is allowed. The centralized event wrapper applies the gate
+before handler product/DB side effects. Outbound personalized/legacy delivery has
+independent allowlist checks.
 
-The centralized bot-event wrapper executes this gate before handler product/DB
-side effects.
-
-This boundary applies to normal messages, commands, navigation/free text and
-callbacks. Outbound personalized and legacy delivery have independent allowlist
-checks.
-
-The collector pipeline is unaffected by the bot allowlist.
+The collector pipeline and its channel memberships are independent from bot
+allowlist state.
 
 ## Session locking
 
-Telethon session files are bearer credentials.
-
-Collector and bot sessions use different paths. A sidecar nonblocking lock
-prevents concurrent LeadRadar processes from using the same session path.
+Telethon session files are bearer credentials. Collector and bot sessions use
+different paths. A sidecar nonblocking lock prevents concurrent LeadRadar use of
+the same session path.
 
 Never copy, inspect, print or commit session contents.
 
 ## Discovery and audit
 
-The repository contains Web, Telegram graph/global/chat discovery and Source
-Audit capabilities.
+Web, Telegram graph/global/chat discovery and Source Audit exist in code but are
+separate later-stage capabilities and remain disabled in deployment.
 
-These are separate operational stages and are currently disabled in the live
-deployment.
+Their existence does not authorize execution.
 
-Their existence in code does not authorize their execution.
+## Persistent runtime
+
+Supporting runtime code exists, but no persistent LeadRadar service is currently
+authorized. Bounded successful runs are evidence gates, not daemon authorization.
+
+Future persistent deployment preflight must verify both PostgreSQL-approved source
+state and Telegram membership state.
 
 ## Observability
 
-Structured logs and operator commands are designed to expose identifiers,
-counts and bounded evidence rather than raw message bodies or secrets.
-
-Operators must still treat logging as a security boundary: do not deliberately
-print DSNs, tokens, owner IDs, session contents or live Telegram bodies.
+Prefer structured evidence containing IDs, counts, statuses and hashes rather
+than live message bodies or secrets. Never deliberately log DSNs, tokens, owner
+IDs, session contents or raw Telegram bodies.
