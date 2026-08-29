@@ -1,8 +1,8 @@
 # LeadRadar Documentation Index
 
 **Status:** CANONICAL  
-**Last verified:** 2026-08-27  
-**Implementation baseline:** `f9884b196ed6a424ec69352597de66c1eeca331c`
+**Last verified:** 2026-08-30
+**Implementation baseline:** `d92b0446be19f391bb8f479387b27d914c081e35`
 
 This index defines which documents describe the current project and which are
 historical/reference material.
@@ -86,6 +86,7 @@ baseline where appropriate. If a code-changing commit lands after that baseline:
 2. determine which canonical docs are affected;
 3. update them before treating documentation as fully synchronized.
 
-A docs-only commit may change repository `HEAD` while leaving the implementation
-baseline unchanged. That is expected and should not be interpreted as a runtime
-code change.
+PR #6 was a code-changing OpenRouter Opportunity Analysis implementation and
+server sync. This documentation sync realigns the canonical implementation
+baseline to that merged code. Later docs-only commits may again move repository
+`HEAD` without changing application behavior.

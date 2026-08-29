@@ -1,8 +1,8 @@
 # LeadRadar — Known Limitations and Validation Gaps
 
 **Status:** CANONICAL  
-**Last verified:** 2026-08-29  
-**Implementation baseline:** `f9884b196ed6a424ec69352597de66c1eeca331c`
+**Last verified:** 2026-08-30
+**Implementation baseline:** `d92b0446be19f391bb8f479387b27d914c081e35`
 
 This document distinguishes code that exists from behavior that has actually
 been validated in the current deployment.
@@ -30,15 +30,22 @@ Therefore:
 
 ```text
 SHADOW_LIVE_EVIDENCE=YES
-READY_FOR_AI_SETUP=YES
+OPENROUTER_IMPLEMENTATION_READY=YES
+OPENROUTER_RUNTIME_CONFIGURED=NO
+LIVE_AI_ANALYSIS_VALIDATED=NO
+READY_FOR_OPENROUTER_CONFIGURATION=YES
+READY_FOR_BOUNDED_AI_ANALYSIS=NO
 ```
 
-The next limitation/gate is live AI configuration/validation, not ingestion.
+The next limitation/gate is OpenRouter configuration-only, then bounded live AI
+validation, not ingestion.
 
 ## Current top limitations
 
-1. **P0 — No live AI Opportunity-analysis evidence yet.** The deployment still
-   has no AI provider key/model configured by design.
+1. **P0 — OpenRouter Opportunity Analysis is not live-validated.** First-class
+   OpenRouter Opportunity support is implemented, offline-tested and
+   server-synced, but runtime key/configuration and live model behavior are not
+   validated yet.
 2. **P0 — No live end-to-end lead delivery yet.** Matching and personalized
    delivery are implemented/tested, but no real AI-produced Opportunity has been
    matched and delivered in this deployment.
@@ -57,24 +64,32 @@ The next limitation/gate is live AI configuration/validation, not ingestion.
 7. **P1 — Current shadow sample is small.** Live path correctness is proven, but
    one successful natural shadow row is not enough to tune thresholds/keywords
    confidently.
-8. **P1 — AI quality/cost are provider-dependent.** Repository abstractions and
-   tests do not establish that a specific current provider/model is suitable.
-9. **P1 — SearchProfile onboarding requires a configured AI route for its
+8. **P1 — OpenRouter model availability/cost are external.**
+   `minimax/minimax-m3:free` availability, pricing and rate/free-tier limits can
+   change outside the repository and must be reverified before live validation.
+9. **P1 — Opportunity Analysis has no separate enable switch.** Once the
+   matching provider key is configured, full `--run` can process pending
+   `opportunity.analysis.v1` jobs and make provider calls. `AI_REPLY_ENABLED`
+   controls reply drafting only.
+10. **P1 — SearchProfile onboarding requires a configured AI route for its
    natural-language flow.** That route is not enabled yet.
-10. **P1 — At-least-once external delivery remains.** Telegram send and
+11. **P1 — At-least-once external delivery remains.** Telegram send and
     PostgreSQL confirmation cannot be one atomic transaction; idempotency reduces
     but cannot mathematically remove the crash window.
-11. **P2 — Discovery/audit code is not deployment evidence.** Web,
+12. **P2 — OpenRouter scope is currently Opportunity Analysis only.** It is not
+    first-class support for onboarding, Source Audit, Telegram Chat Screening,
+    reply drafting or source discovery.
+13. **P2 — Discovery/audit code is not deployment evidence.** Web,
     global/graph/chat discovery and Source Audit exist but remain disabled.
-12. **P2 — Billing/payment code is not configured production payment behavior.**
+14. **P2 — Billing/payment code is not configured production payment behavior.**
     Provider-neutral state/adapters exist, but current private single-owner
     deployment has not activated production billing.
-13. **P2 — Legacy V1 compatibility remains in the codebase.** SQLite/legacy
+15. **P2 — Legacy V1 compatibility remains in the codebase.** SQLite/legacy
     components still exist even though PostgreSQL is V2 authority and legacy
     delivery is disabled.
-14. **P2 — Synthetic fixtures are not production-quality evidence.** Tests are
+16. **P2 — Synthetic fixtures are not production-quality evidence.** Tests are
     necessary but do not substitute for bounded live validation.
-15. **P2 — Persistent runtime is intentionally absent.** No LeadRadar daemon is
+17. **P2 — Persistent runtime is intentionally absent.** No LeadRadar daemon is
     authorized, so unattended continuity/restart behavior is not yet proven.
 
 ## What the membership investigation changed

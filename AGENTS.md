@@ -1,8 +1,8 @@
 # LeadRadar — Agent Entry Point
 
 **Status:** CANONICAL  
-**Last verified:** 2026-08-27  
-**Implementation baseline:** `f9884b196ed6a424ec69352597de66c1eeca331c`
+**Last verified:** 2026-08-30
+**Implementation baseline:** `d92b0446be19f391bb8f479387b27d914c081e35`
 
 This file is the entry point for ChatGPT, Codex, Claude, DeepSeek, or any other
 engineer/agent that receives repository access without prior conversation
@@ -69,6 +69,11 @@ baseline, verify the diff and update the canonical docs in the same workstream.
 - A bounded validation is not authorization for a persistent runtime.
 - AI, discovery, catch-up, and delivery are separate gates. Enabling one does
   not authorize the others.
+- Opportunity Analysis is not gated by `AI_REPLY_ENABLED`; that flag controls
+  reply drafting only.
+- In the current implementation, a matching Opportunity Analysis provider key
+  plus full `--run` can activate `opportunity.analysis.v1` job processing and
+  provider calls. Configuration-only AI setup must not start full runtime.
 
 ## Documentation invariant
 

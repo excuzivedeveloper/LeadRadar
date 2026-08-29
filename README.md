@@ -12,7 +12,7 @@ This repository is an engineering project, not a hosted service.
 ## Current project stage
 
 As of the current documented implementation baseline
-`f9884b196ed6a424ec69352597de66c1eeca331c`:
+`d92b0446be19f391bb8f479387b27d914c081e35`:
 
 - isolated PostgreSQL deployment is ready at Alembic `20260825_0037`;
 - the dedicated Telegram collector is configured and joined to all 13 approved
@@ -23,11 +23,17 @@ As of the current documented implementation baseline
 - shadow schema and exact filter SHA matched;
 - no AI calls, Opportunities or deliveries occurred during that proof;
 - the collector membership prerequisite has been experimentally confirmed;
+- first-class OpenRouter support for V2 Opportunity Analysis is implemented and
+  server-synced;
+- the selected initial Opportunity Analysis route is
+  `provider=openrouter`, `model=minimax/minimax-m3:free`;
+- the OpenRouter runtime key is not configured and no live AI provider call has
+  occurred;
 - AI, discovery, catch-up and legacy delivery remain disabled;
 - persistent runtime is **not** authorized.
 
-Therefore the current next gate is **AI provider/model configuration**, followed
-by a separate bounded live Opportunity-analysis canary.
+Therefore the current next gate is **OpenRouter + MiniMax configuration-only**,
+followed by a separate bounded live Opportunity-analysis canary.
 
 For exact state and next steps read
 [`docs/CURRENT_STATE.md`](docs/CURRENT_STATE.md) and
@@ -175,9 +181,15 @@ relaxation was required to prove the live ingestion/shadow path.
 
 AI is optional and BYOK.
 
-The pre-AI ingestion gate has passed, but the current deployment intentionally
-has no AI key configured. Provider/model configuration is now the next stage and
-must be separated from the first bounded live provider call.
+The pre-AI ingestion gate has passed, and OpenRouter support is currently
+implemented only for V2 Opportunity Analysis. It does not add first-class
+OpenRouter support for reply drafting, SearchProfile onboarding, Source Audit,
+Telegram Chat Screening or discovery.
+
+The current deployment intentionally has no OpenRouter key configured. The
+selected first route is `minimax/minimax-m3:free`, whose availability and
+pricing must be reverified immediately before configuration/live validation.
+Configuration readiness is separate from the first bounded live provider call.
 
 Follow [`docs/ACTIVE_PLAN.md`](docs/ACTIVE_PLAN.md) and
 [`docs/COST_SAFETY.md`](docs/COST_SAFETY.md).

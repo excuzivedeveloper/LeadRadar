@@ -1,9 +1,9 @@
 # LeadRadar — Current Deployment
 
 **Status:** CANONICAL  
-**Snapshot date:** 2026-08-29  
-**Deployment code baseline:** `f9884b196ed6a424ec69352597de66c1eeca331c`  
-**Repository head before this docs sync:** `e44a3a7f11ebe463e7222cc3a10eca29ff51c062`
+**Snapshot date:** 2026-08-30
+**Deployment code baseline:** `d92b0446be19f391bb8f479387b27d914c081e35`
+**Repository/server head:** `d92b0446be19f391bb8f479387b27d914c081e35`
 
 This document records the current shared-server LeadRadar layout. It contains no
 credential values.
@@ -184,10 +184,20 @@ Current expected AI credential state:
 OPENAI_API_KEY=not configured
 DEEPSEEK_API_KEY=not configured
 TOKENROUTER_API_KEY=not configured
+OPENROUTER_API_KEY=not configured
 ```
 
-`READY_FOR_AI_SETUP=YES` means the pre-AI ingestion gate passed. It does **not**
-mean an AI key/provider is already configured.
+Current OpenRouter implementation state:
+
+```text
+OpenRouter Opportunity support present in checkout=YES
+runtime OpenRouter configuration=NO
+provider calls=0
+```
+
+`READY_FOR_OPENROUTER_CONFIGURATION=YES` means the implementation is deployed
+and the pre-AI ingestion gate passed. It does **not** mean an OpenRouter key is
+already configured or that live AI analysis is authorized.
 
 ## Process state
 
@@ -219,11 +229,15 @@ shadow filter SHA match=YES
 AI provider calls=0
 live Opportunities=0
 live deliveries=0
-READY_FOR_AI_SETUP=YES
+OPENROUTER_IMPLEMENTATION_READY=YES
+OPENROUTER_RUNTIME_CONFIGURED=NO
+READY_FOR_OPENROUTER_CONFIGURATION=YES
+READY_FOR_BOUNDED_AI_ANALYSIS=NO
+LIVE_AI_ANALYSIS_VALIDATED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 ```
 
-The next gate is AI provider/model configuration, defined in
+The next gate is OpenRouter + MiniMax configuration-only, defined in
 `docs/ACTIVE_PLAN.md`.
 
 ## Evidence references
@@ -239,6 +253,9 @@ f60769f6dcfbe65b7094ba7fba901fea9bc1e9a2278481c49265f83a9c50c623
 
 membership rollout report:
 dfbf1d19b29963c43e01eb9512e6817343a2274182be4c0d562466f0898cec5e
+
+OpenRouter implementation sync report:
+89decdcf40c3486d5cd51571ab2ab27d99049abb0d2158be602d11188bd4b369
 ```
 
 ## Shared-server no-touch boundary
