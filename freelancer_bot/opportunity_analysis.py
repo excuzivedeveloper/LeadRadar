@@ -852,6 +852,9 @@ class RoutedOpportunityAnalyzer:
         try:
             fallback = await self._fallback.analyze(candidate)
         except AIBudgetExceeded:
+            # The stronger route is optional work. Preserve the successful
+            # primary result when a configured spend guard suspends it, so a
+            # budget boundary never blocks critical opportunity processing.
             return replace(
                 primary,
                 routing_version=self._routing_version,
