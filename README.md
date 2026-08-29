@@ -15,17 +15,19 @@ As of the current documented implementation baseline
 `f9884b196ed6a424ec69352597de66c1eeca331c`:
 
 - isolated PostgreSQL deployment is ready at Alembic `20260825_0037`;
-- a dedicated Telegram account is configured for collection;
-- 15 repository sources are seeded, 13 are approved/readable;
+- the dedicated Telegram collector is configured and joined to all 13 approved
+  public sources;
 - the bot is restricted to one owner account in private 1:1 chats;
-- V2 legacy-filter shadow telemetry is implemented;
-- the first 600-second full-runtime canary started/stopped cleanly but received
-  no natural source messages;
+- a natural Telegram message has been live-observed through `raw_messages`, the
+  cheap V2 prefilter and `legacy-filter-shadow.v1` telemetry;
+- shadow schema and exact filter SHA matched;
+- no AI calls, Opportunities or deliveries occurred during that proof;
+- the collector membership prerequisite has been experimentally confirmed;
 - AI, discovery, catch-up and legacy delivery remain disabled;
-- persistent runtime is **not** authorized yet.
+- persistent runtime is **not** authorized.
 
-Therefore the current next gate is a longer bounded live shadow-evidence run,
-not AI setup or daemon deployment.
+Therefore the current next gate is **AI provider/model configuration**, followed
+by a separate bounded live Opportunity-analysis canary.
 
 For exact state and next steps read
 [`docs/CURRENT_STATE.md`](docs/CURRENT_STATE.md) and
@@ -33,9 +35,7 @@ For exact state and next steps read
 
 ## For AI agents and new engineers
 
-Start with [`AGENTS.md`](AGENTS.md).
-
-The canonical reading order is defined in
+Start with [`AGENTS.md`](AGENTS.md), then follow
 [`docs/DOCUMENTATION_INDEX.md`](docs/DOCUMENTATION_INDEX.md).
 
 Do not infer current state from historical documents alone.
@@ -53,8 +53,9 @@ Telegram bot                    -> UI + delivery identity
 Current steady-state V2 flow:
 
 ```text
-approved PostgreSQL source
--> Telegram collector
+PostgreSQL APPROVED source
++ collector Telegram membership
+-> Telegram live NewMessage
 -> raw message + durable job
 -> cheap high-recall prefilter
 -> legacy filter shadow telemetry
@@ -65,6 +66,11 @@ approved PostgreSQL source
 ```
 
 PostgreSQL is the V2 source of truth. SQLite remains legacy compatibility only.
+
+Important deployment nuance: being able to resolve/read a public Telegram
+channel does not prove live update delivery. The dedicated collector must be a
+channel participant/member. Current deployment membership is 13/13 approved
+public sources.
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
@@ -78,36 +84,38 @@ uv run --frozen python -m freelancer_bot
 
 It prints help and exits.
 
-Explicit network modes and Telegram diagnostics:
+Explicit network modes and diagnostics:
 
 ```bash
-# Bot UI only; no collector/full ingestion runtime.
+# Bot UI only.
 uv run --frozen python -m freelancer_bot --bot-only
 
-# Dedicated collector/source-side runtime without the full ingestion runtime.
+# Dedicated collector/source-side runtime without full ingestion/shadow.
 uv run --frozen python -m freelancer_bot --collector-only
 
-# Bounded networked source-access diagnostic. Uses the Telegram user session,
-# takes its session lock, and resolves enabled config/sources.json entries via
-# Telegram. It does not start the full ingestion/shadow runtime.
+# Bounded networked source-access diagnostic using the Telegram user session.
+# Resolves enabled config/sources.json entries but does not prove membership or
+# live NewMessage delivery.
 uv run --frozen python -m freelancer_bot --check-sources
 
 # Full collector + bot + durable ingestion/matching runtime.
 uv run --frozen python -m freelancer_bot --run
 ```
 
-`--check-sources` is not a local/offline config check. It performs real Telegram
-network operations and requires an explicitly authorized bounded task/session.
+`--check-sources` performs real Telegram requests and requires an explicitly
+authorized bounded task. It is not a local/offline config check and is not a
+membership-readiness proof.
 
-`--run` does not itself authorize AI, discovery, catch-up or persistent
-deployment. Those remain explicit configuration/plan gates.
+`--run` does not itself authorize AI, discovery, catch-up, delivery or persistent
+deployment. Those remain explicit gates.
 
 ## Requirements
 
 - Python 3.14.7
 - uv 0.12.2
 - PostgreSQL 18.x
-- Telegram API ID/hash and user session for collection
+- Telegram API ID/hash and dedicated user session for collection
+- membership of the collector account in approved monitored channels
 - Telegram bot token for bot/full runtime
 - provider key only when an AI capability is explicitly enabled
 
@@ -130,10 +138,12 @@ uv run --frozen python -m freelancer_bot.persistence.source_seed \
 uv run --frozen python -m freelancer_bot --check-config
 ```
 
-Never commit `.env` or session files.
+Never commit `.env` or session files. Telegram channel membership is external
+account state and must be provisioned/verified separately from PostgreSQL source
+seeding.
 
-The current shared-server deployment has additional isolation rules documented
-in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+The current shared-server deployment has additional isolation rules in
+[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
 ## Owner-only bot access
 
@@ -145,34 +155,32 @@ TELEGRAM_ALLOWED_USER_IDS=<owner numeric Telegram ID>
 
 When non-empty, bot interaction requires an allowlisted positive `sender_id`
 from a private 1:1 chat. Group/supergroup interactions do not pass the gate.
-
-Personalized delivery also checks the allowlist before Telegram send.
+Personalized delivery independently checks the recipient allowlist.
 
 The collector account is independent from this bot allowlist.
 
 ## Sources and filtering
 
-`config/sources.json` is repository seed/diagnostic input. The runtime collector
-uses PostgreSQL-approved source state.
+`config/sources.json` is repository seed/diagnostic input. Runtime source
+lifecycle authority is PostgreSQL, while live Telegram collection additionally
+requires collector membership in the approved channel.
 
-`config/filters.json` contains the preserved legacy keyword/stop-word rules.
+`config/filters.json` contains preserved legacy keyword/stop-word rules.
 
-In V2, the cheap prefilter is intentionally high-recall. The legacy filter is
-currently recorded as **shadow telemetry**, not used as the V2 routing gate.
-
-See [`docs/CURRENT_STATE.md`](docs/CURRENT_STATE.md) for the current filter
-snapshot and known matcher limitation.
+In V2, the cheap prefilter is high-recall. The legacy filter is recorded as
+**shadow telemetry**, not used as the V2 routing gate. No production filter
+relaxation was required to prove the live ingestion/shadow path.
 
 ## AI and cost controls
 
 AI is optional and BYOK.
 
-The current deployment intentionally has no AI key configured. Before enabling
-AI, follow [`docs/ACTIVE_PLAN.md`](docs/ACTIVE_PLAN.md) and
-[`docs/COST_SAFETY.md`](docs/COST_SAFETY.md).
+The pre-AI ingestion gate has passed, but the current deployment intentionally
+has no AI key configured. Provider/model configuration is now the next stage and
+must be separated from the first bounded live provider call.
 
-Repository defaults include bounded attempts and Opportunity-analysis spend
-guards, but provider/model/pricing choices still require operator verification.
+Follow [`docs/ACTIVE_PLAN.md`](docs/ACTIVE_PLAN.md) and
+[`docs/COST_SAFETY.md`](docs/COST_SAFETY.md).
 
 ## Security
 
@@ -180,7 +188,6 @@ Telethon sessions, bot tokens, Telegram API hashes, database credentials and
 provider keys are bearer-sensitive material.
 
 Do not paste live message bodies or credentials into issues, reports or chats.
-
 See [`SECURITY.md`](SECURITY.md).
 
 ## Development and tests
@@ -212,8 +219,8 @@ Canonical documentation:
 - [`docs/KNOWN_LIMITATIONS.md`](docs/KNOWN_LIMITATIONS.md)
 - [`docs/COST_SAFETY.md`](docs/COST_SAFETY.md)
 
-Historical migration/publication notes remain in `docs/` but are explicitly not
-the current execution authority.
+Historical migration/publication notes remain in `docs/` but are not current
+execution authority.
 
 ## License
 
