@@ -237,6 +237,18 @@ class RuntimeConfig(BaseSettings):
         min_length=1,
         max_length=2048,
     )
+    openrouter_api_key: SecretStr | None = classified_field(
+        None,
+        sensitivity=Sensitivity.SECRET,
+        validation_alias="OPENROUTER_API_KEY",
+    )
+    openrouter_base_url: str = classified_field(
+        "https://openrouter.ai/api/v1",
+        sensitivity=Sensitivity.PUBLIC,
+        validation_alias="OPENROUTER_BASE_URL",
+        min_length=1,
+        max_length=2048,
+    )
     openai_model: str = classified_field(
         "gpt-4.1-mini",
         sensitivity=Sensitivity.PUBLIC,

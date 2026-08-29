@@ -46,7 +46,10 @@ OPPORTUNITY_ROUTING_VERSION = "opportunity-routing.v1"
 OPENAI_CHAT_COMPLETIONS_URL = "https://api.openai.com/v1/chat/completions"
 DEEPSEEK_CHAT_COMPLETIONS_URL = "https://api.deepseek.com/chat/completions"
 TOKENROUTER_CHAT_COMPLETIONS_URL = "https://api.tokenrouter.com/v1/chat/completions"
-SUPPORTED_OPPORTUNITY_AI_PROVIDERS = frozenset({"openai", "deepseek", "tokenrouter"})
+OPENROUTER_CHAT_COMPLETIONS_URL = "https://openrouter.ai/api/v1/chat/completions"
+SUPPORTED_OPPORTUNITY_AI_PROVIDERS = frozenset(
+    {"openai", "deepseek", "tokenrouter", "openrouter"}
+)
 _SAFE_VERSION = re.compile(r"^[a-z0-9][a-z0-9._-]{0,99}$")
 
 
@@ -706,12 +709,20 @@ def resolve_opportunity_analysis_provider(
         api_key_name = "DEEPSEEK_API_KEY"
         base_url = DEEPSEEK_CHAT_COMPLETIONS_URL
         secret = getattr(config, "deepseek_api_key", None)
-    else:
+    elif provider == "tokenrouter":
         api_key_name = "TOKENROUTER_API_KEY"
         base_url = _normalize_chat_completions_url(
             str(getattr(config, "tokenrouter_base_url", ""))
         )
         secret = getattr(config, "tokenrouter_api_key", None)
+    elif provider == "openrouter":
+        api_key_name = "OPENROUTER_API_KEY"
+        base_url = _normalize_chat_completions_url(
+            str(getattr(config, "openrouter_base_url", ""))
+        )
+        secret = getattr(config, "openrouter_api_key", None)
+    else:
+        raise AssertionError("unreachable")
 
     api_key = ""
     if secret is not None:
@@ -756,7 +767,15 @@ def _default_opportunity_provider_url(provider: str) -> str:
         return OPENAI_CHAT_COMPLETIONS_URL
     if provider == "deepseek":
         return DEEPSEEK_CHAT_COMPLETIONS_URL
-    return TOKENROUTER_CHAT_COMPLETIONS_URL
+    if provider == "tokenrouter":
+        return TOKENROUTER_CHAT_COMPLETIONS_URL
+    if provider == "openrouter":
+        return OPENROUTER_CHAT_COMPLETIONS_URL
+    raise OpportunityAnalysisProviderConfigurationError(
+        f"Unsupported Opportunity Analysis provider: {provider or '<empty>'}",
+        retryable=False,
+        error_code="unsupported_provider",
+    )
 
 
 class RoutedOpportunityAnalyzer:
