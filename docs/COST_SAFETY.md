@@ -1,11 +1,12 @@
 # LeadRadar — Cost and External-Work Safety
 
 **Status:** CANONICAL  
-**Last verified:** 2026-08-27
+**Last verified:** 2026-08-30
 
 ## Current deployment rule
 
-The current deployment is still before the AI gate.
+The current deployment is pre-live-AI. OpenRouter Opportunity Analysis support
+is implemented and server-synced, but the runtime provider key is still absent.
 
 Expected:
 
@@ -14,6 +15,10 @@ AI_REPLY_ENABLED=false
 OPENAI_API_KEY_CONFIGURED=NO
 DEEPSEEK_API_KEY_CONFIGURED=NO
 TOKENROUTER_API_KEY_CONFIGURED=NO
+OPENROUTER_API_KEY_CONFIGURED=NO
+PROVIDER_LIVE_CALLS=0
+READY_FOR_OPENROUTER_CONFIGURATION=YES
+READY_FOR_BOUNDED_AI_ANALYSIS=NO
 
 SEND_CATCH_UP=false
 SOURCE_DISCOVERY_ENABLED=false
@@ -24,10 +29,24 @@ TELEGRAM_CHAT_DISCOVERY_ENABLED=false
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 ```
 
-Do not enable AI, discovery or catch-up merely because supporting code already
-exists.
+Do not enable provider calls, discovery or catch-up merely because supporting
+code already exists.
 
 The active order is defined in `docs/ACTIVE_PLAN.md`.
+
+Critical runtime invariant:
+
+```text
+matching Opportunity Analysis provider key present
++ full python -m freelancer_bot --run
+=> opportunity.analysis.v1 jobs can be processed
+=> provider calls can occur
+```
+
+There is no separate `OPPORTUNITY_ANALYSIS_ENABLED` switch. `AI_REPLY_ENABLED`
+gates reply drafting only and does not disable Opportunity Analysis. The
+configuration-only OpenRouter task must make zero provider calls and must not
+start full runtime after key insertion.
 
 ## Fresh-clone defaults
 
@@ -50,22 +69,30 @@ Relevant conservative defaults include:
 These defaults are safety controls, not a guarantee against spend after an
 operator changes configuration.
 
-## Before enabling AI
+## Before the first live Opportunity Analysis call
 
-Only after the live shadow-evidence gate passes:
+The selected first route is OpenRouter with `minimax/minimax-m3:free`.
 
-1. choose an exact supported provider and model;
-2. use a dedicated BYOK key;
-3. set a low provider-side spend/rate limit;
-4. verify model pricing and configure repository pricing inputs where required;
-5. keep fallback disabled for the first bounded canary;
-6. preserve the repository daily/monthly spend guards;
-7. use a small fresh-message window;
+Before the first live call:
+
+1. reverify current model availability and pricing from authoritative provider
+   information;
+2. use a dedicated BYOK OpenRouter key;
+3. set low provider-side spend/rate limits where available;
+4. configure repository pricing inputs from operator-verified values;
+5. keep fallback disabled;
+6. preserve repository daily/monthly spend guards;
+7. use an explicitly bounded provider-call/job mechanism;
 8. inspect AI telemetry and job counts before increasing limits.
 
 Do not enable discovery in the same first AI canary.
 
 Missing keys should fail closed. Never recover a key from a chat transcript.
+
+Current external information may report `minimax/minimax-m3:free` input/output
+pricing as free, but that is not a provider-side cost guarantee. A local
+configured price of `0/0` is descriptive telemetry/accounting, not proof that
+external billing, rate limits or free-tier availability cannot change.
 
 ## Before enabling catch-up
 

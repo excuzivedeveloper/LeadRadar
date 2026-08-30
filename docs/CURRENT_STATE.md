@@ -1,13 +1,9 @@
 # LeadRadar — Current State
 
 **Status:** CANONICAL  
-**Snapshot date:** 2026-08-29  
-**Implementation baseline:** `f9884b196ed6a424ec69352597de66c1eeca331c`  
-**Current deployed repository head before this docs sync:** `e44a3a7f11ebe463e7222cc3a10eca29ff51c062`
-
-> The implementation baseline remains older than repository HEAD because the
-> later `e44a3a7f...` merge was documentation-only. A later docs-only commit may
-> again move repository HEAD without changing application behavior.
+**Snapshot date:** 2026-08-30
+**Implementation baseline:** `d92b0446be19f391bb8f479387b27d914c081e35`
+**Current deployed repository head:** `d92b0446be19f391bb8f479387b27d914c081e35`
 
 ## Executive status
 
@@ -22,31 +18,38 @@ SOURCE_CATALOG_READY=YES
 COLLECTOR_MEMBERSHIP_READY=YES
 POSTGRES_READY=YES
 SHADOW_LIVE_EVIDENCE=YES
-READY_FOR_AI_SETUP=YES
+OPENROUTER_IMPLEMENTATION_READY=YES
+OPENROUTER_RUNTIME_CONFIGURED=NO
+OPENROUTER_API_KEY_CONFIGURED=NO
+PROVIDER_LIVE_CALLS=0
+LIVE_AI_ANALYSIS_VALIDATED=NO
+READY_FOR_OPENROUTER_CONFIGURATION=YES
+READY_FOR_BOUNDED_AI_ANALYSIS=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 ```
 
 The exact next execution stage after this documentation synchronization is:
 
 ```text
-AI_PROVIDER_SETUP
+OPENROUTER_MINIMAX_CONFIGURATION_ONLY
 ```
 
-AI is not configured yet. Discovery, catch-up, legacy delivery and persistent
-runtime remain disabled.
+OpenRouter implementation is present, but the runtime key is not configured and
+no live provider call has occurred. Discovery, catch-up, legacy delivery and
+persistent runtime remain disabled.
 
 ## Repository and migration state
 
 Application implementation baseline:
 
 ```text
-f9884b196ed6a424ec69352597de66c1eeca331c
+d92b0446be19f391bb8f479387b27d914c081e35
 ```
 
-Current server repository head before this docs update:
+Current server repository head:
 
 ```text
-e44a3a7f11ebe463e7222cc3a10eca29ff51c062
+d92b0446be19f391bb8f479387b27d914c081e35
 ```
 
 Runtime/tooling baseline:
@@ -73,6 +76,24 @@ Relevant merged adaptation milestones:
 - PR #3 — owner-only Telegram bot allowlist with private-chat enforcement and
   outbound delivery defense in depth.
 - PR #4 — canonical self-contained documentation for new agents.
+- PR #6 — first-class OpenRouter Opportunity Analysis provider support.
+
+PR #6 was independently forensically reviewed with no findings, merged, and
+server-synced to the same head. Offline validation passed:
+
+```text
+OPENROUTER_UNIT_TESTS=PASS
+FULL_UNITTEST_DISCOVERY=PASS
+FULL_TEST_COUNT=582
+PY_COMPILE=PASS
+CHECK_CONFIG=PASS
+```
+
+Server implementation sync report SHA-256:
+
+```text
+89decdcf40c3486d5cd51571ab2ab27d99049abb0d2158be602d11188bd4b369
+```
 
 ## Completed deployment milestones
 
@@ -167,6 +188,7 @@ AI_REPLY_ENABLED=false
 OPENAI_API_KEY_CONFIGURED=NO
 DEEPSEEK_API_KEY_CONFIGURED=NO
 TOKENROUTER_API_KEY_CONFIGURED=NO
+OPENROUTER_API_KEY_CONFIGURED=NO
 ```
 
 There is no persistent LeadRadar app/bot/collector process.
@@ -216,6 +238,46 @@ The shadow result does not decide whether V2 analysis work is routed.
 
 Known legacy matcher substring behavior remains intentionally preserved until
 more shadow data justifies a narrow evidence-backed change.
+
+## OpenRouter Opportunity Analysis state
+
+First-class OpenRouter support is implemented only for V2 Opportunity Analysis.
+It is not current first-class support for reply drafting, Source Audit,
+Telegram Chat Screening, SearchProfile onboarding AI or source discovery.
+
+Selected initial route for the next AI gate:
+
+```text
+OPPORTUNITY_ANALYSIS_PROVIDER=openrouter
+OPPORTUNITY_ANALYSIS_MODEL=minimax/minimax-m3:free
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+RESOLVED_CHAT_COMPLETIONS_ENDPOINT=https://openrouter.ai/api/v1/chat/completions
+OPPORTUNITY_ANALYSIS_FALLBACK_ENABLED=false
+```
+
+The route is selected for the first bounded Opportunity Analysis path, not a
+permanent provider lock-in. `minimax/minimax-m3:free` availability, rate limits
+and pricing are external and must be reverified immediately before
+configuration/live validation.
+
+Current runtime state:
+
+```text
+OPENROUTER_IMPLEMENTATION_READY=YES
+OPENROUTER_RUNTIME_CONFIGURED=NO
+OPENROUTER_API_KEY_CONFIGURED=NO
+PROVIDER_LIVE_CALLS=0
+LIVE_AI_ANALYSIS_VALIDATED=NO
+READY_FOR_OPENROUTER_CONFIGURATION=YES
+READY_FOR_BOUNDED_AI_ANALYSIS=NO
+```
+
+Important runtime invariant: the current implementation has no separate
+`OPPORTUNITY_ANALYSIS_ENABLED` switch. Once the matching Opportunity Analysis
+provider key is configured, starting full `python -m freelancer_bot --run` can
+construct the analyzer, activate the `opportunity.analysis.v1` handler, claim
+existing pending analysis jobs and make provider calls. `AI_REPLY_ENABLED=false`
+does not disable Opportunity Analysis; it gates reply drafting only.
 
 ## Live validation history
 
@@ -327,7 +389,9 @@ already proved membership -> live update -> raw -> prefilter -> shadow.
 | Raw Telegram persistence | yes | **live-validated** |
 | Cheap V2 prefilter | yes | **live-validated** |
 | Legacy-filter shadow telemetry | yes | **live-validated** |
-| Opportunity AI analysis | yes | disabled; no live provider configured |
+| OpenRouter Opportunity provider | yes | offline tests and server sync passed; not runtime-configured |
+| OpenRouter runtime configuration | n/a | **not configured** |
+| Opportunity AI analysis | yes | no live provider call/model response validated |
 | Canonical Opportunities/dedup | yes | not live-validated with real AI output |
 | SearchProfiles/onboarding | yes | owner UI exists; AI onboarding not enabled |
 | Matching | yes | not live-validated end to end |
@@ -346,8 +410,8 @@ continuing. Historical values are invalid and must not be reused.
 
 The ingestion/shadow gate is complete. Remaining ordered gates are:
 
-1. AI provider/model/key selection with explicit cost/rate limits;
-2. bounded live Opportunity analysis;
+1. OpenRouter + MiniMax configuration-only with zero provider calls;
+2. bounded live OpenRouter Opportunity analysis;
 3. owner SearchProfile/onboarding validation for the chosen AI route;
 4. bounded matching + personalized delivery to the owner;
 5. later decision on legacy-filter tuning from accumulated shadow evidence;

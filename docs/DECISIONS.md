@@ -1,7 +1,7 @@
 # LeadRadar — Accepted Decisions
 
 **Status:** CANONICAL  
-**Last verified:** 2026-08-29
+**Last verified:** 2026-08-30
 
 These decisions explain why the current architecture and execution order look
 the way they do. Reversing one should be an explicit reviewed decision, not an
@@ -155,3 +155,31 @@ live-update readiness proof.
 Automatic join behavior is **not** accepted by this decision. Adding auto-join
 would introduce new external side effects/rate-limit risk and requires its own
 reviewed design.
+
+## D-013 — First live Opportunity route uses first-class OpenRouter identity
+
+The selected initial live Opportunity Analysis route is:
+
+```text
+provider=openrouter
+model=minimax/minimax-m3:free
+```
+
+OpenRouter must be represented as `openrouter` in configuration, telemetry and
+cache identity. It must not masquerade as TokenRouter or borrow TokenRouter
+credentials.
+
+This decision is for the initial bounded Opportunity Analysis route only; it is
+not a permanent provider lock-in and it does not automatically extend OpenRouter
+support to SearchProfile onboarding, Source Audit, Telegram Chat Screening,
+reply drafting or source discovery.
+
+`minimax/minimax-m3:free` availability, pricing and free-tier/rate limits are
+external provider facts and must be reverified before configuration/live
+validation when relevant.
+
+Configuration and the first live provider call are separate gates. In the
+current implementation, once the matching Opportunity Analysis key is present,
+full `--run` can construct the analyzer, activate the `opportunity.analysis.v1`
+handler, claim pending jobs and make provider calls. `AI_REPLY_ENABLED=false`
+does not disable Opportunity Analysis.

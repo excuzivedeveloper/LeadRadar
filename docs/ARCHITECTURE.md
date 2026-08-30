@@ -1,8 +1,8 @@
 # LeadRadar — Current Architecture
 
 **Status:** CANONICAL  
-**Last verified:** 2026-08-29  
-**Implementation baseline:** `f9884b196ed6a424ec69352597de66c1eeca331c`
+**Last verified:** 2026-08-30
+**Implementation baseline:** `d92b0446be19f391bb8f479387b27d914c081e35`
 
 ## Purpose
 
@@ -79,8 +79,9 @@ Full runtime starts:
 - PostgreSQL-backed ingestion/durable workers;
 - enabled matching/delivery components.
 
-Catch-up, discovery, AI and legacy delivery remain independently gated by
-configuration.
+Catch-up, discovery and legacy delivery remain independently gated by
+configuration. Opportunity Analysis is activated by matching provider
+configuration in the full ingestion runtime; see the AI section below.
 
 ## Persistence boundaries
 
@@ -231,14 +232,60 @@ No filter relaxation was required to prove ingestion/shadow operation.
 Opportunity analysis is global per canonical raw/dedup identity, not one model
 call per user.
 
+OpenRouter is implemented as a first-class Opportunity Analysis provider:
+
+```text
+provider=openrouter
+OPENROUTER_API_KEY=<secret runtime value>
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+resolved endpoint=https://openrouter.ai/api/v1/chat/completions
+```
+
+OpenRouter is not represented as TokenRouter and must keep distinct telemetry,
+cache and provider identity.
+
+The current OpenRouter scope is V2 Opportunity Analysis only. It does not add
+first-class OpenRouter support for reply drafting, Source Audit, Telegram Chat
+Screening, SearchProfile onboarding AI or source discovery.
+
+Structured-output handling differs by provider family:
+
+```text
+OpenAI
+-> provider-side strict json_schema response_format
+
+non-OpenAI compatible providers, including OpenRouter
+-> response_format=json_object
+-> complete OpportunityAnalysis schema included in prompt
+-> strict local Pydantic validation
+-> grounding validation
+```
+
+Do not claim provider-side JSON Schema enforcement for OpenRouter.
+
 When no analyzer is configured:
 
 - raw ingestion/prefilter/shadow can operate;
 - `opportunity.analysis.v1` jobs may remain pending;
 - no provider call should occur.
 
-The pre-AI gate has passed, but current deployment still has no AI provider key
-configured. Provider/model configuration is the next separate gate.
+Critical activation invariant:
+
+```text
+matching Opportunity Analysis provider key present
++ full python -m freelancer_bot --run
+=> Opportunity analyzer constructed
+=> opportunity.analysis.v1 handler active
+=> pending analysis jobs can be claimed and provider calls can occur
+```
+
+There is no separate `OPPORTUNITY_ANALYSIS_ENABLED` switch in the current
+implementation. `AI_REPLY_ENABLED=false` does not disable Opportunity Analysis;
+it disables reply drafting only.
+
+The pre-AI gate has passed and OpenRouter implementation is server-synced, but
+current deployment still has no OpenRouter runtime key configured. The next gate
+is configuration-only and must not start full runtime.
 
 ## SearchProfiles
 
