@@ -4,6 +4,7 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import UUID
 
 from freelancer_bot.app import cli, run_app
 from freelancer_bot.config import RuntimeMode
@@ -88,6 +89,45 @@ class CliModeTest(unittest.TestCase):
 
         from_env.assert_called_once_with(mode=RuntimeMode.CHECK_SOURCES)
         source_check.assert_awaited_once_with(config)
+
+    def test_opportunity_analysis_job_id_uses_one_shot_mode(self):
+        config = SimpleNamespace()
+        runner = AsyncMock()
+        job_id = "11111111-1111-1111-1111-111111111111"
+
+        with (
+            patch(
+                "sys.argv",
+                ["freelancer_bot", "--opportunity-analysis-job-id", job_id],
+            ),
+            patch("freelancer_bot.app.RuntimeConfig.from_env", return_value=config) as from_env,
+            patch("freelancer_bot.app.run_opportunity_analysis_job_once", runner),
+            patch("freelancer_bot.app.TelegramClient") as telegram_client,
+            patch("freelancer_bot.app.LeadBot") as lead_bot,
+        ):
+            cli()
+
+        from_env.assert_called_once_with(mode=RuntimeMode.OPPORTUNITY_ANALYSIS_JOB)
+        runner.assert_awaited_once_with(config, UUID(job_id))
+        telegram_client.assert_not_called()
+        lead_bot.assert_not_called()
+
+    def test_opportunity_analysis_job_id_rejects_malformed_uuid_before_config(self):
+        runner = AsyncMock()
+
+        with (
+            patch(
+                "sys.argv",
+                ["freelancer_bot", "--opportunity-analysis-job-id", "not-a-uuid"],
+            ),
+            patch("freelancer_bot.app.RuntimeConfig.from_env") as from_env,
+            patch("freelancer_bot.app.run_opportunity_analysis_job_once", runner),
+            self.assertRaises(SystemExit),
+        ):
+            cli()
+
+        from_env.assert_not_called()
+        runner.assert_not_awaited()
 
     def test_draft_text_uses_ai_only_mode(self):
         config = SimpleNamespace(

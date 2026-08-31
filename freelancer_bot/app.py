@@ -38,6 +38,7 @@ from .observability import (
     trace_context,
 )
 from .opportunity_analysis import opportunity_analysis_provider_available
+from .opportunity_one_shot import run_opportunity_analysis_job_once
 from .persistence.database import Database
 from .persistence.delivery_actions import (
     DeliveryActionError,
@@ -1683,6 +1684,10 @@ def cli() -> None:
     parser.add_argument("--check-config", action="store_true", help="Validate JSON sources and filter configs.")
     parser.add_argument("--check-sources", action="store_true", help="Resolve enabled sources through Telegram.")
     parser.add_argument(
+        "--opportunity-analysis-job-id",
+        help="Process exactly one explicit opportunity.analysis.v1 durable job UUID.",
+    )
+    parser.add_argument(
         "--run",
         action="store_true",
         help="Explicitly start the full collector, durable workers, matching and delivery runtime.",
@@ -1720,6 +1725,15 @@ def cli() -> None:
     if args.check_sources:
         config = RuntimeConfig.from_env(mode=RuntimeMode.CHECK_SOURCES)
         asyncio.run(check_sources(config))
+        return
+
+    if args.opportunity_analysis_job_id:
+        try:
+            job_id = UUID(args.opportunity_analysis_job_id)
+        except ValueError:
+            parser.error("--opportunity-analysis-job-id must be a valid UUID")
+        config = RuntimeConfig.from_env(mode=RuntimeMode.OPPORTUNITY_ANALYSIS_JOB)
+        asyncio.run(run_opportunity_analysis_job_once(config, job_id))
         return
 
     if args.collector_only:

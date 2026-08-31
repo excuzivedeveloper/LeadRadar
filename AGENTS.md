@@ -1,7 +1,7 @@
 # LeadRadar — Agent Entry Point
 
 **Status:** CANONICAL  
-**Last verified:** 2026-08-30
+**Last verified:** 2026-08-31
 **Implementation baseline:** `d92b0446be19f391bb8f479387b27d914c081e35`
 
 This file is the entry point for ChatGPT, Codex, Claude, DeepSeek, or any other
@@ -74,6 +74,10 @@ baseline, verify the diff and update the canonical docs in the same workstream.
 - In the current implementation, a matching Opportunity Analysis provider key
   plus full `--run` can activate `opportunity.analysis.v1` job processing and
   provider calls. Configuration-only AI setup must not start full runtime.
+- For the first bounded live Opportunity Analysis canary, use only the explicit
+  one-shot durable job entrypoint:
+  `python -m freelancer_bot --opportunity-analysis-job-id <UUID>`.
+  Do not substitute full `--run` for that gate.
 
 ## Documentation invariant
 
