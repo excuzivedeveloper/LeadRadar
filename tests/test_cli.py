@@ -1,9 +1,10 @@
 import io
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import UUID
 
 from freelancer_bot.app import cli, run_app
 from freelancer_bot.config import RuntimeMode
@@ -88,6 +89,124 @@ class CliModeTest(unittest.TestCase):
 
         from_env.assert_called_once_with(mode=RuntimeMode.CHECK_SOURCES)
         source_check.assert_awaited_once_with(config)
+
+    def test_opportunity_analysis_job_id_uses_one_shot_mode(self):
+        config = SimpleNamespace()
+        runner = AsyncMock()
+        job_id = "11111111-1111-1111-1111-111111111111"
+
+        with (
+            patch(
+                "sys.argv",
+                ["freelancer_bot", "--opportunity-analysis-job-id", job_id],
+            ),
+            patch("freelancer_bot.app.RuntimeConfig.from_env", return_value=config) as from_env,
+            patch("freelancer_bot.app.run_opportunity_analysis_job_once", runner),
+            patch("freelancer_bot.app.TelegramClient") as telegram_client,
+            patch("freelancer_bot.app.LeadBot") as lead_bot,
+        ):
+            cli()
+
+        from_env.assert_called_once_with(mode=RuntimeMode.OPPORTUNITY_ANALYSIS_JOB)
+        runner.assert_awaited_once_with(config, UUID(job_id))
+        telegram_client.assert_not_called()
+        lead_bot.assert_not_called()
+
+    def test_opportunity_analysis_job_id_rejects_malformed_uuid_before_config(self):
+        runner = AsyncMock()
+
+        with (
+            patch(
+                "sys.argv",
+                ["freelancer_bot", "--opportunity-analysis-job-id", "not-a-uuid"],
+            ),
+            patch("freelancer_bot.app.RuntimeConfig.from_env") as from_env,
+            patch("freelancer_bot.app.run_opportunity_analysis_job_once", runner),
+            self.assertRaises(SystemExit),
+        ):
+            cli()
+
+        from_env.assert_not_called()
+        runner.assert_not_awaited()
+
+    def test_opportunity_analysis_job_id_expected_failure_exits_nonzero(self):
+        from freelancer_bot.opportunity_one_shot import OpportunityAnalysisOneShotError
+
+        runner = AsyncMock(
+            side_effect=OpportunityAnalysisOneShotError(
+                "Selected opportunity analysis job scheduled retry",
+                status="retry_queued",
+                job_state="queued",
+                failure_code="OpportunityAnalysisOutputError",
+            )
+        )
+        job_id = "11111111-1111-1111-1111-111111111111"
+
+        with (
+            patch(
+                "sys.argv",
+                ["freelancer_bot", "--opportunity-analysis-job-id", job_id],
+            ),
+            patch("freelancer_bot.app.RuntimeConfig.from_env", return_value=SimpleNamespace()),
+            patch("freelancer_bot.app.run_opportunity_analysis_job_once", runner),
+            redirect_stderr(io.StringIO()) as error_output,
+            self.assertRaises(SystemExit) as raised,
+        ):
+            cli()
+
+        self.assertEqual(raised.exception.code, 1)
+        self.assertIn("status=retry_queued", error_output.getvalue())
+        self.assertIn("state=queued", error_output.getvalue())
+        self.assertIn("failure_code=OpportunityAnalysisOutputError", error_output.getvalue())
+
+    def test_opportunity_analysis_job_id_conflict_with_check_sources_rejects_before_side_effects(self):
+        self._assert_one_shot_conflict_rejected("--check-sources")
+
+    def test_opportunity_analysis_job_id_conflict_with_run_rejects_before_side_effects(self):
+        self._assert_one_shot_conflict_rejected("--run")
+
+    def test_opportunity_analysis_job_id_conflict_with_bot_only_rejects_before_side_effects(self):
+        self._assert_one_shot_conflict_rejected("--bot-only")
+
+    def test_opportunity_analysis_job_id_conflict_with_collector_only_rejects_before_side_effects(self):
+        self._assert_one_shot_conflict_rejected("--collector-only")
+
+    def test_opportunity_analysis_job_id_conflict_with_check_config_rejects_before_side_effects(self):
+        self._assert_one_shot_conflict_rejected("--check-config")
+
+    def test_opportunity_analysis_job_id_conflict_with_check_filter_rejects_before_side_effects(self):
+        self._assert_one_shot_conflict_rejected("--check-filter", "telegram")
+
+    def test_opportunity_analysis_job_id_conflict_with_draft_text_rejects_before_side_effects(self):
+        self._assert_one_shot_conflict_rejected("--draft-text", "Нужен telegram бот")
+
+    def _assert_one_shot_conflict_rejected(self, *extra_args: str):
+        runner = AsyncMock()
+        job_id = "11111111-1111-1111-1111-111111111111"
+
+        with (
+            patch(
+                "sys.argv",
+                ["freelancer_bot", "--opportunity-analysis-job-id", job_id, *extra_args],
+            ),
+            patch("freelancer_bot.app.RuntimeConfig.from_env") as from_env,
+            patch("freelancer_bot.app.run_opportunity_analysis_job_once", runner),
+            patch("freelancer_bot.app.check_sources", new_callable=AsyncMock) as source_check,
+            patch("freelancer_bot.app.run_app", new_callable=AsyncMock) as run,
+            patch("freelancer_bot.app.run_collector_only", new_callable=AsyncMock) as collector,
+            patch("freelancer_bot.app.TelegramClient") as telegram_client,
+            redirect_stderr(io.StringIO()) as error_output,
+            self.assertRaises(SystemExit),
+        ):
+            cli()
+
+        self.assertIn("conflicting action modes", error_output.getvalue())
+        from_env.assert_not_called()
+        runner.assert_not_awaited()
+        source_check.assert_not_awaited()
+        run.assert_not_awaited()
+        collector.assert_not_awaited()
+        telegram_client.assert_not_called()
 
     def test_draft_text_uses_ai_only_mode(self):
         config = SimpleNamespace(

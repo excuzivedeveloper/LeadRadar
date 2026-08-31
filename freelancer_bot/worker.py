@@ -103,6 +103,40 @@ class DurableWorker:
     def request_stop(self) -> None:
         self._stop_event.set()
 
+    async def run_one(self) -> bool:
+        log_event(
+            self._logger,
+            logging.INFO,
+            "worker.one_shot_started",
+            worker_id=self._worker_id,
+        )
+        try:
+            self._health = replace(
+                self._health,
+                state=WorkerState.IDLE,
+                current_job_id=None,
+                last_poll_at=datetime.now(timezone.utc),
+            )
+            claim = await self._claim_next()
+            if claim is None:
+                return False
+            await self._execute_claim(claim)
+            return True
+        finally:
+            self._health = replace(
+                self._health,
+                state=WorkerState.STOPPED,
+                current_job_id=None,
+            )
+            if self._close_database_on_exit:
+                await self._database.close()
+            log_event(
+                self._logger,
+                logging.INFO,
+                "worker.one_shot_stopped",
+                worker_id=self._worker_id,
+            )
+
     async def run(self, *, install_signal_handlers: bool = True) -> None:
         installed_signals = self._install_signal_handlers() if install_signal_handlers else []
         log_event(self._logger, logging.INFO, "worker.started", worker_id=self._worker_id)

@@ -1,7 +1,7 @@
 # LeadRadar — Current Deployment
 
 **Status:** CANONICAL  
-**Snapshot date:** 2026-08-30
+**Snapshot date:** 2026-08-31
 **Deployment code baseline:** `d92b0446be19f391bb8f479387b27d914c081e35`
 **Repository/server head:** `d92b0446be19f391bb8f479387b27d914c081e35`
 
@@ -184,20 +184,30 @@ Current expected AI credential state:
 OPENAI_API_KEY=not configured
 DEEPSEEK_API_KEY=not configured
 TOKENROUTER_API_KEY=not configured
-OPENROUTER_API_KEY=not configured
+OPENROUTER_API_KEY=configured
 ```
 
 Current OpenRouter implementation state:
 
 ```text
 OpenRouter Opportunity support present in checkout=YES
-runtime OpenRouter configuration=NO
+runtime OpenRouter configuration=YES
 provider calls=0
 ```
 
-`READY_FOR_OPENROUTER_CONFIGURATION=YES` means the implementation is deployed
-and the pre-AI ingestion gate passed. It does **not** mean an OpenRouter key is
-already configured or that live AI analysis is authorized.
+`READY_FOR_BOUNDED_AI_ANALYSIS=YES` means the selected OpenRouter route is
+configured and ready for a separately authorized one-shot live AI canary. It does
+**not** authorize full `--run`, delivery, discovery, catch-up or persistent
+runtime.
+
+After this branch is merged and server-synced, the bounded canary entrypoint is:
+
+```bash
+python -m freelancer_bot --opportunity-analysis-job-id <UUID>
+```
+
+Use exactly one explicit `opportunity.analysis.v1` durable job UUID. The command
+must not be replaced with full runtime for the first AI call.
 
 ## Process state
 
@@ -230,15 +240,15 @@ AI provider calls=0
 live Opportunities=0
 live deliveries=0
 OPENROUTER_IMPLEMENTATION_READY=YES
-OPENROUTER_RUNTIME_CONFIGURED=NO
-READY_FOR_OPENROUTER_CONFIGURATION=YES
-READY_FOR_BOUNDED_AI_ANALYSIS=NO
+OPENROUTER_RUNTIME_CONFIGURED=YES
+READY_FOR_OPENROUTER_CONFIGURATION=COMPLETE
+READY_FOR_BOUNDED_AI_ANALYSIS=YES
 LIVE_AI_ANALYSIS_VALIDATED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 ```
 
-The next gate is OpenRouter + MiniMax configuration-only, defined in
-`docs/ACTIVE_PLAN.md`.
+The next gate is bounded one-shot OpenRouter Opportunity Analysis, defined in
+`docs/ACTIVE_PLAN.md`. No live provider response has been validated yet.
 
 ## Evidence references
 

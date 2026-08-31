@@ -293,6 +293,27 @@ class RuntimeConfigTest(unittest.TestCase):
                 mode=RuntimeMode.DATABASE,
             )
 
+    def test_opportunity_analysis_job_mode_requires_database_without_telegram(self):
+        config = self._load(
+            {
+                "DATABASE_URL": "postgresql+psycopg://user:short@localhost/database",
+                "OPPORTUNITY_ANALYSIS_PROVIDER": "openrouter",
+                "OPENROUTER_API_KEY": "test-openrouter-key",
+            },
+            mode=RuntimeMode.OPPORTUNITY_ANALYSIS_JOB,
+        )
+
+        self.assertEqual(
+            config.postgresql_url(),
+            "postgresql+psycopg://user:short@localhost/database",
+        )
+        self.assertIsNone(config.api_id)
+        self.assertIsNone(config.api_hash)
+        self.assertIsNone(config.bot_token)
+
+        with self.assertRaisesRegex(ConfigurationError, "DATABASE_URL"):
+            self._load({}, mode=RuntimeMode.OPPORTUNITY_ANALYSIS_JOB)
+
     def test_secret_values_are_hidden_from_repr_dump_and_validation_errors(self):
         sentinel = "do-not-leak-this-value"
         env = self._telegram_env()

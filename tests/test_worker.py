@@ -112,6 +112,54 @@ class DurableWorkerTest(unittest.IsolatedAsyncioTestCase):
             1,
         )
 
+    async def test_run_one_processes_single_selected_job_and_exits(self):
+        first_job_id = await self._enqueue("one-shot-first")
+        second_job_id = await self._enqueue("one-shot-second")
+        processed = []
+
+        async def handler(claim):
+            processed.append(claim.id)
+
+        worker = self._worker(handler, job_ids=(first_job_id,))
+
+        claimed = await worker.run_one()
+
+        self.assertTrue(claimed)
+        self.assertEqual(processed, [first_job_id])
+        self.assertEqual(worker.health.state, WorkerState.STOPPED)
+        async with self.database.connect() as connection:
+            first = await self.repository.get(connection, first_job_id)
+            second = await self.repository.get(connection, second_job_id)
+        self.assertEqual(first["state"], "completed")
+        self.assertEqual(second["state"], "queued")
+        self.assertEqual(second["attempt_count"], 0)
+
+    async def test_run_one_returns_false_without_polling_second_job(self):
+        first_job_id = await self._enqueue("one-shot-first")
+        second_job_id = await self._enqueue("one-shot-second")
+        async with self.database.transaction() as connection:
+            claim = await self.repository.claim_next(
+                connection,
+                worker_id="one-shot-prep",
+                lease_duration=timedelta(seconds=1),
+                job_ids=(first_job_id,),
+            )
+            self.assertIsNotNone(claim)
+            await self.repository.complete(connection, claim)
+
+        async def handler(claim):
+            raise AssertionError("No selected job should have been claimed")
+
+        worker = self._worker(handler, job_ids=(first_job_id,))
+
+        claimed = await worker.run_one()
+
+        self.assertFalse(claimed)
+        async with self.database.connect() as connection:
+            second = await self.repository.get(connection, second_job_id)
+        self.assertEqual(second["state"], "queued")
+        self.assertEqual(second["attempt_count"], 0)
+
     async def test_worker_claims_only_job_types_with_registered_handlers(self):
         async with self.database.transaction() as connection:
             future_job_id = await self.repository.enqueue(

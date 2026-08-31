@@ -27,13 +27,15 @@ As of the current documented implementation baseline
   server-synced;
 - the selected initial Opportunity Analysis route is
   `provider=openrouter`, `model=minimax/minimax-m3:free`;
-- the OpenRouter runtime key is not configured and no live AI provider call has
-  occurred;
+- the OpenRouter runtime key is configured for the selected bounded
+  Opportunity Analysis route, but no live AI provider call has occurred;
+- this branch adds an explicit one-shot Opportunity Analysis job command for
+  the first live AI canary;
 - AI, discovery, catch-up and legacy delivery remain disabled;
 - persistent runtime is **not** authorized.
 
-Therefore the current next gate is **OpenRouter + MiniMax configuration-only**,
-followed by a separate bounded live Opportunity-analysis canary.
+Therefore the current next gate is a **bounded one-job live
+Opportunity-analysis canary**, not full runtime or persistent deployment.
 
 For exact state and next steps read
 [`docs/CURRENT_STATE.md`](docs/CURRENT_STATE.md) and
@@ -104,6 +106,10 @@ uv run --frozen python -m freelancer_bot --collector-only
 # live NewMessage delivery.
 uv run --frozen python -m freelancer_bot --check-sources
 
+# Process exactly one explicit opportunity.analysis.v1 durable job.
+# Does not start Telegram, collector, discovery, matching or delivery runtime.
+uv run --frozen python -m freelancer_bot --opportunity-analysis-job-id <UUID>
+
 # Full collector + bot + durable ingestion/matching runtime.
 uv run --frozen python -m freelancer_bot --run
 ```
@@ -112,8 +118,17 @@ uv run --frozen python -m freelancer_bot --run
 authorized bounded task. It is not a local/offline config check and is not a
 membership-readiness proof.
 
-`--run` does not itself authorize AI, discovery, catch-up, delivery or persistent
-deployment. Those remain explicit gates.
+`--opportunity-analysis-job-id` requires one explicit durable job UUID, verifies
+that it is a claimable `opportunity.analysis.v1` job, processes at most that
+selected job once through the production Opportunity Analysis path, then exits.
+With `OPPORTUNITY_ANALYSIS_MAX_OUTPUT_ATTEMPTS=1` and
+`OPPORTUNITY_ANALYSIS_FALLBACK_ENABLED=false`, one invocation can make at most
+one provider request.
+
+`--run` does not itself authorize discovery, catch-up, delivery or persistent
+deployment. With a configured Opportunity Analysis provider key it can process
+pending `opportunity.analysis.v1` jobs, so use the one-shot command for the
+first bounded AI canary.
 
 ## Requirements
 
@@ -186,10 +201,11 @@ implemented only for V2 Opportunity Analysis. It does not add first-class
 OpenRouter support for reply drafting, SearchProfile onboarding, Source Audit,
 Telegram Chat Screening or discovery.
 
-The current deployment intentionally has no OpenRouter key configured. The
-selected first route is `minimax/minimax-m3:free`, whose availability and
-pricing must be reverified immediately before configuration/live validation.
-Configuration readiness is separate from the first bounded live provider call.
+The current deployment has the OpenRouter route configured for Opportunity
+Analysis and still has zero live provider calls. The selected first route is
+`minimax/minimax-m3:free`, whose availability and pricing must be reverified
+immediately before live validation. Configuration readiness remains separate
+from the first bounded live provider call.
 
 Follow [`docs/ACTIVE_PLAN.md`](docs/ACTIVE_PLAN.md) and
 [`docs/COST_SAFETY.md`](docs/COST_SAFETY.md).

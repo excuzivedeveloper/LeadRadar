@@ -1,7 +1,7 @@
 # LeadRadar — Current State
 
 **Status:** CANONICAL  
-**Snapshot date:** 2026-08-30
+**Snapshot date:** 2026-08-31
 **Implementation baseline:** `d92b0446be19f391bb8f479387b27d914c081e35`
 **Current deployed repository head:** `d92b0446be19f391bb8f479387b27d914c081e35`
 
@@ -19,24 +19,27 @@ COLLECTOR_MEMBERSHIP_READY=YES
 POSTGRES_READY=YES
 SHADOW_LIVE_EVIDENCE=YES
 OPENROUTER_IMPLEMENTATION_READY=YES
-OPENROUTER_RUNTIME_CONFIGURED=NO
-OPENROUTER_API_KEY_CONFIGURED=NO
+OPENROUTER_RUNTIME_CONFIGURED=YES
+OPENROUTER_API_KEY_CONFIGURED=YES
+OPPORTUNITY_ANALYSIS_PROVIDER=openrouter
+OPPORTUNITY_ANALYSIS_MODEL=minimax/minimax-m3:free
 PROVIDER_LIVE_CALLS=0
 LIVE_AI_ANALYSIS_VALIDATED=NO
-READY_FOR_OPENROUTER_CONFIGURATION=YES
-READY_FOR_BOUNDED_AI_ANALYSIS=NO
+READY_FOR_OPENROUTER_CONFIGURATION=COMPLETE
+READY_FOR_BOUNDED_AI_ANALYSIS=YES
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 ```
 
-The exact next execution stage after this documentation synchronization is:
+The exact next execution stage after this one-shot implementation is merged and
+server-synced is:
 
 ```text
-OPENROUTER_MINIMAX_CONFIGURATION_ONLY
+BOUNDED_ONE_SHOT_OPENROUTER_OPPORTUNITY_ANALYSIS
 ```
 
-OpenRouter implementation is present, but the runtime key is not configured and
-no live provider call has occurred. Discovery, catch-up, legacy delivery and
-persistent runtime remain disabled.
+OpenRouter implementation and runtime configuration are present, but no live
+provider call has occurred. Discovery, catch-up, legacy delivery and persistent
+runtime remain disabled.
 
 ## Repository and migration state
 
@@ -188,7 +191,7 @@ AI_REPLY_ENABLED=false
 OPENAI_API_KEY_CONFIGURED=NO
 DEEPSEEK_API_KEY_CONFIGURED=NO
 TOKENROUTER_API_KEY_CONFIGURED=NO
-OPENROUTER_API_KEY_CONFIGURED=NO
+OPENROUTER_API_KEY_CONFIGURED=YES
 ```
 
 There is no persistent LeadRadar app/bot/collector process.
@@ -264,12 +267,12 @@ Current runtime state:
 
 ```text
 OPENROUTER_IMPLEMENTATION_READY=YES
-OPENROUTER_RUNTIME_CONFIGURED=NO
-OPENROUTER_API_KEY_CONFIGURED=NO
+OPENROUTER_RUNTIME_CONFIGURED=YES
+OPENROUTER_API_KEY_CONFIGURED=YES
 PROVIDER_LIVE_CALLS=0
 LIVE_AI_ANALYSIS_VALIDATED=NO
-READY_FOR_OPENROUTER_CONFIGURATION=YES
-READY_FOR_BOUNDED_AI_ANALYSIS=NO
+READY_FOR_OPENROUTER_CONFIGURATION=COMPLETE
+READY_FOR_BOUNDED_AI_ANALYSIS=YES
 ```
 
 Important runtime invariant: the current implementation has no separate
@@ -278,6 +281,21 @@ provider key is configured, starting full `python -m freelancer_bot --run` can
 construct the analyzer, activate the `opportunity.analysis.v1` handler, claim
 existing pending analysis jobs and make provider calls. `AI_REPLY_ENABLED=false`
 does not disable Opportunity Analysis; it gates reply drafting only.
+
+This branch adds the production-safe operator entrypoint for the first bounded
+AI canary:
+
+```bash
+python -m freelancer_bot --opportunity-analysis-job-id <UUID>
+```
+
+It requires one explicit durable job UUID, accepts only claimable
+`opportunity.analysis.v1` jobs, constructs only the Opportunity Analysis handler
+and exits after one selected-job processing attempt. It does not start Telegram,
+collector, discovery, catch-up, matching or delivery runtime. With
+`OPPORTUNITY_ANALYSIS_MAX_OUTPUT_ATTEMPTS=1` and
+`OPPORTUNITY_ANALYSIS_FALLBACK_ENABLED=false`, one invocation can make at most
+one provider request.
 
 ## Live validation history
 
@@ -389,8 +407,8 @@ already proved membership -> live update -> raw -> prefilter -> shadow.
 | Raw Telegram persistence | yes | **live-validated** |
 | Cheap V2 prefilter | yes | **live-validated** |
 | Legacy-filter shadow telemetry | yes | **live-validated** |
-| OpenRouter Opportunity provider | yes | offline tests and server sync passed; not runtime-configured |
-| OpenRouter runtime configuration | n/a | **not configured** |
+| OpenRouter Opportunity provider | yes | offline tests and server sync passed; runtime configured |
+| OpenRouter runtime configuration | n/a | **configured; zero live calls** |
 | Opportunity AI analysis | yes | no live provider call/model response validated |
 | Canonical Opportunities/dedup | yes | not live-validated with real AI output |
 | SearchProfiles/onboarding | yes | owner UI exists; AI onboarding not enabled |
@@ -410,8 +428,8 @@ continuing. Historical values are invalid and must not be reused.
 
 The ingestion/shadow gate is complete. Remaining ordered gates are:
 
-1. OpenRouter + MiniMax configuration-only with zero provider calls;
-2. bounded live OpenRouter Opportunity analysis;
+1. merge and server-sync the one-shot Opportunity Analysis command;
+2. bounded one-job live OpenRouter Opportunity analysis;
 3. owner SearchProfile/onboarding validation for the chosen AI route;
 4. bounded matching + personalized delivery to the owner;
 5. later decision on legacy-filter tuning from accumulated shadow evidence;

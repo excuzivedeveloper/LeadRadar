@@ -1,7 +1,7 @@
 # LeadRadar — Current Architecture
 
 **Status:** CANONICAL  
-**Last verified:** 2026-08-30
+**Last verified:** 2026-08-31
 **Implementation baseline:** `d92b0446be19f391bb8f479387b27d914c081e35`
 
 ## Purpose
@@ -69,6 +69,28 @@ takes its session lock and resolves enabled `config/sources.json` (or configured
 
 It does not start full ingestion/shadow runtime and requires explicit external-
 work authorization.
+
+### `--opportunity-analysis-job-id <UUID>`
+
+A bounded operator entrypoint for the first live Opportunity Analysis canary.
+It requires one explicit durable job UUID and only accepts a claimable
+`opportunity.analysis.v1` job.
+
+It constructs the production Opportunity Analysis handler and configured
+analyzer path, including PostgreSQL AI telemetry, strict local schema
+validation, grounding validation, cache and canonical Opportunity persistence.
+
+It does not construct or start:
+
+- Telegram user client;
+- Telegram bot client;
+- collector/source handlers;
+- raw ingestion worker;
+- matching/delivery handlers;
+- discovery, audit or catch-up runtime.
+
+It exits after one selected-job processing attempt. It does not poll for or
+claim another job.
 
 ### `--run`
 
@@ -283,9 +305,22 @@ There is no separate `OPPORTUNITY_ANALYSIS_ENABLED` switch in the current
 implementation. `AI_REPLY_ENABLED=false` does not disable Opportunity Analysis;
 it disables reply drafting only.
 
-The pre-AI gate has passed and OpenRouter implementation is server-synced, but
-current deployment still has no OpenRouter runtime key configured. The next gate
-is configuration-only and must not start full runtime.
+The pre-AI gate has passed, OpenRouter implementation is server-synced, and
+runtime OpenRouter configuration is present for the selected Opportunity
+Analysis route. No live provider call has occurred yet. The next gate is a
+bounded one-job live Opportunity Analysis canary through
+`--opportunity-analysis-job-id <UUID>`, not full `--run`.
+
+With the intended canary configuration:
+
+```text
+OPPORTUNITY_ANALYSIS_MAX_OUTPUT_ATTEMPTS=1
+OPPORTUNITY_ANALYSIS_FALLBACK_ENABLED=false
+```
+
+one invocation has at most one provider HTTP request path. The durable job may
+finish completed, retry-queued or terminally failed according to existing job
+semantics, and the command exits without reclaiming it.
 
 ## SearchProfiles
 

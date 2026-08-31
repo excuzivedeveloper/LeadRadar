@@ -1,12 +1,13 @@
 # LeadRadar — Cost and External-Work Safety
 
 **Status:** CANONICAL  
-**Last verified:** 2026-08-30
+**Last verified:** 2026-08-31
 
 ## Current deployment rule
 
 The current deployment is pre-live-AI. OpenRouter Opportunity Analysis support
-is implemented and server-synced, but the runtime provider key is still absent.
+is implemented and server-synced, and the selected OpenRouter runtime route is
+configured. No live provider call has occurred.
 
 Expected:
 
@@ -15,10 +16,12 @@ AI_REPLY_ENABLED=false
 OPENAI_API_KEY_CONFIGURED=NO
 DEEPSEEK_API_KEY_CONFIGURED=NO
 TOKENROUTER_API_KEY_CONFIGURED=NO
-OPENROUTER_API_KEY_CONFIGURED=NO
+OPENROUTER_API_KEY_CONFIGURED=YES
+OPPORTUNITY_ANALYSIS_PROVIDER=openrouter
+OPPORTUNITY_ANALYSIS_MODEL=minimax/minimax-m3:free
 PROVIDER_LIVE_CALLS=0
-READY_FOR_OPENROUTER_CONFIGURATION=YES
-READY_FOR_BOUNDED_AI_ANALYSIS=NO
+READY_FOR_OPENROUTER_CONFIGURATION=COMPLETE
+READY_FOR_BOUNDED_AI_ANALYSIS=YES
 
 SEND_CATCH_UP=false
 SOURCE_DISCOVERY_ENABLED=false
@@ -45,8 +48,20 @@ matching Opportunity Analysis provider key present
 
 There is no separate `OPPORTUNITY_ANALYSIS_ENABLED` switch. `AI_REPLY_ENABLED`
 gates reply drafting only and does not disable Opportunity Analysis. The
-configuration-only OpenRouter task must make zero provider calls and must not
-start full runtime after key insertion.
+the first live AI canary must use the bounded one-shot job command rather than
+full runtime.
+
+For the first canary, use:
+
+```bash
+python -m freelancer_bot --opportunity-analysis-job-id <UUID>
+```
+
+The command requires an explicit `opportunity.analysis.v1` durable job UUID,
+processes at most that selected job once, and exits without claiming a second
+job. With `OPPORTUNITY_ANALYSIS_MAX_OUTPUT_ATTEMPTS=1` and
+`OPPORTUNITY_ANALYSIS_FALLBACK_ENABLED=false`, one invocation can make at most
+one provider request.
 
 ## Fresh-clone defaults
 
@@ -77,12 +92,12 @@ Before the first live call:
 
 1. reverify current model availability and pricing from authoritative provider
    information;
-2. use a dedicated BYOK OpenRouter key;
-3. set low provider-side spend/rate limits where available;
-4. configure repository pricing inputs from operator-verified values;
+2. keep using the dedicated BYOK OpenRouter key without printing it;
+3. verify low provider-side spend/rate limits where available;
+4. keep repository pricing inputs aligned with operator-verified values;
 5. keep fallback disabled;
 6. preserve repository daily/monthly spend guards;
-7. use an explicitly bounded provider-call/job mechanism;
+7. use only the explicit one-shot provider-call/job mechanism;
 8. inspect AI telemetry and job counts before increasing limits.
 
 Do not enable discovery in the same first AI canary.

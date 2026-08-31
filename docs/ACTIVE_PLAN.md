@@ -1,7 +1,7 @@
 # LeadRadar — Active Plan
 
 **Status:** CANONICAL / ACTIVE  
-**Last verified:** 2026-08-30
+**Last verified:** 2026-08-31
 **Implementation baseline:** `d92b0446be19f391bb8f479387b27d914c081e35`
 
 This file defines execution order. A later capability being implemented in code
@@ -20,6 +20,7 @@ APPROVED_SOURCE_MEMBERSHIP_ROLLOUT_13_OF_13
 CANONICAL_DOC_SYNC_FOR_LIVE_EVIDENCE_AND_MEMBERSHIP
 OPENROUTER_FIRST_CLASS_OPPORTUNITY_IMPLEMENTATION
 OPENROUTER_IMPLEMENTATION_SERVER_SYNC
+OPENROUTER_MINIMAX_CONFIGURATION_ONLY
 ```
 
 The collector membership hypothesis is now experimentally confirmed:
@@ -38,19 +39,21 @@ Current authorization state:
 SHADOW_LIVE_EVIDENCE=YES
 COLLECTOR_MEMBERSHIP_READY=YES
 OPENROUTER_IMPLEMENTATION_READY=YES
-OPENROUTER_RUNTIME_CONFIGURED=NO
-OPENROUTER_API_KEY_CONFIGURED=NO
+OPENROUTER_RUNTIME_CONFIGURED=YES
+OPENROUTER_API_KEY_CONFIGURED=YES
+OPPORTUNITY_ANALYSIS_PROVIDER=openrouter
+OPPORTUNITY_ANALYSIS_MODEL=minimax/minimax-m3:free
 PROVIDER_LIVE_CALLS=0
 LIVE_AI_ANALYSIS_VALIDATED=NO
-READY_FOR_OPENROUTER_CONFIGURATION=YES
-READY_FOR_BOUNDED_AI_ANALYSIS=NO
+READY_FOR_OPENROUTER_CONFIGURATION=COMPLETE
+READY_FOR_BOUNDED_AI_ANALYSIS=YES
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 ```
 
 Current next execution stage:
 
 ```text
-OPENROUTER_MINIMAX_CONFIGURATION_ONLY
+BOUNDED_ONE_SHOT_OPENROUTER_OPPORTUNITY_ANALYSIS
 ```
 
 ## Step 0 — Pre-AI ingestion/shadow validation
@@ -75,7 +78,7 @@ application-code defect.
 
 ## Step 1 — OpenRouter + MiniMax configuration-only
 
-**Status: NEXT EXECUTION STAGE.**
+**Status: COMPLETE.**
 
 Goal: make the selected Opportunity Analysis route ready without making the
 first live provider/model call in the same configuration step.
@@ -135,12 +138,23 @@ PERSISTENT_RUNTIME_AUTHORIZED=NO
 
 ## Step 2 — Bounded first live OpenRouter Opportunity analysis
 
-**Blocked until Step 1 passes.**
+**Status: NEXT EXECUTION STAGE after the one-shot command implementation is
+merged and server-synced.**
 
 Use one narrowly bounded Opportunity Analysis validation with OpenRouter and
-`minimax/minimax-m3:free`. The exact operational mechanism for bounding a single
-provider call/job should be defined by the orchestrator in the later server
-task; this plan does not invent it.
+`minimax/minimax-m3:free`.
+
+Required operator mechanism:
+
+```bash
+python -m freelancer_bot --opportunity-analysis-job-id <UUID>
+```
+
+The UUID must be an explicit `opportunity.analysis.v1` durable job selected from
+fresh preflight evidence. Do not choose an arbitrary queued job automatically.
+With `OPPORTUNITY_ANALYSIS_MAX_OUTPUT_ATTEMPTS=1` and
+`OPPORTUNITY_ANALYSIS_FALLBACK_ENABLED=false`, one invocation is bounded to at
+most one provider request and exits after one selected-job processing attempt.
 
 Goals:
 
@@ -241,8 +255,7 @@ Do not:
 
 - enable catch-up to force test data;
 - enable discovery concurrently with first AI setup;
-- run full `--run` during OpenRouter configuration-only work after inserting the
-  key;
+- run full `--run` for the first live Opportunity Analysis canary;
 - switch collector back to owner's main Telegram account;
 - remove owner-only bot access;
 - add automatic channel joining without a separately reviewed design;

@@ -25,6 +25,7 @@ class RuntimeMode(str, Enum):
     CHECK_FILTER = "check_filter"
     CHECK_SOURCES = "check_sources"
     DRAFT_TEXT = "draft_text"
+    OPPORTUNITY_ANALYSIS_JOB = "opportunity_analysis_job"
     DATABASE = "database"
 
 
@@ -1176,6 +1177,8 @@ class RuntimeConfig(BaseSettings):
             )
         elif mode is RuntimeMode.DRAFT_TEXT:
             required.append(("OPENAI_API_KEY", self.openai_api_key))
+        elif mode is RuntimeMode.OPPORTUNITY_ANALYSIS_JOB:
+            required.append(("DATABASE_URL", self.database_url))
         elif mode is RuntimeMode.DATABASE:
             required.append(("DATABASE_URL", self.database_url))
 
@@ -1185,7 +1188,7 @@ class RuntimeConfig(BaseSettings):
                 f"Missing required configuration for {mode.value}: {', '.join(missing)}"
             )
 
-        if mode is RuntimeMode.DATABASE:
+        if mode in {RuntimeMode.DATABASE, RuntimeMode.OPPORTUNITY_ANALYSIS_JOB}:
             self.postgresql_url()
         elif mode in {
             RuntimeMode.RUN,
