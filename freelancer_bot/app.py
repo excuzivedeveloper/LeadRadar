@@ -38,7 +38,10 @@ from .observability import (
     trace_context,
 )
 from .opportunity_analysis import opportunity_analysis_provider_available
-from .opportunity_one_shot import run_opportunity_analysis_job_once
+from .opportunity_one_shot import (
+    OpportunityAnalysisOneShotError,
+    run_opportunity_analysis_job_once,
+)
 from .persistence.database import Database
 from .persistence.delivery_actions import (
     DeliveryActionError,
@@ -1703,6 +1706,7 @@ def cli() -> None:
         help="Run the authenticated PostgreSQL-backed collector without the user-facing bot.",
     )
     args = parser.parse_args()
+    _reject_conflicting_action_modes(parser, args)
 
     if args.check_config:
         config = RuntimeConfig.from_env(mode=RuntimeMode.CHECK_CONFIG)
@@ -1733,7 +1737,15 @@ def cli() -> None:
         except ValueError:
             parser.error("--opportunity-analysis-job-id must be a valid UUID")
         config = RuntimeConfig.from_env(mode=RuntimeMode.OPPORTUNITY_ANALYSIS_JOB)
-        asyncio.run(run_opportunity_analysis_job_once(config, job_id))
+        try:
+            asyncio.run(run_opportunity_analysis_job_once(config, job_id))
+        except OpportunityAnalysisOneShotError as error:
+            details = [f"status={error.status}"]
+            if error.job_state:
+                details.append(f"state={error.job_state}")
+            if error.failure_code:
+                details.append(f"failure_code={error.failure_code}")
+            parser.exit(1, f"opportunity analysis one-shot failed: {' '.join(details)}\n")
         return
 
     if args.collector_only:
@@ -1784,6 +1796,31 @@ def cli() -> None:
     print(
         "\nNo runtime started. Choose --bot-only, --collector-only or --run explicitly."
     )
+
+
+def _reject_conflicting_action_modes(
+    parser: argparse.ArgumentParser,
+    args: argparse.Namespace,
+) -> None:
+    selected = []
+    if args.check_filter:
+        selected.append("--check-filter")
+    if args.draft_text:
+        selected.append("--draft-text")
+    if args.check_config:
+        selected.append("--check-config")
+    if args.check_sources:
+        selected.append("--check-sources")
+    if args.opportunity_analysis_job_id:
+        selected.append("--opportunity-analysis-job-id")
+    if args.run:
+        selected.append("--run")
+    if args.bot_only:
+        selected.append("--bot-only")
+    if args.collector_only:
+        selected.append("--collector-only")
+    if len(selected) > 1:
+        parser.error(f"conflicting action modes: {', '.join(selected)}")
 
 
 def _build_reply_draft_provider(config: RuntimeConfig) -> ReplyDraftProvider:

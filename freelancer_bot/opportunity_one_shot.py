@@ -20,13 +20,26 @@ LOGGER = logging.getLogger("freelancer_bot")
 
 
 class OpportunityAnalysisOneShotError(RuntimeError):
-    pass
+    def __init__(
+        self,
+        message: str,
+        *,
+        status: str = "rejected_before_claim",
+        job_state: str | None = None,
+        failure_code: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.status = status
+        self.job_state = job_state
+        self.failure_code = failure_code
 
 
 @dataclass(frozen=True)
 class OpportunityAnalysisOneShotResult:
     job_id: UUID
     processed: bool
+    state: str
+    failure_code: str | None = None
 
 
 async def run_opportunity_analysis_job_once(
@@ -70,17 +83,89 @@ async def run_opportunity_analysis_job_once(
             raise OpportunityAnalysisOneShotError(
                 "Selected opportunity analysis job is not eligible for claim"
             )
+        row = await _read_selected_job(db, jobs, job_id)
+        state = str(row["state"])
+        failure_code = row["failure_code"]
+        if state == "completed":
+            log_event(
+                active_logger,
+                logging.INFO,
+                "opportunity.analysis.one_shot_completed",
+                job_id=job_id,
+                job_type=OPPORTUNITY_ANALYSIS_JOB_TYPE,
+                state=state,
+            )
+            return OpportunityAnalysisOneShotResult(
+                job_id=job_id,
+                processed=True,
+                state=state,
+                failure_code=failure_code,
+            )
+        if state == "queued":
+            log_event(
+                active_logger,
+                logging.WARNING,
+                "opportunity.analysis.one_shot_retry_scheduled",
+                job_id=job_id,
+                job_type=OPPORTUNITY_ANALYSIS_JOB_TYPE,
+                state=state,
+                failure_code=failure_code,
+            )
+            raise OpportunityAnalysisOneShotError(
+                "Selected opportunity analysis job scheduled retry",
+                status="retry_queued",
+                job_state=state,
+                failure_code=failure_code,
+            )
+        if state == "failed":
+            log_event(
+                active_logger,
+                logging.ERROR,
+                "opportunity.analysis.one_shot_failed",
+                job_id=job_id,
+                job_type=OPPORTUNITY_ANALYSIS_JOB_TYPE,
+                state=state,
+                failure_code=failure_code,
+            )
+            raise OpportunityAnalysisOneShotError(
+                "Selected opportunity analysis job failed",
+                status="failed",
+                job_state=state,
+                failure_code=failure_code,
+            )
         log_event(
             active_logger,
-            logging.INFO,
-            "opportunity.analysis.one_shot_completed",
+            logging.ERROR,
+            "opportunity.analysis.one_shot_unexpected_state",
             job_id=job_id,
             job_type=OPPORTUNITY_ANALYSIS_JOB_TYPE,
+            state=state,
+            failure_code=failure_code,
         )
-        return OpportunityAnalysisOneShotResult(job_id=job_id, processed=True)
+        raise OpportunityAnalysisOneShotError(
+            "Selected opportunity analysis job reached unexpected state",
+            status="unexpected_state",
+            job_state=state,
+            failure_code=failure_code,
+        )
     finally:
         if close_database:
             await db.close()
+
+
+async def _read_selected_job(
+    database: Database,
+    repository: DurableJobRepository,
+    job_id: UUID,
+):
+    async with database.connect() as connection:
+        row = await repository.get(connection, job_id)
+    if row is None:
+        raise OpportunityAnalysisOneShotError(
+            "Selected opportunity analysis job disappeared",
+            status="unexpected_state",
+        )
+    return row
 
 
 async def _require_claimable_opportunity_job(

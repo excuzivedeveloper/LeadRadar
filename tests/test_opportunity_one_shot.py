@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 import json
+import logging
 import unittest
 import urllib.error
 from uuid import UUID, uuid4
@@ -190,6 +191,7 @@ class OpportunityAnalysisOneShotTest(unittest.IsolatedAsyncioTestCase):
         selected = await self._analysis_job("selected", 200)
         untouched = await self._analysis_job("untouched", 201)
         requests = []
+        logger, records = _capture_logger()
 
         with self._patched_urlopen(requests, _openrouter_response(_analysis_payload())):
             result = await run_opportunity_analysis_job_once(
@@ -197,9 +199,11 @@ class OpportunityAnalysisOneShotTest(unittest.IsolatedAsyncioTestCase):
                 selected,
                 database=self.database,
                 repository=self.jobs,
+                logger=logger,
             )
 
         self.assertTrue(result.processed)
+        self.assertEqual(result.state, "completed")
         self.assertEqual(len(requests), 1)
         async with self.database.connect() as connection:
             selected_row = await self.jobs.get(connection, selected)
@@ -222,22 +226,26 @@ class OpportunityAnalysisOneShotTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(telemetry["status"], "succeeded")
         self.assertEqual(cache_count, 1)
         self.assertEqual(opportunity_count, 1)
+        self.assertIn("opportunity.analysis.one_shot_completed", _events(records))
 
     async def test_invalid_output_uses_one_request_and_retry_semantics(self):
         selected = await self._analysis_job("invalid-output", 300)
         untouched = await self._analysis_job("invalid-untouched", 301)
         requests = []
+        logger, records = _capture_logger()
 
         with self._patched_urlopen(
             requests,
             {"model": "minimax/minimax-m3:free", "choices": [], "usage": _usage()},
         ):
-            await run_opportunity_analysis_job_once(
-                self.config,
-                selected,
-                database=self.database,
-                repository=self.jobs,
-            )
+            with self.assertRaises(OpportunityAnalysisOneShotError) as raised:
+                await run_opportunity_analysis_job_once(
+                    self.config,
+                    selected,
+                    database=self.database,
+                    repository=self.jobs,
+                    logger=logger,
+                )
 
         self.assertEqual(len(requests), 1)
         async with self.database.connect() as connection:
@@ -249,26 +257,34 @@ class OpportunityAnalysisOneShotTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(selected_row["state"], "queued")
         self.assertEqual(selected_row["attempt_count"], 1)
         self.assertEqual(selected_row["failure_code"], "OpportunityAnalysisOutputError")
+        self.assertEqual(raised.exception.status, "retry_queued")
+        self.assertEqual(raised.exception.job_state, "queued")
+        self.assertEqual(raised.exception.failure_code, "OpportunityAnalysisOutputError")
         self.assertEqual(untouched_row["state"], "queued")
         self.assertEqual(untouched_row["attempt_count"], 0)
         self.assertEqual(telemetry["status"], "invalid_output")
+        self.assertIn("opportunity.analysis.one_shot_retry_scheduled", _events(records))
+        self.assertNotIn("opportunity.analysis.one_shot_completed", _events(records))
 
     async def test_transport_failure_uses_one_request_and_retry_semantics(self):
         selected = await self._analysis_job("transport-failure", 400)
         untouched = await self._analysis_job("transport-untouched", 401)
         requests = []
+        logger, records = _capture_logger()
 
         def fail_urlopen(request, timeout):
             requests.append((request, timeout))
             raise urllib.error.URLError("fixture network failure")
 
         with self._patch_urlopen(fail_urlopen):
-            await run_opportunity_analysis_job_once(
-                self.config,
-                selected,
-                database=self.database,
-                repository=self.jobs,
-            )
+            with self.assertRaises(OpportunityAnalysisOneShotError) as raised:
+                await run_opportunity_analysis_job_once(
+                    self.config,
+                    selected,
+                    database=self.database,
+                    repository=self.jobs,
+                    logger=logger,
+                )
 
         self.assertEqual(len(requests), 1)
         async with self.database.connect() as connection:
@@ -280,9 +296,48 @@ class OpportunityAnalysisOneShotTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(selected_row["state"], "queued")
         self.assertEqual(selected_row["attempt_count"], 1)
         self.assertEqual(selected_row["failure_code"], "OpportunityAnalysisError")
+        self.assertEqual(raised.exception.status, "retry_queued")
+        self.assertEqual(raised.exception.job_state, "queued")
+        self.assertEqual(raised.exception.failure_code, "OpportunityAnalysisError")
         self.assertEqual(untouched_row["state"], "queued")
         self.assertEqual(untouched_row["attempt_count"], 0)
         self.assertEqual(telemetry["status"], "request_failed")
+        self.assertIn("opportunity.analysis.one_shot_retry_scheduled", _events(records))
+        self.assertNotIn("opportunity.analysis.one_shot_completed", _events(records))
+
+    async def test_terminal_failure_exits_non_success_without_completed_event(self):
+        selected = await self._analysis_job("terminal-failure", 500)
+        untouched = await self._analysis_job("terminal-untouched", 501)
+        await self._make_last_attempt(selected)
+        requests = []
+        logger, records = _capture_logger()
+
+        with self._patched_urlopen(
+            requests,
+            {"model": "minimax/minimax-m3:free", "choices": [], "usage": _usage()},
+        ):
+            with self.assertRaises(OpportunityAnalysisOneShotError) as raised:
+                await run_opportunity_analysis_job_once(
+                    self.config,
+                    selected,
+                    database=self.database,
+                    repository=self.jobs,
+                    logger=logger,
+                )
+
+        self.assertEqual(len(requests), 1)
+        async with self.database.connect() as connection:
+            selected_row = await self.jobs.get(connection, selected)
+            untouched_row = await self.jobs.get(connection, untouched)
+        self.assertEqual(selected_row["state"], "failed")
+        self.assertEqual(selected_row["attempt_count"], selected_row["max_attempts"])
+        self.assertEqual(raised.exception.status, "failed")
+        self.assertEqual(raised.exception.job_state, "failed")
+        self.assertEqual(raised.exception.failure_code, "OpportunityAnalysisOutputError")
+        self.assertEqual(untouched_row["state"], "queued")
+        self.assertEqual(untouched_row["attempt_count"], 0)
+        self.assertIn("opportunity.analysis.one_shot_failed", _events(records))
+        self.assertNotIn("opportunity.analysis.one_shot_completed", _events(records))
 
     async def _analysis_job(self, key: str, external_message_id: int) -> UUID:
         result = await RawMessageIngestor(self.database, jobs=self.jobs).ingest(
@@ -360,6 +415,14 @@ class OpportunityAnalysisOneShotTest(unittest.IsolatedAsyncioTestCase):
                 .values(attempt_count=durable_jobs.c.max_attempts)
             )
 
+    async def _make_last_attempt(self, job_id: UUID) -> None:
+        async with self.database.transaction() as connection:
+            await connection.execute(
+                sa.update(durable_jobs)
+                .where(durable_jobs.c.id == job_id)
+                .values(attempt_count=durable_jobs.c.max_attempts - 1)
+            )
+
     @contextmanager
     def _patched_urlopen(self, requests: list[object], response: dict[str, object]):
         def fake_urlopen(request, timeout):
@@ -429,6 +492,28 @@ def _analysis_payload() -> dict[str, object]:
 
 def _usage() -> dict[str, int]:
     return {"prompt_tokens": 41, "completion_tokens": 23, "total_tokens": 64}
+
+
+class _ListHandler(logging.Handler):
+    def __init__(self) -> None:
+        super().__init__()
+        self.records: list[logging.LogRecord] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.records.append(record)
+
+
+def _capture_logger():
+    logger = logging.getLogger(f"one-shot-test-{uuid4()}")
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+    handler = _ListHandler()
+    logger.addHandler(handler)
+    return logger, handler.records
+
+
+def _events(records: list[logging.LogRecord]) -> list[str]:
+    return [getattr(record, "event", "") for record in records]
 
 
 if __name__ == "__main__":
