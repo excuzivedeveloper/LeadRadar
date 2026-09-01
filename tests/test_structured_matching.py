@@ -14,7 +14,12 @@ from freelancer_bot.matching import (
     score_candidate_structured,
     score_narrowed_candidates,
 )
-from freelancer_bot.lexical_matching import labels_have_overlap
+from freelancer_bot.lexical_matching import (
+    label_similarity,
+    labels_f1,
+    labels_have_overlap,
+    lexical_token_sequence,
+)
 from freelancer_bot.opportunity_analysis import OpportunityAnalysis
 from freelancer_bot.persistence.database import Database
 from freelancer_bot.persistence.opportunities import (
@@ -45,6 +50,110 @@ NOW = datetime(2026, 8, 14, 14, 0, tzinfo=timezone.utc)
 
 
 class StructuredMatchingScoreTest(unittest.TestCase):
+    def test_supported_capability_taxonomy_regression_recovers_narrowing_overlap(self):
+        profile = _profile(
+            roles=("Bot developer",),
+            skills=("Chatbot development",),
+            categories=("Messaging automation",),
+            work_types=None,
+            minimum_budget=None,
+            currency=None,
+            languages=None,
+            geographies=None,
+            work_modes=None,
+        )
+        opportunity = _opportunity(
+            role_title="Workflow engineer",
+            skills=("Telegram workflow orchestration",),
+            category="Telegram workflow orchestration",
+            language=None,
+            location=None,
+        )
+
+        self.assertFalse(
+            _base_style_exact_token_overlap(
+                ("Telegram workflow orchestration", "Workflow engineer", "Telegram workflow orchestration"),
+                ("Bot developer", "Chatbot development", "Messaging automation"),
+            )
+        )
+
+        result = score_narrowed_candidates(opportunity, (profile,))
+
+        self.assertEqual(result.candidates.trace.exclusions, ())
+        self.assertEqual(result.candidates.eligible_profiles, (profile,))
+        self.assertGreater(result.scores[0].component("skills").score, Decimal("0"))
+
+    def test_supported_capability_taxonomy_regression_scores_structured_components(self):
+        profile = _profile(
+            roles=("Python backend developer",),
+            skills=("Python API",),
+            categories=("Backend development",),
+            work_types=None,
+            minimum_budget=None,
+            currency=None,
+            languages=None,
+            geographies=None,
+            work_modes=None,
+        )
+        opportunity = _opportunity(
+            role_title="FastAPI engineer",
+            skills=("FastAPI",),
+            category="FastAPI API service",
+            language=None,
+            location=None,
+        )
+
+        score = score_candidate_structured(opportunity, profile)
+
+        self.assertGreaterEqual(
+            label_similarity("FastAPI", "Python backend"),
+            Decimal("0.6000"),
+        )
+        self.assertGreater(score.component("role").score, Decimal("0"))
+        self.assertGreater(score.component("skills").score, Decimal("0"))
+        self.assertGreater(score.component("category").score, Decimal("0"))
+
+    def test_browser_parser_and_frontend_capability_families_match_without_exact_labels(self):
+        browser_score, browser_matches = labels_f1(
+            ("browser automation",),
+            ("scraping parser",),
+        )
+        frontend_score, frontend_matches = labels_f1(
+            ("Next.js web app",),
+            ("React frontend development",),
+        )
+
+        self.assertGreaterEqual(browser_score, Decimal("0.6000"))
+        self.assertTrue(browser_matches)
+        self.assertGreaterEqual(frontend_score, Decimal("0.6000"))
+        self.assertTrue(frontend_matches)
+
+    def test_generic_developer_project_words_do_not_create_overlap(self):
+        self.assertFalse(
+            labels_have_overlap(
+                ("developer project work",),
+                ("specialist job project",),
+            )
+        )
+        self.assertLess(
+            label_similarity("developer project work", "specialist job project"),
+            Decimal("0.6000"),
+        )
+
+    def test_unrelated_technology_category_does_not_create_overlap(self):
+        self.assertFalse(
+            labels_have_overlap(
+                ("React web development",),
+                ("accounting spreadsheet setup",),
+            )
+        )
+        self.assertFalse(
+            labels_have_overlap(
+                ("LLM integration",),
+                ("video editing project",),
+            )
+        )
+
     def test_generalized_lexical_equivalents_are_structured_and_explainable(self):
         profile = _profile(
             roles=("python-разработчик",),
@@ -497,6 +606,25 @@ def _source_quality(*, high: bool) -> SourceQualitySnapshot:
         duplicate_ratio=Decimal("0") if high else Decimal("0.8"),
         created_at=NOW,
     )
+
+
+def _base_style_exact_token_overlap(
+    left: tuple[str, ...],
+    right: tuple[str, ...],
+) -> bool:
+    left_tokens = {
+        token
+        for label in left
+        for token in lexical_token_sequence(label)
+        if token not in {"develop", "developer", "project", "work"}
+    }
+    right_tokens = {
+        token
+        for label in right
+        for token in lexical_token_sequence(label)
+        if token not in {"develop", "developer", "project", "work"}
+    }
+    return bool(left_tokens & right_tokens)
 
 
 if __name__ == "__main__":

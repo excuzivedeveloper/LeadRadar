@@ -32,8 +32,8 @@ from .search_profiles import (
 )
 
 
-MATCHING_FILTER_VERSION = "matching-hard-filters.v4"
-STRUCTURED_SCORING_VERSION = "structured-matching-score.v4"
+MATCHING_FILTER_VERSION = "matching-hard-filters.v5"
+STRUCTURED_SCORING_VERSION = "structured-matching-score.v5"
 STRUCTURED_SCORING_POLICY_VERSION = "structured-matching-policy.v4"
 _VERSION_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]{0,99}$")
 _SCORE_QUANTUM = Decimal("0.0001")
