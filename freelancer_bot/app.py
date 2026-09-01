@@ -236,6 +236,7 @@ class LeadBot:
         )
         self.profile_confirmation = ProfileConfirmationService(
             self.database,
+            owner_telegram_user_id=getattr(config, "owner_telegram_user_id", None),
             telegram_chat_discovery_enabled=getattr(
                 config,
                 "telegram_chat_discovery_enabled",
@@ -255,6 +256,7 @@ class LeadBot:
         self.navigation = TelegramNavigationService(
             self.profile_confirmation,
             billing_plan=BillingPlan.from_config(config),
+            owner_telegram_user_id=getattr(config, "owner_telegram_user_id", None),
         )
         self._pending_navigation_inputs: dict[str, _PendingNavigationInput] = {}
         self.delivery_actions = DeliveryActionService(
@@ -1848,7 +1850,11 @@ def _build_profile_onboarding(
     else:
         ai_onboarding = ProfileOnboardingService(database, analyzer)
     return TelegramProfileOnboarding(
-        confirmation or ProfileConfirmationService(database),
+        confirmation
+        or ProfileConfirmationService(
+            database,
+            owner_telegram_user_id=getattr(config, "owner_telegram_user_id", None),
+        ),
         ai_onboarding,
     )
 

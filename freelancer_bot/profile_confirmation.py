@@ -17,6 +17,7 @@ from .persistence.search_profiles import (
     UserRepository,
     UserRecord,
 )
+from .persistence.entitlements import is_owner_telegram_identity
 from .profile_discovery import (
     ProfileDiscoveryIntentRepository,
     build_profile_discovery_intent,
@@ -73,6 +74,7 @@ class ProfileConfirmationService:
         analysis_cache: SearchProfileAnalysisCacheRepository | None = None,
         discovery_intents: ProfileDiscoveryIntentRepository | None = None,
         jobs: DurableJobRepository | None = None,
+        owner_telegram_user_id: int | None = None,
         telegram_chat_discovery_enabled: bool = False,
         telegram_chat_discovery_max_topics_per_cycle: int = 5,
     ) -> None:
@@ -86,6 +88,7 @@ class ProfileConfirmationService:
         self._analysis_cache = analysis_cache or SearchProfileAnalysisCacheRepository()
         self._discovery_intents = discovery_intents or ProfileDiscoveryIntentRepository()
         self._jobs = jobs or DurableJobRepository()
+        self._owner_telegram_user_id = owner_telegram_user_id
         self._telegram_chat_discovery_enabled = telegram_chat_discovery_enabled
         self._telegram_chat_discovery_max_topics_per_cycle = (
             telegram_chat_discovery_max_topics_per_cycle
@@ -267,6 +270,11 @@ class ProfileConfirmationService:
                 profile_id=profile_id,
                 user_id=user.id,
                 expected_revision=expected_revision,
+                start_trial=not is_owner_telegram_identity(
+                    platform=user.platform,
+                    external_user_id=user.external_user_id,
+                    owner_telegram_user_id=self._owner_telegram_user_id,
+                ),
             )
             await self._jobs.enqueue(
                 connection,

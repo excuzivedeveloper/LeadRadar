@@ -17,6 +17,7 @@ DEFAULT_SUBSCRIPTION_PLAN_INTERVAL = "month"
 
 
 class EntitlementState(str, Enum):
+    OWNER_ACTIVE = "owner_active"
     TRIAL_NOT_STARTED = "trial_not_started"
     TRIAL_ACTIVE = "trial_active"
     TRIAL_EXPIRED = "trial_expired"
@@ -127,6 +128,18 @@ class EntitlementDecision:
 
 class EntitlementChecker(Protocol):
     async def check(self, connection: Any, user_id: UUID) -> EntitlementDecision: ...
+
+
+def evaluate_owner_entitlement(*, evaluated_at: datetime) -> EntitlementDecision:
+    return EntitlementDecision(
+        state=EntitlementState.OWNER_ACTIVE,
+        can_receive_deliveries=True,
+        evaluated_at=_utc(evaluated_at),
+        trial_started_at=None,
+        trial_expires_at=None,
+        trial_policy_version=None,
+        subscription_state=None,
+    )
 
 
 def evaluate_trial_entitlement(

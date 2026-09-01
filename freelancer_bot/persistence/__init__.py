@@ -13,7 +13,12 @@ from .discovery import (
     DiscoveryRunRepository,
     DiscoveryRunStatus,
 )
-from .entitlements import EntitlementUserNotFound, TrialEntitlementChecker
+from .entitlements import (
+    EntitlementUserNotFound,
+    OwnerEntitlementChecker,
+    TrialEntitlementChecker,
+    is_owner_telegram_identity,
+)
 from .jobs import DurableJobRepository, JobClaim
 from .telegram_chat_discovery import (
     ChatDiscoveryBackpressure,
@@ -168,6 +173,7 @@ __all__ = [
     "DiscoveryRunStatus",
     "DurableJobRepository",
     "EntitlementUserNotFound",
+    "OwnerEntitlementChecker",
     "FEEDBACK_SCHEMA_VERSION",
     "SOURCE_FEEDBACK_SIGNAL_VERSION",
     "FeedbackPersistenceConflict",
@@ -258,6 +264,7 @@ __all__ = [
     "SubscriptionStateRecord",
     "SubscriptionTransitionError",
     "TrialEntitlementChecker",
+    "is_owner_telegram_identity",
     "TelegramCollectorFloodWaitActive",
     "TelegramCollectorOperationRepository",
     "TelegramCollectorOperationState",
