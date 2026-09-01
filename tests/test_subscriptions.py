@@ -11,7 +11,7 @@ import sqlalchemy as sa
 from freelancer_bot.billing import EntitlementState
 from freelancer_bot.payment_provider import PaymentStatus, VerifiedPaymentEvent
 from freelancer_bot.persistence.database import Database
-from freelancer_bot.persistence.entitlements import TrialEntitlementChecker
+from freelancer_bot.persistence.entitlements import OwnerEntitlementChecker, TrialEntitlementChecker
 from freelancer_bot.persistence.payments import PaymentRepository
 from freelancer_bot.persistence.schema import (
     subscription_periods,
@@ -120,6 +120,63 @@ class SubscriptionLifecycleIntegrationTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(after.trial_started_at, NOW - timedelta(days=5))
         self.assertEqual(after.trial_expires_at, NOW - timedelta(days=2))
         self.assertEqual(after.paid_provider, "robokassa")
+
+    async def test_owner_entitlement_grants_unlimited_access_without_trial_or_subscription(self):
+        user_id = await self._create_user("7000001")
+        checker = OwnerEntitlementChecker(
+            owner_telegram_user_id=7000001,
+            clock=lambda: NOW,
+        )
+
+        async with self.database.transaction() as connection:
+            decision = await checker.check(connection, user_id)
+
+        self.assertEqual(decision.state, EntitlementState.OWNER_ACTIVE)
+        self.assertTrue(decision.can_receive_deliveries)
+        self.assertIsNone(decision.trial_started_at)
+        self.assertIsNone(decision.trial_expires_at)
+        self.assertIsNone(decision.subscription_state)
+        self.assertIsNone(decision.failure_code)
+
+    async def test_owner_entitlement_is_exact_telegram_identity_not_allowlist_membership(self):
+        user_id = await self._create_user("7000002")
+        checker = OwnerEntitlementChecker(
+            owner_telegram_user_id=7000001,
+            clock=lambda: NOW,
+        )
+
+        async with self.database.transaction() as connection:
+            decision = await checker.check(connection, user_id)
+
+        self.assertEqual(decision.state, EntitlementState.TRIAL_NOT_STARTED)
+        self.assertFalse(decision.can_receive_deliveries)
+        self.assertEqual(decision.failure_code, "TrialNotStarted")
+
+    async def test_owner_entitlement_preserves_non_owner_trial_and_paid_states(self):
+        trial_user = await self._create_user(
+            "7000003",
+            trial_started_at=NOW - timedelta(hours=1),
+            trial_expires_at=NOW + timedelta(days=3) - timedelta(hours=1),
+        )
+        paid_user = await self._create_user(
+            "7000004",
+            trial_started_at=NOW - timedelta(days=5),
+            trial_expires_at=NOW - timedelta(days=2),
+        )
+        await self._record_period(paid_user)
+        checker = OwnerEntitlementChecker(
+            owner_telegram_user_id=7000001,
+            clock=lambda: NOW,
+        )
+
+        async with self.database.transaction() as connection:
+            trial_decision = await checker.check(connection, trial_user)
+            paid_decision = await checker.check(connection, paid_user)
+
+        self.assertEqual(trial_decision.state, EntitlementState.TRIAL_ACTIVE)
+        self.assertTrue(trial_decision.can_receive_deliveries)
+        self.assertEqual(paid_decision.state, EntitlementState.PAID_ACTIVE)
+        self.assertTrue(paid_decision.can_receive_deliveries)
 
     async def test_renewal_switches_current_period_without_rewriting_period_history(self):
         user_id = await self._create_user("8100007")

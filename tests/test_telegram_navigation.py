@@ -463,6 +463,26 @@ class TelegramNavigationIntegrationTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Пробный период ещё не начался", subscription.text)
         self.assertIn("Тариф: 990 RUB/month", subscription.text)
 
+    async def test_owner_subscription_view_shows_unlimited_access_without_trial_authority(self):
+        owner_navigation = TelegramNavigationService(
+            self.confirmation,
+            owner_telegram_user_id=7000201,
+        )
+
+        owner_subscription = await owner_navigation.subscription(
+            external_user_id="7000201",
+        )
+        non_owner_subscription = await owner_navigation.subscription(
+            external_user_id="7000202",
+        )
+
+        self.assertIn("Доступ владельца активен", owner_subscription.text)
+        self.assertIn("Срок действия: без ограничений", owner_subscription.text)
+        self.assertIn("Подписка для аккаунта владельца не требуется", owner_subscription.text)
+        self.assertNotIn("Пробный период", owner_subscription.text)
+        self.assertIn("Пробный период ещё не начался", non_owner_subscription.text)
+        self.assertIn("Тариф: 990 RUB/month", non_owner_subscription.text)
+
     async def test_confirmed_profile_settings_can_be_changed_from_navigation_state(self):
         draft = await self._draft("settings-owner", "settings")
         confirmed = await self.confirmation.confirm(

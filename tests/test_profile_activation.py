@@ -379,6 +379,104 @@ class SearchProfileActivationIntegrationTest(unittest.IsolatedAsyncioTestCase):
             )
         self.assertEqual(cache_count, 0)
 
+    async def test_owner_activation_does_not_start_trial_but_regular_user_still_does(self):
+        owner_service = ProfileConfirmationService(
+            self.database,
+            owner_telegram_user_id=7000101,
+        )
+        owner_draft = await owner_service.create_manual_draft(
+            platform="telegram",
+            external_user_id="7000101",
+            semantic_text="Owner developer | Python | Telegram",
+            roles=("Owner developer",),
+            skills=("Python",),
+            categories=("Telegram",),
+        )
+        owner_confirmed = await owner_service.confirm(
+            platform="telegram",
+            external_user_id="7000101",
+            profile_id=owner_draft.profile.id,
+            expected_revision=owner_draft.profile.revision,
+        )
+
+        owner_activated = await owner_service.activate(
+            platform="telegram",
+            external_user_id="7000101",
+            profile_id=owner_confirmed.profile.id,
+            expected_revision=owner_confirmed.profile.revision,
+        )
+
+        owner_user = await self._user("7000101")
+        self.assertFalse(owner_activated.trial_started)
+        self.assertTrue(owner_activated.profile.profile.is_active)
+        self.assertTrue(owner_activated.profile.profile.is_primary)
+        self.assertIsNone(owner_user.trial_started_at)
+        self.assertIsNone(owner_user.trial_expires_at)
+        self.assertIsNone(owner_user.trial_policy_version)
+
+        regular_draft = await owner_service.create_manual_draft(
+            platform="telegram",
+            external_user_id="7000102",
+            semantic_text="Regular developer | Python | Telegram",
+            roles=("Regular developer",),
+            skills=("Python",),
+            categories=("Telegram",),
+        )
+        regular_confirmed = await owner_service.confirm(
+            platform="telegram",
+            external_user_id="7000102",
+            profile_id=regular_draft.profile.id,
+            expected_revision=regular_draft.profile.revision,
+        )
+        regular_activated = await owner_service.activate(
+            platform="telegram",
+            external_user_id="7000102",
+            profile_id=regular_confirmed.profile.id,
+            expected_revision=regular_confirmed.profile.revision,
+        )
+
+        regular_user = await self._user("7000102")
+        self.assertTrue(regular_activated.trial_started)
+        self.assertIsNotNone(regular_user.trial_started_at)
+        self.assertIsNotNone(regular_user.trial_expires_at)
+        self.assertEqual(regular_user.trial_policy_version, TRIAL_POLICY_VERSION)
+
+    async def test_owner_telegram_activation_does_not_say_trial_started(self):
+        owner_service = ProfileConfirmationService(
+            self.database,
+            owner_telegram_user_id=7000103,
+        )
+        telegram = TelegramProfileOnboarding(owner_service, None)
+        draft_response = await telegram.create_manual(
+            external_user_id="7000103",
+            payload="Разработчик | Python | Telegram",
+        )
+        profile_id = _profile_id_from_callback(draft_response.buttons[0][0].data)
+        draft = await owner_service.show(
+            platform="telegram",
+            external_user_id="7000103",
+            profile_id=profile_id,
+        )
+        await telegram.confirm(
+            external_user_id="7000103",
+            profile_id=profile_id,
+            expected_revision=draft.profile.revision,
+        )
+        confirmed = await owner_service.show(
+            platform="telegram",
+            external_user_id="7000103",
+            profile_id=profile_id,
+        )
+
+        activated_response = await telegram.activate(
+            external_user_id="7000103",
+            profile_id=profile_id,
+            expected_revision=confirmed.profile.revision,
+        )
+
+        self.assertIn("поиск активен", activated_response.text)
+        self.assertNotIn("Пробный период начался", activated_response.text)
+
     async def test_chat_discovery_activation_uses_buyer_queries_and_skips_legacy_job(self):
         service = ProfileConfirmationService(
             self.database,

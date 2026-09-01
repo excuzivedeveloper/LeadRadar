@@ -85,6 +85,32 @@ class RuntimeConfigTest(unittest.TestCase):
                 ):
                     self._load(env)
 
+    def test_owner_telegram_user_id_is_optional_sensitive_and_positive(self):
+        config = self._load(self._telegram_env())
+        self.assertIsNone(config.owner_telegram_user_id)
+
+        env = self._telegram_env()
+        env["OWNER_TELEGRAM_USER_ID"] = "7000001"
+        config = self._load(env)
+
+        self.assertEqual(config.owner_telegram_user_id, 7000001)
+        self.assertEqual(
+            RuntimeConfig.model_fields["owner_telegram_user_id"].json_schema_extra[
+                "sensitivity"
+            ],
+            Sensitivity.SENSITIVE.value,
+        )
+
+        for raw in ("abc", "0", "-42"):
+            with self.subTest(raw=raw):
+                invalid = self._telegram_env()
+                invalid["OWNER_TELEGRAM_USER_ID"] = raw
+                with self.assertRaisesRegex(
+                    ConfigurationError,
+                    "OWNER_TELEGRAM_USER_ID",
+                ):
+                    self._load(invalid)
+
     def test_collector_only_accepts_valid_allowlist_without_bot_token(self):
         config = self._load(
             {

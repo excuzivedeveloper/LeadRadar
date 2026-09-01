@@ -14,6 +14,7 @@ from .persistence.search_profiles import (
     SearchProfileConfirmationStatus,
     UserNotFound,
 )
+from .persistence.entitlements import is_owner_telegram_identity
 from .profile_confirmation import (
     ProfileConfirmationService,
     ProfileConfirmationView,
@@ -67,9 +68,11 @@ class TelegramNavigationService:
         confirmation: ProfileConfirmationService,
         *,
         billing_plan: BillingPlan | None = None,
+        owner_telegram_user_id: int | None = None,
     ) -> None:
         self._confirmation = confirmation
         self._billing_plan = billing_plan or BillingPlan()
+        self._owner_telegram_user_id = owner_telegram_user_id
 
     def home(self) -> TelegramOnboardingResponse:
         return TelegramOnboardingResponse(
@@ -299,6 +302,21 @@ class TelegramNavigationService:
         *,
         external_user_id: str,
     ) -> TelegramOnboardingResponse:
+        if is_owner_telegram_identity(
+            platform="telegram",
+            external_user_id=external_user_id,
+            owner_telegram_user_id=self._owner_telegram_user_id,
+        ):
+            return TelegramOnboardingResponse(
+                "<b>Подписка</b>\n\n"
+                "Доступ владельца активен.\n"
+                "Срок действия: без ограничений.\n"
+                "Подписка для аккаунта владельца не требуется.",
+                (
+                    (_button("Мой поиск", b"nav:search"),),
+                    (_button(HOME_LABEL, b"nav:home"),),
+                ),
+            )
         try:
             user = await self._confirmation.get_user(
                 platform="telegram",

@@ -54,7 +54,7 @@ from freelancer_bot.persistence.feedback import (
     FeedbackType,
     SourceFeedbackSignalRepository,
 )
-from freelancer_bot.persistence.entitlements import TrialEntitlementChecker
+from freelancer_bot.persistence.entitlements import OwnerEntitlementChecker, TrialEntitlementChecker
 from freelancer_bot.persistence.jobs import DurableJobRepository
 from freelancer_bot.persistence.matches import MatchTraceRepository
 from freelancer_bot.persistence.payments import PaymentRepository
@@ -651,6 +651,64 @@ class PersonalizedDeliveryPostgresTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(report.created_count, 1)
         self.assertEqual(report.failures, ())
 
+    async def test_owner_without_trial_can_schedule_and_send_delivery(self):
+        run_id, _, _ = await self._matched_run(
+            external_user_ids=("7000101",),
+            trial_active=False,
+        )
+        entitlements = OwnerEntitlementChecker(
+            owner_telegram_user_id=7000101,
+            clock=lambda: NOW,
+        )
+        service = PersonalizedDeliveryService(
+            self.database,
+            jobs=DurableJobRepository(self.metrics),
+            entitlement_checker=entitlements,
+            metrics=self.metrics,
+            logger=self.logger,
+        )
+
+        report = await service.schedule_run(run_id, rendered_at=NOW)
+
+        self.assertEqual(report.created_count, 1)
+        self.assertEqual(report.failures, ())
+        sender = _RecordingSender()
+        await self._run_delivery_worker(
+            sender,
+            expected_delivery_status=DeliveryStatus.SENT,
+            expected_count=1,
+            entitlement_checker=entitlements,
+        )
+        self.assertEqual(sender.success_count, 1)
+
+    async def test_allowlist_alone_does_not_grant_owner_delivery_entitlement(self):
+        run_id, _, _ = await self._matched_run(
+            external_user_ids=("7000102",),
+            trial_active=False,
+        )
+        entitlements = OwnerEntitlementChecker(
+            owner_telegram_user_id=7000101,
+            clock=lambda: NOW,
+        )
+        service = PersonalizedDeliveryService(
+            self.database,
+            jobs=DurableJobRepository(self.metrics),
+            entitlement_checker=entitlements,
+            metrics=self.metrics,
+            logger=self.logger,
+        )
+
+        report = await service.schedule_run(run_id, rendered_at=NOW)
+
+        self.assertEqual(report.deliveries, ())
+        self.assertEqual(len(report.failures), 1)
+        self.assertEqual(report.failures[0].failure_code, "DeliverySchedulingError")
+        async with self.database.connect() as connection:
+            delivery_count = await connection.scalar(
+                sa.select(sa.func.count()).select_from(personalized_deliveries)
+            )
+        self.assertEqual(delivery_count, 0)
+
     async def test_trial_expiry_suppresses_queued_delivery_without_sending(self):
         run_id, _, user_ids = await self._matched_run(external_user_ids=("7000013",))
         report = await self._service().schedule_run(run_id, rendered_at=NOW)
@@ -1124,6 +1182,7 @@ class PersonalizedDeliveryPostgresTest(unittest.IsolatedAsyncioTestCase):
         *,
         external_user_ids: tuple[str, ...],
         same_user: bool = False,
+        trial_active: bool = True,
     ) -> tuple[UUID, tuple[UUID, ...], tuple[UUID, ...]]:
         if same_user and len(set(external_user_ids)) != 1:
             raise ValueError("same-user fixture requires one Telegram identity")
@@ -1160,9 +1219,21 @@ class PersonalizedDeliveryPostgresTest(unittest.IsolatedAsyncioTestCase):
                         "platform": "telegram",
                         "external_user_id": external_id,
                         "created_at": NOW - timedelta(days=5),
-                        "trial_started_at": NOW - timedelta(minutes=2),
-                        "trial_expires_at": NOW + timedelta(days=3) - timedelta(minutes=2),
-                        "trial_policy_version": TRIAL_POLICY_VERSION,
+                        "trial_started_at": (
+                            NOW - timedelta(minutes=2)
+                            if trial_active
+                            else None
+                        ),
+                        "trial_expires_at": (
+                            NOW + timedelta(days=3) - timedelta(minutes=2)
+                            if trial_active
+                            else None
+                        ),
+                        "trial_policy_version": (
+                            TRIAL_POLICY_VERSION
+                            if trial_active
+                            else None
+                        ),
                     }
                     for user_id, external_id in unique_users
                 ),
@@ -1336,12 +1407,14 @@ class PersonalizedDeliveryPostgresTest(unittest.IsolatedAsyncioTestCase):
         expected_delivery_status: DeliveryStatus,
         expected_count: int,
         worker_count: int = 1,
+        entitlement_checker=None,
     ) -> None:
         jobs = DurableJobRepository(self.metrics)
         processor = PersonalizedDeliveryJobProcessor(
             self.database,
             sender,
-            entitlement_checker=TrialEntitlementChecker(clock=lambda: NOW),
+            entitlement_checker=entitlement_checker
+            or TrialEntitlementChecker(clock=lambda: NOW),
             metrics=self.metrics,
             logger=self.logger,
         )

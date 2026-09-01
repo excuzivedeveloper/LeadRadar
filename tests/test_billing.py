@@ -12,6 +12,7 @@ from freelancer_bot.billing import (
     SubscriptionState,
     TrialPolicy,
     evaluate_subscription_entitlement,
+    evaluate_owner_entitlement,
     evaluate_trial_entitlement,
 )
 from uuid import uuid4
@@ -21,6 +22,17 @@ STARTED_AT = datetime(2026, 8, 14, 20, 0, tzinfo=timezone.utc)
 
 
 class BillingPolicyTest(unittest.TestCase):
+    def test_owner_entitlement_is_explicit_unlimited_state(self):
+        decision = evaluate_owner_entitlement(evaluated_at=STARTED_AT)
+
+        self.assertEqual(decision.state, EntitlementState.OWNER_ACTIVE)
+        self.assertTrue(decision.can_receive_deliveries)
+        self.assertIsNone(decision.trial_started_at)
+        self.assertIsNone(decision.trial_expires_at)
+        self.assertIsNone(decision.trial_policy_version)
+        self.assertIsNone(decision.subscription_state)
+        self.assertIsNone(decision.failure_code)
+
     def test_trial_is_active_before_three_day_boundary_and_expired_at_boundary(self):
         active = evaluate_trial_entitlement(
             STARTED_AT,

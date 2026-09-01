@@ -93,6 +93,12 @@ class RuntimeConfig(BaseSettings):
         sensitivity=Sensitivity.SENSITIVE,
         validation_alias="TELEGRAM_ALLOWED_USER_IDS",
     )
+    owner_telegram_user_id: int | None = classified_field(
+        None,
+        sensitivity=Sensitivity.SENSITIVE,
+        validation_alias="OWNER_TELEGRAM_USER_ID",
+        gt=0,
+    )
     target_chat_id: int | None = classified_field(
         None,
         sensitivity=Sensitivity.SENSITIVE,

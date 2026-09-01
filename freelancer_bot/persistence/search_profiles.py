@@ -479,6 +479,7 @@ class SearchProfileRepository:
         profile_id: UUID,
         user_id: UUID,
         expected_revision: int,
+        start_trial: bool = True,
     ) -> SearchProfileActivationOutcome:
         if expected_revision < 1:
             raise ValueError("expected_revision must be positive")
@@ -589,7 +590,7 @@ class SearchProfileRepository:
                 "search profile changed before activation"
             )
 
-        trial_started = user_row["trial_started_at"] is None
+        trial_started = start_trial and user_row["trial_started_at"] is None
         if trial_started:
             await connection.execute(
                 sa.update(users)

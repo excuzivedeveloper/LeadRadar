@@ -9,7 +9,11 @@ from uuid import uuid4
 
 from .ai_telemetry import AIModelPrice, AISpendGuardPolicy
 from .config import RuntimeConfig
-from .delivery import PersonalizedDeliveryJobProcessor, TelegramDeliverySender
+from .delivery import (
+    PersonalizedDeliveryJobProcessor,
+    PersonalizedDeliveryService,
+    TelegramDeliverySender,
+)
 from .filters import load_filter_snapshot
 from .global_source_library_runtime import (
     DiscoveryCampaignPlanProcessor,
@@ -35,6 +39,7 @@ from .opportunity_analysis import (
 from .opportunity_classifier import OpportunityAnalysisJobProcessor
 from .persistence.ai_telemetry import PostgreSQLAICallRecorder
 from .persistence.database import Database
+from .persistence.entitlements import OwnerEntitlementChecker
 from .persistence.jobs import DurableJobRepository
 from .persistence.raw_messages import RAW_MESSAGE_JOB_TYPE
 from .profile_rematch import PROFILE_REMATCH_JOB_TYPE, ProfileRematchJobProcessor
@@ -162,20 +167,35 @@ def _build_worker(
     if delivery_sender is not None:
         from .persistence.deliveries import PERSONALIZED_DELIVERY_JOB_TYPE
 
+        entitlements = OwnerEntitlementChecker(
+            owner_telegram_user_id=config.owner_telegram_user_id,
+        )
+        delivery_service = PersonalizedDeliveryService(
+            database,
+            jobs=jobs,
+            entitlement_checker=entitlements,
+            logger=logger,
+        )
+
         handlers[PERSONALIZED_DELIVERY_JOB_TYPE] = PersonalizedDeliveryJobProcessor(
             database,
             delivery_sender,
+            entitlement_checker=entitlements,
             logger=logger,
             telegram_allowed_user_ids=config.telegram_allowed_user_ids,
         )
         handlers[MATCHING_DELIVERY_JOB_TYPE] = MatchingDeliveryJobProcessor(
             database,
             config,
+            deliveries=delivery_service,
+            jobs=jobs,
             logger=logger,
         )
         handlers[PROFILE_REMATCH_JOB_TYPE] = ProfileRematchJobProcessor(
             database,
             config,
+            deliveries=delivery_service,
+            jobs=jobs,
             logger=logger,
         )
     return DurableWorker(
