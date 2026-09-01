@@ -9,7 +9,11 @@ from uuid import uuid4
 
 from .ai_telemetry import AIModelPrice, AISpendGuardPolicy
 from .config import RuntimeConfig
-from .delivery import PersonalizedDeliveryJobProcessor, TelegramDeliverySender
+from .delivery import (
+    PersonalizedDeliveryJobProcessor,
+    PersonalizedDeliveryService,
+    TelegramDeliverySender,
+)
 from .filters import load_filter_snapshot
 from .global_source_library_runtime import (
     DiscoveryCampaignPlanProcessor,
