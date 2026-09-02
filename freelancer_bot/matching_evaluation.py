@@ -49,7 +49,9 @@ DEFAULT_CORPUS_PATH = Path("evaluation/matching_corpus.v1.jsonl")
 DEFAULT_CORPUS_SHA_PATH = Path("evaluation/matching_corpus.v1.sha256")
 DEFAULT_BASELINE_PATH = Path("docs/evaluation/current_main_matching_baseline.md")
 BASELINE_CODE_SHA = "4b53cbc710739a55ff88d0476ad14aafe78e4944"
+MATCHING_BEHAVIOR_BASE_SHA = BASELINE_CODE_SHA
 EVALUATED_AT = datetime(2026, 9, 2, 0, 0, tzinfo=timezone.utc)
+ACTUAL_NOT_EXPOSED = "NOT_EXPOSED_BY_CURRENT_MAIN"
 
 CAPABILITY_FAMILIES = frozenset(
     {
@@ -114,6 +116,9 @@ class EvaluationCase:
 class CaseResult:
     case_id: str
     expected_bucket: str
+    expected_evidence: dict[str, str]
+    actual_evidence_or_observable_proxy: dict[str, Any]
+    evidence_contract_status: str
     final_stage: str
     candidate_survived: bool
     final_match: bool
@@ -258,11 +263,6 @@ def evaluate_current_main(
         for case, result in zip(cases, results, strict=True)
         if case.expected_candidate_should_survive is EvidenceExpectation.YES
     ]
-    final_positive = [
-        result
-        for result in results
-        if result.expected_bucket in {"STRONG_MATCH", "WEAK_BUT_VALID_CANDIDATE"}
-    ]
     final_matches = [result for result in results if result.final_match]
     true_final_matches = [
         result for result in final_matches if result.expected_bucket == "STRONG_MATCH"
@@ -270,7 +270,8 @@ def evaluate_current_main(
     false_positives = [
         result
         for result in final_matches
-        if result.expected_bucket in {"NON_MATCH", "HARD_CONSTRAINT_REJECT"}
+        if result.expected_bucket
+        in {"WEAK_BUT_VALID_CANDIDATE", "NON_MATCH", "HARD_CONSTRAINT_REJECT"}
     ]
     false_negatives = [
         result for result in strong if not result.final_match
@@ -278,9 +279,11 @@ def evaluate_current_main(
 
     metrics = {
         "BASELINE_CODE_SHA": BASELINE_CODE_SHA,
+        "MATCHING_BEHAVIOR_BASE_SHA": MATCHING_BEHAVIOR_BASE_SHA,
         "ONTOLOGY_VERSION": ONTOLOGY_VERSION,
         "CORPUS_SCHEMA_VERSION": CORPUS_SCHEMA_VERSION,
         "CORPUS_SHA256": corpus_digest,
+        "DELIVERY_POSITIVE_BUCKET": "STRONG_MATCH",
         "TOTAL_CASES": len(cases),
         "RU_CASES": language_counts["RU"],
         "EN_CASES": language_counts["EN"],
@@ -319,16 +322,11 @@ def evaluate_current_main(
             ),
             len(hard_reject),
         ),
-        "DELIVERY_OR_FINAL_MATCH_PRECISION": _ratio(
-            len(true_final_matches),
-            len(final_matches),
-        ),
-        "DELIVERY_OR_FINAL_MATCH_RECALL": _ratio(
-            sum(result.final_match for result in strong),
-            len(strong),
-        ),
-        "FALSE_POSITIVE_COUNT": len(false_positives),
-        "FALSE_NEGATIVE_COUNT": len(false_negatives),
+        "FINAL_TRUE_POSITIVE_COUNT": len(true_final_matches),
+        "FINAL_FALSE_POSITIVE_COUNT": len(false_positives),
+        "FINAL_FALSE_NEGATIVE_COUNT": len(false_negatives),
+        "FINAL_MATCH_PRECISION": _ratio(len(true_final_matches), len(final_matches)),
+        "FINAL_MATCH_RECALL": _ratio(len(true_final_matches), len(strong)),
         "NO_STRUCTURED_TARGET_OVERLAP_COUNT": sum(
             "narrowing.no_structured_target_overlap" in result.hard_filter_reasons
             for result in results
@@ -368,17 +366,44 @@ def write_baseline_report(report: EvaluationReport, path: Path) -> None:
     lines.extend(
         [
             "",
-            "## Terminal Decision",
+            "## Metric Semantics",
             "",
-            "The closest deterministic offline terminal decision is",
-            "`MatchDecisionCode.ELIGIBLE` from `decide_and_rank_matches()`. It is",
-            "reported as `DELIVERY_OR_FINAL_MATCH_*` because this evaluator does",
-            "not execute personalized Telegram delivery.",
+            "`MATCHING_BEHAVIOR_BASE_SHA` is the production matching code baseline",
+            "that this PR evaluates. Evaluation-only repair commits must not be",
+            "interpreted as changing production matching behavior.",
             "",
+            "`DELIVERY_POSITIVE_BUCKET=STRONG_MATCH` means only STRONG_MATCH is a",
+            "positive final-delivery class.",
+            "",
+            "`FINAL_TRUE_POSITIVE_COUNT` is STRONG_MATCH cases reaching final match.",
+            "`FINAL_FALSE_POSITIVE_COUNT` is WEAK_BUT_VALID_CANDIDATE, NON_MATCH,",
+            "or HARD_CONSTRAINT_REJECT cases reaching final match.",
+            "`FINAL_FALSE_NEGATIVE_COUNT` is STRONG_MATCH cases that do not reach",
+            "final match.",
+            "",
+            "`FINAL_MATCH_PRECISION = FINAL_TRUE_POSITIVE_COUNT /",
+            "(FINAL_TRUE_POSITIVE_COUNT + FINAL_FALSE_POSITIVE_COUNT)`, equivalent",
+            "to STRONG_MATCH reaching final match divided by all cases reaching",
+            "final match.",
+            "",
+            "`FINAL_MATCH_RECALL = FINAL_TRUE_POSITIVE_COUNT /",
+            "(FINAL_TRUE_POSITIVE_COUNT + FINAL_FALSE_NEGATIVE_COUNT)`, equivalent",
+            "to STRONG_MATCH reaching final match divided by all STRONG_MATCH cases.",
+            "",
+            "`WEAK_VALID_SURVIVAL_RECALL` and `CANDIDATE_SURVIVAL_RECALL` measure",
+            "retrieval survival only. They do not define final delivery positives.",
+            "",
+            "Per-case `expected_evidence` is curated ground truth for future",
+            "NEXT_2B comparisons. Current main does not expose semantic dimension",
+            "signals, so `actual_evidence_or_observable_proxy` records terminal",
+            "observable proxies and marks each evidence dimension as",
+            "`NOT_EXPOSED_BY_CURRENT_MAIN`.",
         ]
     )
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("\n".join(lines), encoding="utf-8")
+    with path.open("w", encoding="utf-8", newline="\n") as handle:
+        handle.write("\n".join(lines))
+        handle.write("\n")
 
 
 def report_as_json(report: EvaluationReport) -> dict[str, Any]:
@@ -442,6 +467,21 @@ def _evaluate_case(case: EvaluationCase) -> CaseResult:
     return CaseResult(
         case_id=case.case_id,
         expected_bucket=case.expected_bucket.value,
+        expected_evidence=_expected_evidence(case),
+        actual_evidence_or_observable_proxy={
+            "capability": ACTUAL_NOT_EXPOSED,
+            "action_or_problem": ACTUAL_NOT_EXPOSED,
+            "platform": ACTUAL_NOT_EXPOSED,
+            "technology": ACTUAL_NOT_EXPOSED,
+            "constraint": ACTUAL_NOT_EXPOSED,
+            "terminal_proxy": {
+                "candidate_survived": trace.hard_filter_eligible,
+                "final_match": trace.eligible,
+                "decision_code": trace.decision_code.value,
+                "hard_filter_reasons": hard_reasons,
+            },
+        },
+        evidence_contract_status="EXPECTED_ONLY_ACTUAL_NOT_EXPOSED_BY_CURRENT_MAIN",
         final_stage=final_stage,
         candidate_survived=trace.hard_filter_eligible,
         final_match=trace.eligible,
@@ -456,6 +496,18 @@ def _evaluate_case(case: EvaluationCase) -> CaseResult:
             None if trace.final_rank_score is None else str(trace.final_rank_score)
         ),
     )
+
+
+def _expected_evidence(case: EvaluationCase) -> dict[str, str]:
+    raw = case.raw
+    return {
+        "capability": raw["expected_capability_match"],
+        "action_or_problem": raw["expected_action_problem_match"],
+        "platform": raw["expected_platform_match"],
+        "technology": raw["expected_technology_match"],
+        "constraint": raw["expected_hard_constraint_conflict"],
+        "candidate_should_survive": raw["expected_candidate_should_survive"],
+    }
 
 
 def _opportunity(case: EvaluationCase) -> CanonicalOpportunityRecord:
