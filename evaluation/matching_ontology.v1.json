@@ -1,0 +1,32 @@
+{
+  "ontology_version": "ontology.v1",
+  "description": "Frozen evaluation vocabulary for LeadRadar matching cases. This is not a runtime matching ontology.",
+  "evidence_dimensions": [
+    "capability",
+    "action_or_problem",
+    "platform",
+    "technology",
+    "constraint"
+  ],
+  "capability_families": [
+    "android_kotlin_utility",
+    "api_webhook_integrations",
+    "browser_automation",
+    "business_automation",
+    "chrome_extension",
+    "docker_vps_deployment",
+    "fullstack_product_integration",
+    "google_sheets_automation",
+    "llm_ai_integration",
+    "monitoring_alerting",
+    "python_backend_api",
+    "react_next_web",
+    "responsive_frontend",
+    "telegram_automation",
+    "web_scraping"
+  ],
+  "notes": [
+    "Evidence dimensions intentionally remain separate. For example, chatbot is a capability cue, while Telegram is a platform cue.",
+    "Broad relatedness is not evidence of strong equivalence. Prompt writing is not the same as production LLM API integration, and a generic backend is not the same as Python/FastAPI technology evidence."
+  ]
+}
