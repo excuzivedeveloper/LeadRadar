@@ -31,7 +31,7 @@ from .semantic_matching import (
 
 
 MATCH_DECISION_SCHEMA_VERSION = "match-decision-trace.v1"
-MATCH_DECISION_ALGORITHM_VERSION = "matching-decision.v4"
+MATCH_DECISION_ALGORITHM_VERSION = "matching-decision.v5"
 MATCH_DECISION_POLICY_VERSION = "matching-decision-policy.v1"
 _VERSION_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]{0,99}$")
 _SCORE_QUANTUM = Decimal("0.0001")
@@ -312,7 +312,9 @@ def _profile_trace(
                 "profile_values": (),
             },
         )
-    hard_eligible = hard_decision.eligible and narrowing_exclusion is None
+    hard_eligible = hard_decision.eligible and not _blocks_hard_eligibility(
+        narrowing_exclusion
+    )
     structured = None if semantic_score is None else semantic_score.structured
     components = (
         ()
@@ -333,6 +335,8 @@ def _profile_trace(
             semantic_score.combined_relevance_score
             < policy.minimum_relevance_score
         ):
+            decision = MatchDecisionCode.BELOW_RELEVANCE_THRESHOLD
+        elif _fails_final_evidence_consistency(components):
             decision = MatchDecisionCode.BELOW_RELEVANCE_THRESHOLD
         elif final_rank_score < policy.minimum_rank_score:
             decision = MatchDecisionCode.BELOW_RANK_SCORE_THRESHOLD
@@ -496,6 +500,10 @@ def _scoring_policy_config(
             "work_type_weight": str(structured.work_type_weight),
             "budget_weight": str(structured.budget_weight),
             "preferences_weight": str(structured.preferences_weight),
+            "capability_weight": str(structured.capability_weight),
+            "action_problem_weight": str(structured.action_problem_weight),
+            "platform_weight": str(structured.platform_weight),
+            "technology_weight": str(structured.technology_weight),
             "relevance_weight": str(structured.relevance_weight),
             "opportunity_quality_weight": str(
                 structured.opportunity_quality_weight
@@ -514,6 +522,31 @@ def _scoring_policy_config(
             "semantic_relevance_weight": str(semantic.semantic_relevance_weight),
         },
     }
+
+
+def _fails_final_evidence_consistency(
+    components: tuple[dict[str, object], ...],
+) -> bool:
+    by_name = {str(component["name"]): component for component in components}
+    for name in ("action_or_problem", "platform", "technology"):
+        if by_name.get(name, {}).get("score") == "0.0000":
+            return True
+    category = by_name.get("category", {})
+    role = by_name.get("role", {})
+    role_evidence = tuple(role.get("evidence", ()))
+    return (
+        category.get("score") == "0.0000"
+        and role_evidence == ("developer",)
+    )
+
+
+def _blocks_hard_eligibility(
+    narrowing_exclusion: CandidateExclusionCode | None,
+) -> bool:
+    return (
+        narrowing_exclusion is not None
+        and narrowing_exclusion is not CandidateExclusionCode.NO_STRUCTURED_TARGET_OVERLAP
+    )
 
 
 def _trace_sha256(trace: MatchTraceDraft) -> str:

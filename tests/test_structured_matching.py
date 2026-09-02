@@ -67,7 +67,7 @@ class StructuredMatchingScoreTest(unittest.TestCase):
         self.assertTrue(score.component("category").evidence)
         self.assertTrue(labels_have_overlap(("SMM",), ("social media manager",)))
 
-    def test_unrelated_professions_remain_outside_structured_candidate_set(self):
+    def test_unrelated_professions_survive_only_as_diagnostic_candidates(self):
         profile = _profile(
             roles=("Python developer",),
             skills=("Python",),
@@ -93,7 +93,7 @@ class StructuredMatchingScoreTest(unittest.TestCase):
                     skills=skills,
                 )
                 result = score_narrowed_candidates(opportunity, (profile,))
-                self.assertFalse(result.candidates.eligible_profiles)
+                self.assertEqual(result.candidates.eligible_profiles, (profile,))
                 self.assertEqual(
                     result.candidates.trace.exclusions[0].code.value,
                     "no_structured_target_overlap",
@@ -161,7 +161,7 @@ class StructuredMatchingScoreTest(unittest.TestCase):
 
         self.assertEqual(weak.opportunity_quality_score, Decimal("1.0000"))
         self.assertEqual(weak.source_quality_score, Decimal("1.0000"))
-        self.assertEqual(weak.user_relevance_score, Decimal("0.1500"))
+        self.assertEqual(weak.user_relevance_score, Decimal("0.4600"))
         self.assertGreater(aligned.user_relevance_score, weak.user_relevance_score)
         self.assertGreater(aligned.structured_score, weak.structured_score)
 
@@ -232,7 +232,7 @@ class StructuredMatchingScoreTest(unittest.TestCase):
 
         score = score_candidate_structured(opportunity, profile)
 
-        self.assertEqual(score.user_relevance_score, Decimal("0.0000"))
+        self.assertEqual(score.user_relevance_score, Decimal("0.3300"))
         for name in (
             "role",
             "skills",
@@ -243,6 +243,11 @@ class StructuredMatchingScoreTest(unittest.TestCase):
         ):
             self.assertIsNone(score.component(name).score)
             self.assertEqual(score.component(name).evidence, ())
+        self.assertEqual(score.component("capability").score, Decimal("1.0000"))
+        self.assertEqual(
+            score.component("action_or_problem").score,
+            Decimal("1.0000"),
+        )
 
     def test_multiple_active_profiles_remain_independent_scoring_inputs(self):
         aligned = _profile()
