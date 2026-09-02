@@ -31,7 +31,7 @@ class MatchingEvaluationCorpusTest(unittest.TestCase):
         )
         self.assertEqual(
             corpus_sha256(DEFAULT_CORPUS_PATH),
-            "a882b83ebee96e8d8c6a2239b5c679b2047116b84e885a9de5eedc23ab78916c",
+            "e00537a731387d924916f3a4da895f06950a4788311d055eed708ca740449564",
         )
         self.assertEqual(len({case.case_id for case in cases}), len(cases))
 
@@ -65,6 +65,55 @@ class MatchingEvaluationCorpusTest(unittest.TestCase):
         self.assertGreaterEqual(
             sum(case.adversarial_or_negative for case in cases),
             60,
+        )
+
+    def test_curated_language_labels_match_main_prose_examples(self):
+        cases = {case.case_id: case.raw for case in load_corpus()}
+
+        examples = {
+            "ru_telegram_automation_strong_004": "RU",
+            "en_telegram_automation_strong_005": "EN",
+            "mixed_python_backend_api_strong_002": "MIXED",
+            "ru_business_automation_strong_004": "RU",
+            "en_monitoring_alerting_strong_003": "EN",
+            "mixed_monitoring_alerting_strong_004": "MIXED",
+            "ru_hard_worktype_001": "RU",
+            "mixed_hard_geography_003": "MIXED",
+        }
+
+        for case_id, language in examples.items():
+            self.assertEqual(cases[case_id]["language"], language)
+            _assert_main_prose_language(self, cases[case_id], language)
+
+    def test_mixed_cases_are_not_english_only_or_plain_russian_tech_names(self):
+        for case in load_corpus():
+            if case.raw["language"] == "MIXED":
+                summary = case.raw["opportunity"]["task_summary"]
+                self.assertRegex(summary, r"[А-Яа-яЁё]")
+                self.assertRegex(summary, r"[A-Za-z]{3,}")
+
+    def test_non_match_adversarial_variants_are_materially_distinct(self):
+        cases = [
+            case.raw
+            for case in load_corpus()
+            if case.raw["expected_bucket"] == "NON_MATCH"
+        ]
+        summaries = [case["opportunity"]["task_summary"] for case in cases]
+
+        self.assertEqual(len(cases), 60)
+        self.assertEqual(len(set(summaries)), 60)
+        self.assertFalse(any("Variant " in summary for summary in summaries))
+        self.assertFalse(any("Вариант " in summary for summary in summaries))
+
+        repaired = [
+            case
+            for case in cases
+            if 23 <= int(case["case_id"].split("_adversarial_")[1][:3]) <= 60
+        ]
+        self.assertEqual(len(repaired), 38)
+        self.assertEqual(
+            len({case["opportunity"]["role_title"] for case in repaired}),
+            len(repaired),
         )
 
     def test_all_expected_buckets_and_evidence_fields_are_present(self):
@@ -256,6 +305,28 @@ def _ratio(numerator: int, denominator: int) -> str:
     return (Decimal(numerator) / Decimal(denominator)).quantize(
         Decimal("0.0001")
     ).to_eng_string()
+
+
+def _assert_main_prose_language(
+    test_case: unittest.TestCase,
+    raw_case: dict,
+    language: str,
+) -> None:
+    summary = raw_case["opportunity"]["task_summary"]
+    has_cyrillic = any("А" <= char <= "я" or char in "Ёё" for char in summary)
+    has_latin_word = any(
+        part.isascii() and any(char.isalpha() for char in part)
+        for part in summary.replace("/", " ").replace("-", " ").split()
+    )
+    if language == "RU":
+        test_case.assertTrue(has_cyrillic)
+    elif language == "EN":
+        test_case.assertFalse(has_cyrillic)
+    elif language == "MIXED":
+        test_case.assertTrue(has_cyrillic)
+        test_case.assertTrue(has_latin_word)
+    else:
+        test_case.fail(f"unknown language label: {language}")
 
 
 if __name__ == "__main__":
