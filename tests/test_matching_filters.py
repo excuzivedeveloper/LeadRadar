@@ -345,9 +345,9 @@ class CandidateMatchingPostgresTest(unittest.IsolatedAsyncioTestCase):
         inactive = await self._confirmed_profile("inactive", skill="Python")
         unrelated = await self._active_profile(
             "unrelated",
-            role="Graphic designer",
-            skill="Figma",
-            category="Branding",
+            role="Website chatbot developer",
+            skill="JavaScript",
+            category="Website chatbot",
         )
         opportunity_id = uuid4()
         async with self.database.transaction() as connection:
@@ -454,7 +454,7 @@ class CandidateMatchingPostgresTest(unittest.IsolatedAsyncioTestCase):
         draft = await self.profiles.create_manual_draft(
             platform="telegram",
             external_user_id=user,
-            semantic_text=f"Developer | {skill} | Telegram",
+            semantic_text=f"{role} | {skill} | {category}",
             roles=(role,),
             skills=(skill,),
             categories=(category,),
