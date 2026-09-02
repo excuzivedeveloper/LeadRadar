@@ -30,7 +30,7 @@ from .semantic_matching import (
 )
 
 
-MATCH_DECISION_SCHEMA_VERSION = "match-decision-trace.v1"
+MATCH_DECISION_SCHEMA_VERSION = "match-decision-trace.v2"
 MATCH_DECISION_ALGORITHM_VERSION = "matching-decision.v5"
 MATCH_DECISION_POLICY_VERSION = "matching-decision-policy.v1"
 _VERSION_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]{0,99}$")
@@ -113,6 +113,7 @@ class MatchTraceDraft:
     filter_version: str
     hard_filter_eligible: bool
     hard_filter_reasons: tuple[dict[str, object], ...]
+    narrowing_diagnostics: tuple[dict[str, object], ...]
     nonblocking_unknowns: tuple[str, ...]
     structured_scoring_version: str | None
     structured_policy_version: str | None
@@ -304,8 +305,9 @@ def _profile_trace(
     if hard_decision is None:
         hard_decision = evaluate_hard_filters(opportunity, profile)
     reasons = tuple(_failure_payload(failure) for failure in hard_decision.failures)
+    narrowing_diagnostics: tuple[dict[str, object], ...] = ()
     if narrowing_exclusion is not None:
-        reasons += (
+        narrowing_diagnostics = (
             {
                 "code": f"narrowing.{narrowing_exclusion.value}",
                 "opportunity_value": None,
@@ -355,6 +357,7 @@ def _profile_trace(
         filter_version=MATCHING_FILTER_VERSION,
         hard_filter_eligible=hard_eligible,
         hard_filter_reasons=reasons,
+        narrowing_diagnostics=narrowing_diagnostics,
         nonblocking_unknowns=tuple(
             unknown.value for unknown in hard_decision.nonblocking_unknowns
         ),

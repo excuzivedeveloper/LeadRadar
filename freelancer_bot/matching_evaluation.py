@@ -125,6 +125,7 @@ class CaseResult:
     final_match: bool
     decision_code: str
     hard_filter_reasons: tuple[str, ...]
+    narrowing_diagnostics: tuple[str, ...]
     combined_relevance_score: str | None
     final_rank_score: str | None
 
@@ -332,7 +333,7 @@ def evaluate_current_main(
         "FINAL_MATCH_PRECISION": _ratio(len(true_final_matches), len(final_matches)),
         "FINAL_MATCH_RECALL": _ratio(len(true_final_matches), len(strong)),
         "NO_STRUCTURED_TARGET_OVERLAP_DIAGNOSTIC_COUNT": sum(
-            "narrowing.no_structured_target_overlap" in result.hard_filter_reasons
+            "narrowing.no_structured_target_overlap" in result.narrowing_diagnostics
             for result in results
         ),
         "BELOW_RELEVANCE_THRESHOLD_COUNT": sum(
@@ -519,6 +520,9 @@ def _evaluate_case(case: EvaluationCase) -> CaseResult:
         policy=MatchDecisionPolicy(),
     ).traces[0]
     hard_reasons = tuple(reason["code"] for reason in trace.hard_filter_reasons)
+    narrowing_diagnostics = tuple(
+        diagnostic["code"] for diagnostic in trace.narrowing_diagnostics
+    )
     if not trace.hard_filter_eligible:
         final_stage = "hard_constraint_reject"
     elif trace.eligible:
@@ -552,6 +556,7 @@ def _evaluate_case(case: EvaluationCase) -> CaseResult:
                 "final_match": trace.eligible,
                 "decision_code": trace.decision_code.value,
                 "hard_filter_reasons": hard_reasons,
+                "narrowing_diagnostics": narrowing_diagnostics,
             },
         },
         evidence_contract_status=EVIDENCE_EXPOSED,
@@ -560,6 +565,7 @@ def _evaluate_case(case: EvaluationCase) -> CaseResult:
         final_match=trace.eligible,
         decision_code=trace.decision_code.value,
         hard_filter_reasons=hard_reasons,
+        narrowing_diagnostics=narrowing_diagnostics,
         combined_relevance_score=(
             None
             if trace.combined_relevance_score is None

@@ -429,10 +429,11 @@ class CandidateMatchingPostgresTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(traces_by_profile[active.profile.id].eligible)
         unrelated_trace = traces_by_profile[unrelated.profile.id]
         self.assertTrue(unrelated_trace.hard_filter_eligible)
+        self.assertEqual(unrelated_trace.hard_filter_reasons, ())
         self.assertFalse(unrelated_trace.eligible)
         self.assertIn(
             "narrowing.no_structured_target_overlap",
-            {reason["code"] for reason in unrelated_trace.hard_filter_reasons},
+            {reason["code"] for reason in unrelated_trace.narrowing_diagnostics},
         )
         self.assertIn(
             CandidateExclusionCode.NO_STRUCTURED_TARGET_OVERLAP,

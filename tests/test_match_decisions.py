@@ -15,6 +15,7 @@ from freelancer_bot.config import RuntimeConfig
 from freelancer_bot.match_decisions import (
     MATCH_DECISION_ALGORITHM_VERSION,
     MATCH_DECISION_SCHEMA_VERSION,
+    MatchDecisionBatch,
     MatchDecisionCode,
     MatchDecisionPolicy,
     MatchScoringInput,
@@ -338,11 +339,15 @@ class MatchTracePostgresTest(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(len(rejected), 2)
         for trace in rejected:
-            self.assertFalse(trace.hard_filter_eligible)
-            self.assertEqual(trace.decision_code, MatchDecisionCode.HARD_REJECTED)
+            self.assertTrue(trace.hard_filter_eligible)
+            self.assertEqual(trace.hard_filter_reasons, ())
+            self.assertEqual(
+                trace.decision_code,
+                MatchDecisionCode.BELOW_RELEVANCE_THRESHOLD,
+            )
             self.assertIn(
                 "narrowing.no_structured_target_overlap",
-                {reason["code"] for reason in trace.hard_filter_reasons},
+                {reason["code"] for reason in trace.narrowing_diagnostics},
             )
             self.assertIsNone(trace.rank)
 
@@ -353,6 +358,98 @@ class MatchTracePostgresTest(unittest.IsolatedAsyncioTestCase):
                 search_profile_id=profile.id,
             )
         self.assertEqual([record.trace.rank for record in eligible], [1, 2])
+
+    async def test_narrowing_diagnostic_round_trips_without_hard_filter_reason(self):
+        profile = await self._active_profile()
+        diagnostic_profile = await self._active_profile(
+            external_user_id="match-trace-diagnostic",
+            role="Website chatbot developer",
+            skill="JavaScript",
+            category="Website chatbot",
+        )
+        opportunity_id = await self._opportunity(EVALUATED_AT - timedelta(hours=1))
+        service = CandidateMatchingService(self.database)
+
+        outcome = await service.evaluate_and_persist(
+            (opportunity_id,),
+            evaluated_at=EVALUATED_AT,
+        )
+        traces = {
+            record.trace.search_profile_id: record.trace
+            for record in outcome.traces
+        }
+        diagnostic_trace = traces[diagnostic_profile.id]
+
+        self.assertTrue(traces[profile.id].eligible)
+        self.assertTrue(diagnostic_trace.hard_filter_eligible)
+        self.assertEqual(diagnostic_trace.hard_filter_reasons, ())
+        self.assertIn(
+            "narrowing.no_structured_target_overlap",
+            {reason["code"] for reason in diagnostic_trace.narrowing_diagnostics},
+        )
+        self.assertFalse(diagnostic_trace.eligible)
+        self.assertEqual(
+            diagnostic_trace.decision_code,
+            MatchDecisionCode.BELOW_RELEVANCE_THRESHOLD,
+        )
+
+        async with self.database.connect() as connection:
+            persisted = await MatchTraceRepository().list_traces(
+                connection,
+                run_id=outcome.run.id,
+            )
+        persisted_trace = {
+            record.trace.search_profile_id: record.trace
+            for record in persisted
+        }[diagnostic_profile.id]
+        self.assertEqual(
+            persisted_trace.narrowing_diagnostics,
+            diagnostic_trace.narrowing_diagnostics,
+        )
+
+    async def test_hard_filter_reason_invariant_remains_database_enforced(self):
+        profile = _profile()
+        batch = decide_and_rank_matches(
+            (_scoring(_opportunity(), (profile,)),),
+            evaluated_at=EVALUATED_AT,
+            policy=_permissive_policy(),
+        )
+        trace = batch.traces[0]
+        hard_reason = {
+            "code": "excluded_category",
+            "opportunity_value": "telegram",
+            "profile_values": (),
+        }
+        malformed = (
+            replace(
+                trace,
+                hard_filter_reasons=(hard_reason,),
+                narrowing_diagnostics=(),
+            ),
+            replace(
+                trace,
+                hard_filter_eligible=False,
+                hard_filter_reasons=(),
+                decision_code=MatchDecisionCode.HARD_REJECTED,
+                eligible=False,
+                rank=None,
+                final_rank_score=None,
+            ),
+        )
+
+        for index, malformed_trace in enumerate(malformed):
+            bad_batch = replace(
+                batch,
+                idempotency_key=sha256(f"malformed:{index}".encode()).hexdigest(),
+                traces=(malformed_trace,),
+            )
+            with self.subTest(index=index):
+                with self.assertRaises(Exception):
+                    async with self.database.transaction() as connection:
+                        await MatchTraceRepository().persist_batch(
+                            connection,
+                            bad_batch,
+                        )
 
     async def test_one_analysis_generates_many_idempotent_matches_without_ai_calls(self):
         profile_ids = await self._active_profile_batch(64)

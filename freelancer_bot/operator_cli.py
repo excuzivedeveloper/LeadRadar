@@ -2727,6 +2727,7 @@ def _match_trace_payload(record) -> dict[str, object]:
         "profile_revision": trace.profile_revision,
         "hard_filter_eligible": trace.hard_filter_eligible,
         "hard_filter_reasons": trace.hard_filter_reasons,
+        "narrowing_diagnostics": trace.narrowing_diagnostics,
         "semantic_status": trace.semantic_status,
         "combined_relevance_score": trace.combined_relevance_score,
         "final_rank_score": trace.final_rank_score,
