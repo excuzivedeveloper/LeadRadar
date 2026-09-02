@@ -342,12 +342,12 @@ class CandidateMatchingPostgresTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_service_reads_only_confirmed_active_profiles_from_postgres(self):
         active = await self._active_profile("active", skill="Python")
-        await self._confirmed_profile("inactive", skill="Python")
-        await self._active_profile(
+        inactive = await self._confirmed_profile("inactive", skill="Python")
+        unrelated = await self._active_profile(
             "unrelated",
-            role="Designer",
+            role="Graphic designer",
             skill="Figma",
-            category="Design",
+            category="Branding",
         )
         opportunity_id = uuid4()
         async with self.database.transaction() as connection:
@@ -390,23 +390,58 @@ class CandidateMatchingPostgresTest(unittest.IsolatedAsyncioTestCase):
         result = await service.candidates_for_opportunity(opportunity_id)
         scoring = await service.structured_scores_for_opportunity(opportunity_id)
         semantic = await service.semantic_scores_for_opportunity(opportunity_id)
+        generated = await service.generate_matches(
+            (opportunity_id,),
+            evaluated_at=NOW,
+        )
+        traces_by_profile = {
+            record.trace.search_profile_id: record.trace
+            for record in generated.persistence.traces
+        }
 
         self.assertEqual(result.trace.active_profile_count, 2)
-        self.assertEqual(result.trace.narrowed_candidate_count, 1)
+        self.assertEqual(result.trace.narrowed_candidate_count, 2)
         self.assertEqual(
-            tuple(profile.id for profile in result.eligible_profiles),
-            (active.profile.id,),
+            {profile.id for profile in result.eligible_profiles},
+            {active.profile.id, unrelated.profile.id},
         )
-        self.assertEqual(len(scoring.scores), 1)
-        self.assertEqual(scoring.scores[0].profile_id, active.profile.id)
-        self.assertIsNone(scoring.scores[0].source_quality_score)
+        self.assertNotIn(inactive.profile.id, traces_by_profile)
+        self.assertEqual(len(scoring.scores), 2)
+        self.assertEqual(
+            {score.profile_id for score in scoring.scores},
+            {active.profile.id, unrelated.profile.id},
+        )
+        self.assertTrue(
+            all(score.source_quality_score is None for score in scoring.scores)
+        )
         self.assertEqual(
             scoring.candidates.trace.semantic_score_candidate_count,
-            1,
+            2,
         )
-        self.assertEqual(len(semantic.scores), 1)
-        self.assertEqual(semantic.scores[0].structured.profile_id, active.profile.id)
+        self.assertEqual(len(semantic.scores), 2)
+        self.assertEqual(
+            {score.structured.profile_id for score in semantic.scores},
+            {active.profile.id, unrelated.profile.id},
+        )
         self.assertEqual(semantic.status.value, "available")
+        self.assertEqual(generated.report.candidate_pair_count, 2)
+        self.assertEqual(generated.report.eligible_match_count, 1)
+        self.assertTrue(traces_by_profile[active.profile.id].eligible)
+        unrelated_trace = traces_by_profile[unrelated.profile.id]
+        self.assertTrue(unrelated_trace.hard_filter_eligible)
+        self.assertFalse(unrelated_trace.eligible)
+        self.assertIn(
+            "narrowing.no_structured_target_overlap",
+            {reason["code"] for reason in unrelated_trace.hard_filter_reasons},
+        )
+        self.assertIn(
+            CandidateExclusionCode.NO_STRUCTURED_TARGET_OVERLAP,
+            {
+                exclusion.code
+                for exclusion in result.trace.exclusions
+                if exclusion.profile_id == unrelated.profile.id
+            },
+        )
 
     async def _confirmed_profile(
         self,
