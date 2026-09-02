@@ -282,9 +282,9 @@ class MatchTracePostgresTest(unittest.IsolatedAsyncioTestCase):
         profile = await self._active_profile()
         rejected_profile = await self._active_profile(
             external_user_id="match-trace-rejected",
-            role="Designer",
-            skill="Figma",
-            category="Design",
+            role="Website chatbot developer",
+            skill="JavaScript",
+            category="Website chatbot",
         )
         newer = await self._opportunity(EVALUATED_AT - timedelta(hours=1))
         older = await self._opportunity(EVALUATED_AT - timedelta(days=2))
