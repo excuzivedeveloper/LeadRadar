@@ -6,7 +6,7 @@ import re
 import unicodedata
 
 
-LEXICAL_NORMALIZATION_VERSION = "lexical-concepts.v3"
+LEXICAL_NORMALIZATION_VERSION = "lexical-concepts.v4"
 _SCORE_QUANTUM = Decimal("0.0001")
 _MINIMUM_TARGET_LABEL_SIMILARITY = Decimal("0.6000")
 _GENERIC_TARGET_CONCEPTS = frozenset(
@@ -20,6 +20,16 @@ _GENERIC_TARGET_CONCEPTS = frozenset(
         "specialist",
         "специалист",
         "work",
+    }
+)
+_CAPABILITY_FAMILY_CONCEPTS = frozenset(
+    {
+        "browser_extension_capability",
+        "llm_ai_integration_capability",
+        "python_backend_api_capability",
+        "react_next_web_capability",
+        "scraping_parser_automation_capability",
+        "telegram_bot_automation_capability",
     }
 )
 
@@ -104,9 +114,11 @@ def lexical_token_sequence(value: str) -> tuple[str, ...]:
 def lexical_concepts(value: str) -> frozenset[str]:
     """Return the normalized lexical concepts in a label."""
 
-    concepts = set(lexical_token_sequence(value))
+    tokens = lexical_token_sequence(value)
+    concepts = set(tokens)
     for token in tuple(concepts):
         concepts.update(_token_variants(token))
+    concepts.update(_compound_capability_concepts(tokens, concepts))
     return frozenset(concepts)
 
 
@@ -137,11 +149,17 @@ def label_similarity(left: str, right: str) -> Decimal:
         left_tokens,
         right_tokens,
     )
-    return _f1_from_match_count(
+    score = _f1_from_match_count(
         len(matches),
         len(left_tokens),
         len(right_tokens),
     )
+    if score < _MINIMUM_TARGET_LABEL_SIMILARITY and _shared_capability_family(
+        left,
+        right,
+    ):
+        return _MINIMUM_TARGET_LABEL_SIMILARITY
+    return score
 
 
 def label_matches(
@@ -210,7 +228,7 @@ def labels_have_overlap(left: Iterable[str], right: Iterable[str]) -> bool:
         for concept in lexical_concepts(label)
         if concept not in _GENERIC_TARGET_CONCEPTS
     }
-    return not left_specific or not right_specific
+    return False
 
 
 def labels_f1(
@@ -268,6 +286,13 @@ def _concept_equivalent(left: str, right: str) -> bool:
     return False
 
 
+def _shared_capability_family(left: str, right: str) -> bool:
+    left_capabilities = lexical_concepts(left) & _CAPABILITY_FAMILY_CONCEPTS
+    if not left_capabilities:
+        return False
+    return bool(left_capabilities & lexical_concepts(right))
+
+
 def _surface_concept_equivalent(left: str, right: str) -> bool:
     if left == right:
         return True
@@ -313,6 +338,52 @@ def _token_variants(token: str) -> frozenset[str]:
     if transliterated != token:
         variants.add(_transliterated_root(transliterated))
     return frozenset(variants)
+
+
+def _compound_capability_concepts(
+    tokens: Sequence[str],
+    concepts: set[str],
+) -> frozenset[str]:
+    families: set[str] = set()
+    token_set = set(tokens)
+
+    if "fastapi" in token_set or (
+        {"python", "backend"} <= concepts
+        or {"python", "api"} <= concepts
+        or {"backend", "api"} <= concepts
+        or {"backend", "develop"} <= concepts
+    ):
+        families.add("python_backend_api_capability")
+
+    if "chatbot" in concepts:
+        families.add("telegram_bot_automation_capability")
+    if "telegram" in concepts and (
+        {"bot", "bots", "automate"} & concepts
+        or {"workflow", "orchestrate"} & concepts
+    ):
+        families.add("telegram_bot_automation_capability")
+
+    if {"scrap", "scrape", "scraper", "parser", "parse", "pars"} & concepts:
+        families.add("scraping_parser_automation_capability")
+    if {"browser", "brows"} & concepts and "automate" in concepts:
+        families.add("scraping_parser_automation_capability")
+
+    if ("chrome" in concepts and {"extension", "plugin"} & concepts) or (
+        {"browser", "brows"} & concepts and {"extension", "plugin"} & concepts
+    ):
+        families.add("browser_extension_capability")
+
+    if {"llm", "gpt", "openai"} & concepts or (
+        "ai" in concepts and {"integrate", "assistant", "agent"} & concepts
+    ):
+        families.add("llm_ai_integration_capability")
+
+    if "react" in concepts or "nextjs" in concepts or (
+        "next" in token_set and "js" in token_set
+    ):
+        families.add("react_next_web_capability")
+
+    return frozenset(families)
 
 
 def _transliterated_root(value: str) -> str:
