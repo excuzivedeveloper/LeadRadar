@@ -221,7 +221,12 @@ class MatchingEvaluationCorpusTest(unittest.TestCase):
         digest = validate_recorded_corpus_sha()
         report = report_as_json(evaluate_current_main(cases, corpus_digest=digest))
 
-        self.assertEqual(report["metrics"], _baseline_metrics(DEFAULT_BASELINE_PATH))
+        self.assertEqual(
+            report["frozen_baseline_metrics"],
+            _baseline_metrics(DEFAULT_BASELINE_PATH),
+        )
+        self.assertNotEqual(report["metrics"], report["frozen_baseline_metrics"])
+        self.assertIn("delta_metrics", report)
 
     def test_final_metric_arithmetic_uses_strong_match_as_positive_class(self):
         cases = load_corpus()
@@ -242,13 +247,37 @@ class MatchingEvaluationCorpusTest(unittest.TestCase):
             _ratio(tp, tp + fn),
         )
 
+    def test_next_2b_successor_acceptance_gates_are_met(self):
+        cases = load_corpus()
+        report = report_as_json(
+            evaluate_current_main(cases, corpus_digest=validate_recorded_corpus_sha())
+        )
+        metrics = report["metrics"]
+
+        self.assertEqual(metrics["STRONG_MATCH_SURVIVAL_RECALL"], "1.0000")
+        self.assertGreaterEqual(
+            Decimal(metrics["WEAK_VALID_SURVIVAL_RECALL"]),
+            Decimal("0.8000"),
+        )
+        self.assertGreaterEqual(
+            Decimal(metrics["CANDIDATE_SURVIVAL_RECALL"]),
+            Decimal("0.9000"),
+        )
+        self.assertEqual(metrics["HARD_CONSTRAINT_REJECT_ACCURACY"], "1.0000")
+        self.assertEqual(metrics["FINAL_MATCH_RECALL"], "1.0000")
+        self.assertGreaterEqual(
+            Decimal(metrics["FINAL_MATCH_PRECISION"]),
+            Decimal("0.7500"),
+        )
+        self.assertIn("NO_STRUCTURED_TARGET_OVERLAP_DIAGNOSTIC_COUNT", metrics)
+
     def test_machine_readable_output_contains_per_case_failure_stage(self):
         cases = load_corpus()
         report = report_as_json(
             evaluate_current_main(cases, corpus_digest=validate_recorded_corpus_sha())
         )
 
-        self.assertEqual(report["schema_version"], "matching-evaluation-report.v1")
+        self.assertEqual(report["schema_version"], "matching-evaluation-report.v2")
         self.assertEqual(len(report["cases"]), 200)
         self.assertTrue(
             all("final_stage" in result for result in report["cases"])
@@ -259,20 +288,20 @@ class MatchingEvaluationCorpusTest(unittest.TestCase):
         self.assertTrue(
             all(
                 result["evidence_contract_status"]
-                == "EXPECTED_ONLY_ACTUAL_NOT_EXPOSED_BY_CURRENT_MAIN"
+                == "EXPOSED_BY_MATCHING_SUCCESSOR"
                 for result in report["cases"]
             )
         )
         self.assertTrue(
             all(
-                result["actual_evidence_or_observable_proxy"]["capability"]
-                == "NOT_EXPOSED_BY_CURRENT_MAIN"
+                "match"
+                in result["actual_evidence_or_observable_proxy"]["capability"]
                 for result in report["cases"]
             )
         )
         self.assertTrue(
             any(
-                result["final_stage"] == "narrowing.no_structured_target_overlap"
+                result["final_stage"] == "final_relevance_reject"
                 for result in report["cases"]
             )
         )

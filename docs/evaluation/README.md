@@ -2,13 +2,23 @@
 
 This directory stores deterministic offline matching evaluation artifacts.
 
-Run the frozen current-main baseline evaluator with:
+Run the frozen corpus evaluator with:
 
 ```bash
 python -m freelancer_bot.matching_evaluation --baseline current-main
 ```
 
-To regenerate the committed human-readable baseline report:
+The JSON report contains:
+
+- `frozen_baseline_metrics`: metrics parsed from
+  `docs/evaluation/current_main_matching_baseline.md`.
+- `metrics`: metrics for the current worktree implementation.
+- `delta_metrics`: current worktree metrics minus the frozen baseline where
+  numeric comparison is meaningful.
+
+The committed human-readable baseline is a historical current-main snapshot.
+Do not overwrite it with successor metrics. If the command below is used, it
+writes the frozen baseline metrics from the report, not successor metrics:
 
 ```bash
 python -m freelancer_bot.matching_evaluation --baseline current-main --write-baseline
@@ -24,8 +34,8 @@ runtime.
 ## Final Decision Metrics
 
 `MATCHING_BEHAVIOR_BASE_SHA` identifies the frozen production matching code
-baseline under evaluation. Evaluation-only PR commits must not be read as a
-runtime matching behavior change.
+baseline used for comparison. Successor PRs report current worktree behavior
+separately from that historical baseline.
 
 `DELIVERY_POSITIVE_BUCKET=STRONG_MATCH` is the final decision contract:
 
@@ -49,6 +59,10 @@ STRONG_MATCH reaching final match / all STRONG_MATCH cases.
 survival metrics. They do not make WEAK_BUT_VALID_CANDIDATE a final delivery
 positive class.
 
+`NO_STRUCTURED_TARGET_OVERLAP_DIAGNOSTIC_COUNT` records the old target-overlap
+signal as a diagnostic. It does not define a universal hard reject in the
+matching successor.
+
 ## Evidence Contract
 
 Each machine-readable case result includes:
@@ -58,10 +72,9 @@ curated ground truth for capability, action/problem, platform, technology,
 constraint, and candidate survival expectations.
 
 `actual_evidence_or_observable_proxy` =
-the terminal current-main observables available today, plus
-`NOT_EXPOSED_BY_CURRENT_MAIN` for semantic evidence dimensions current main does
-not expose.
+the terminal observables plus deterministic successor evidence for capability,
+action/problem, platform, technology, and hard-constraint conflicts.
 
 `evidence_contract_status` =
-`EXPECTED_ONLY_ACTUAL_NOT_EXPOSED_BY_CURRENT_MAIN` until a later matching
-successor exposes comparable semantic evidence signals.
+`EXPOSED_BY_MATCHING_SUCCESSOR` when current worktree matching exposes
+comparable deterministic evidence signals.

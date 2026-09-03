@@ -18,6 +18,7 @@ from .match_decisions import (
     MatchScoringInput,
     decide_and_rank_matches,
 )
+from .matching_evidence import EvidenceMatch, derive_matching_evidence
 from .opportunity_analysis import OpportunityAnalysis
 from .persistence.opportunities import (
     CANONICAL_OPPORTUNITY_SCHEMA_VERSION,
@@ -43,7 +44,7 @@ from .semantic_matching import (
 
 ONTOLOGY_VERSION = "ontology.v1"
 CORPUS_SCHEMA_VERSION = "matching-evaluation-corpus.v1"
-EVALUATOR_VERSION = "matching-evaluator.v1"
+EVALUATOR_VERSION = "matching-evaluator.v2"
 DEFAULT_ONTOLOGY_PATH = Path("evaluation/matching_ontology.v1.json")
 DEFAULT_CORPUS_PATH = Path("evaluation/matching_corpus.v1.jsonl")
 DEFAULT_CORPUS_SHA_PATH = Path("evaluation/matching_corpus.v1.sha256")
@@ -51,7 +52,7 @@ DEFAULT_BASELINE_PATH = Path("docs/evaluation/current_main_matching_baseline.md"
 BASELINE_CODE_SHA = "4b53cbc710739a55ff88d0476ad14aafe78e4944"
 MATCHING_BEHAVIOR_BASE_SHA = BASELINE_CODE_SHA
 EVALUATED_AT = datetime(2026, 9, 2, 0, 0, tzinfo=timezone.utc)
-ACTUAL_NOT_EXPOSED = "NOT_EXPOSED_BY_CURRENT_MAIN"
+EVIDENCE_EXPOSED = "EXPOSED_BY_MATCHING_SUCCESSOR"
 
 CAPABILITY_FAMILIES = frozenset(
     {
@@ -124,6 +125,7 @@ class CaseResult:
     final_match: bool
     decision_code: str
     hard_filter_reasons: tuple[str, ...]
+    narrowing_diagnostics: tuple[str, ...]
     combined_relevance_score: str | None
     final_rank_score: str | None
 
@@ -133,6 +135,8 @@ class EvaluationReport:
     metrics: dict[str, Any]
     cases: tuple[CaseResult, ...]
     corpus_sha256: str
+    frozen_baseline_metrics: dict[str, Any]
+    delta_metrics: dict[str, Any]
 
 
 def load_ontology(path: Path = DEFAULT_ONTOLOGY_PATH) -> dict[str, Any]:
@@ -241,6 +245,7 @@ def evaluate_current_main(
     cases: tuple[EvaluationCase, ...],
     *,
     corpus_digest: str,
+    baseline_path: Path = DEFAULT_BASELINE_PATH,
 ) -> EvaluationReport:
     results = tuple(_evaluate_case(case) for case in cases)
     buckets = Counter(case.expected_bucket.value for case in cases)
@@ -327,8 +332,8 @@ def evaluate_current_main(
         "FINAL_FALSE_NEGATIVE_COUNT": len(false_negatives),
         "FINAL_MATCH_PRECISION": _ratio(len(true_final_matches), len(final_matches)),
         "FINAL_MATCH_RECALL": _ratio(len(true_final_matches), len(strong)),
-        "NO_STRUCTURED_TARGET_OVERLAP_COUNT": sum(
-            "narrowing.no_structured_target_overlap" in result.hard_filter_reasons
+        "NO_STRUCTURED_TARGET_OVERLAP_DIAGNOSTIC_COUNT": sum(
+            "narrowing.no_structured_target_overlap" in result.narrowing_diagnostics
             for result in results
         ),
         "BELOW_RELEVANCE_THRESHOLD_COUNT": sum(
@@ -342,7 +347,59 @@ def evaluate_current_main(
             for result in results
         ),
     }
-    return EvaluationReport(metrics=metrics, cases=results, corpus_sha256=corpus_digest)
+    metrics["NO_STRUCTURED_TARGET_OVERLAP_COUNT"] = metrics[
+        "NO_STRUCTURED_TARGET_OVERLAP_DIAGNOSTIC_COUNT"
+    ]
+    frozen_baseline_metrics = read_baseline_metrics(baseline_path)
+    return EvaluationReport(
+        metrics=metrics,
+        cases=results,
+        corpus_sha256=corpus_digest,
+        frozen_baseline_metrics=frozen_baseline_metrics,
+        delta_metrics=_delta_metrics(metrics, frozen_baseline_metrics),
+    )
+
+
+def read_baseline_metrics(path: Path = DEFAULT_BASELINE_PATH) -> dict[str, Any]:
+    metrics: dict[str, Any] = {}
+    in_metrics = False
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line == "## Metrics":
+            in_metrics = True
+            continue
+        if in_metrics and line.startswith("## "):
+            break
+        if in_metrics and "=" in line:
+            key, value = line.split("=", 1)
+            metrics[key] = _parse_baseline_metric_value(value)
+    return metrics
+
+
+def _parse_baseline_metric_value(value: str) -> str | int:
+    if value.isdigit():
+        return int(value)
+    return value
+
+
+def _delta_metrics(
+    current: dict[str, Any],
+    baseline: dict[str, Any],
+) -> dict[str, str | int]:
+    deltas: dict[str, str | int] = {}
+    for key, value in current.items():
+        if key not in baseline:
+            continue
+        baseline_value = baseline[key]
+        if isinstance(value, int) and isinstance(baseline_value, int):
+            deltas[key] = value - baseline_value
+            continue
+        try:
+            deltas[key] = (
+                Decimal(str(value)) - Decimal(str(baseline_value))
+            ).quantize(Decimal("0.0001")).to_eng_string()
+        except Exception:
+            continue
+    return deltas
 
 
 def write_baseline_report(report: EvaluationReport, path: Path) -> None:
@@ -361,7 +418,8 @@ def write_baseline_report(report: EvaluationReport, path: Path) -> None:
         "## Metrics",
         "",
     ]
-    for key, value in report.metrics.items():
+    metrics = report.frozen_baseline_metrics or report.metrics
+    for key, value in metrics.items():
         lines.append(f"{key}={value}")
     lines.extend(
         [
@@ -408,9 +466,11 @@ def write_baseline_report(report: EvaluationReport, path: Path) -> None:
 
 def report_as_json(report: EvaluationReport) -> dict[str, Any]:
     return {
-        "schema_version": "matching-evaluation-report.v1",
+        "schema_version": "matching-evaluation-report.v2",
         "evaluator_version": EVALUATOR_VERSION,
+        "frozen_baseline_metrics": report.frozen_baseline_metrics,
         "metrics": report.metrics,
+        "delta_metrics": report.delta_metrics,
         "cases": [case.__dict__ for case in report.cases],
     }
 
@@ -429,7 +489,11 @@ def main(argv: list[str] | None = None) -> int:
     ontology = load_ontology(args.ontology)
     cases = load_corpus(args.corpus, ontology=ontology)
     digest = validate_recorded_corpus_sha(args.corpus, args.corpus_sha)
-    report = evaluate_current_main(cases, corpus_digest=digest)
+    report = evaluate_current_main(
+        cases,
+        corpus_digest=digest,
+        baseline_path=args.baseline_output,
+    )
     output = report_as_json(report)
     print(json.dumps(output, ensure_ascii=False, sort_keys=True, indent=2))
     if args.json is not None:
@@ -456,37 +520,52 @@ def _evaluate_case(case: EvaluationCase) -> CaseResult:
         policy=MatchDecisionPolicy(),
     ).traces[0]
     hard_reasons = tuple(reason["code"] for reason in trace.hard_filter_reasons)
+    narrowing_diagnostics = tuple(
+        diagnostic["code"] for diagnostic in trace.narrowing_diagnostics
+    )
     if not trace.hard_filter_eligible:
-        final_stage = (
-            "narrowing.no_structured_target_overlap"
-            if "narrowing.no_structured_target_overlap" in hard_reasons
-            else "hard_filter"
-        )
+        final_stage = "hard_constraint_reject"
+    elif trace.eligible:
+        final_stage = "final_match"
+    elif trace.combined_relevance_score is not None:
+        final_stage = "final_relevance_reject"
     else:
-        final_stage = trace.decision_code.value
+        final_stage = "retrieval_candidate"
+    actual_evidence = derive_matching_evidence(opportunity.analysis, profile)
     return CaseResult(
         case_id=case.case_id,
         expected_bucket=case.expected_bucket.value,
         expected_evidence=_expected_evidence(case),
         actual_evidence_or_observable_proxy={
-            "capability": ACTUAL_NOT_EXPOSED,
-            "action_or_problem": ACTUAL_NOT_EXPOSED,
-            "platform": ACTUAL_NOT_EXPOSED,
-            "technology": ACTUAL_NOT_EXPOSED,
-            "constraint": ACTUAL_NOT_EXPOSED,
+            "capability": _actual_evidence_payload(actual_evidence.capability),
+            "action_or_problem": _actual_evidence_payload(
+                actual_evidence.action_or_problem
+            ),
+            "platform": _actual_evidence_payload(actual_evidence.platform),
+            "technology": _actual_evidence_payload(actual_evidence.technology),
+            "constraint": (
+                EvidenceMatch.YES.value
+                if any(
+                    not reason.startswith("narrowing.")
+                    for reason in hard_reasons
+                )
+                else EvidenceMatch.UNKNOWN.value
+            ),
             "terminal_proxy": {
                 "candidate_survived": trace.hard_filter_eligible,
                 "final_match": trace.eligible,
                 "decision_code": trace.decision_code.value,
                 "hard_filter_reasons": hard_reasons,
+                "narrowing_diagnostics": narrowing_diagnostics,
             },
         },
-        evidence_contract_status="EXPECTED_ONLY_ACTUAL_NOT_EXPOSED_BY_CURRENT_MAIN",
+        evidence_contract_status=EVIDENCE_EXPOSED,
         final_stage=final_stage,
         candidate_survived=trace.hard_filter_eligible,
         final_match=trace.eligible,
         decision_code=trace.decision_code.value,
         hard_filter_reasons=hard_reasons,
+        narrowing_diagnostics=narrowing_diagnostics,
         combined_relevance_score=(
             None
             if trace.combined_relevance_score is None
@@ -496,6 +575,15 @@ def _evaluate_case(case: EvaluationCase) -> CaseResult:
             None if trace.final_rank_score is None else str(trace.final_rank_score)
         ),
     )
+
+
+def _actual_evidence_payload(match) -> dict[str, object]:
+    return {
+        "match": match.value.value,
+        "opportunity_values": match.opportunity_values,
+        "profile_values": match.profile_values,
+        "evidence": match.evidence,
+    }
 
 
 def _expected_evidence(case: EvaluationCase) -> dict[str, str]:

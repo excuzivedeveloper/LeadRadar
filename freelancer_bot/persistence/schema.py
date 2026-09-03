@@ -2843,6 +2843,12 @@ match_traces = sa.Table(
     sa.Column("filter_version", sa.String(64), nullable=False),
     sa.Column("hard_filter_eligible", sa.Boolean(), nullable=False),
     sa.Column("hard_filter_reasons", JSONB(), nullable=False),
+    sa.Column(
+        "narrowing_diagnostics",
+        JSONB(),
+        nullable=False,
+        server_default=sa.text("'[]'::jsonb"),
+    ),
     sa.Column("nonblocking_unknowns", JSONB(), nullable=False),
     sa.Column("structured_scoring_version", sa.String(64)),
     sa.Column("structured_policy_version", sa.String(64)),
@@ -2894,6 +2900,10 @@ match_traces = sa.Table(
         "AND jsonb_typeof(nonblocking_unknowns) = 'array' "
         "AND jsonb_typeof(structured_components) = 'array'",
         name="trace_arrays_valid",
+    ),
+    sa.CheckConstraint(
+        "jsonb_typeof(narrowing_diagnostics) = 'array'",
+        name="narrowing_diagnostics_array",
     ),
     sa.CheckConstraint(
         "semantic_status IN ('available', 'degraded', 'unavailable_input')",

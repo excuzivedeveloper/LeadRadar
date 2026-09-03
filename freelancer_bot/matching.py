@@ -24,6 +24,11 @@ from .lexical_matching import (
     labels_have_overlap,
     lexical_concepts,
 )
+from .matching_evidence import (
+    EvidenceDimensionMatch,
+    EvidenceMatch,
+    derive_matching_evidence,
+)
 from .search_profiles import (
     BudgetPolicy,
     OpportunityType,
@@ -32,9 +37,9 @@ from .search_profiles import (
 )
 
 
-MATCHING_FILTER_VERSION = "matching-hard-filters.v4"
-STRUCTURED_SCORING_VERSION = "structured-matching-score.v4"
-STRUCTURED_SCORING_POLICY_VERSION = "structured-matching-policy.v4"
+MATCHING_FILTER_VERSION = "matching-hard-filters.v5"
+STRUCTURED_SCORING_VERSION = "structured-matching-score.v5"
+STRUCTURED_SCORING_POLICY_VERSION = "structured-matching-policy.v5"
 _VERSION_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]{0,99}$")
 _SCORE_QUANTUM = Decimal("0.0001")
 _ROLE_FAMILY_CONCEPTS = frozenset(
@@ -151,12 +156,16 @@ class HardFilteredCandidateError(ValueError):
 @dataclass(frozen=True)
 class StructuredScoringPolicy:
     version: str = STRUCTURED_SCORING_POLICY_VERSION
-    role_weight: Decimal = Decimal("0.30")
-    skills_weight: Decimal = Decimal("0.35")
-    category_weight: Decimal = Decimal("0.15")
-    work_type_weight: Decimal = Decimal("0.08")
-    budget_weight: Decimal = Decimal("0.07")
+    role_weight: Decimal = Decimal("0.16")
+    skills_weight: Decimal = Decimal("0.21")
+    category_weight: Decimal = Decimal("0.08")
+    work_type_weight: Decimal = Decimal("0.06")
+    budget_weight: Decimal = Decimal("0.06")
     preferences_weight: Decimal = Decimal("0.05")
+    capability_weight: Decimal = Decimal("0.18")
+    action_problem_weight: Decimal = Decimal("0.08")
+    platform_weight: Decimal = Decimal("0.07")
+    technology_weight: Decimal = Decimal("0.05")
     relevance_weight: Decimal = Decimal("0.75")
     opportunity_quality_weight: Decimal = Decimal("0.15")
     source_quality_weight: Decimal = Decimal("0.10")
@@ -173,6 +182,10 @@ class StructuredScoringPolicy:
             self.work_type_weight,
             self.budget_weight,
             self.preferences_weight,
+            self.capability_weight,
+            self.action_problem_weight,
+            self.platform_weight,
+            self.technology_weight,
         )
         aggregate_weights = (
             self.relevance_weight,
@@ -376,6 +389,9 @@ def narrow_and_filter_candidates(
             exclusion = _candidate_exclusion(opportunity.analysis, profile)
             if exclusion is None:
                 candidate_profiles.append(profile)
+            elif exclusion is CandidateExclusionCode.NO_STRUCTURED_TARGET_OVERLAP:
+                candidate_profiles.append(profile)
+                exclusions.append(CandidateExclusion(profile.id, exclusion))
             else:
                 exclusions.append(CandidateExclusion(profile.id, exclusion))
 
@@ -417,6 +433,7 @@ def score_candidate_structured(
         raise HardFilteredCandidateError(decision)
 
     analysis = opportunity.analysis
+    evidence = derive_matching_evidence(analysis, profile)
     components = (
         _role_component(analysis, profile, selected_policy.role_weight),
         _skills_component(analysis, profile, selected_policy.skills_weight),
@@ -431,6 +448,26 @@ def score_candidate_structured(
             analysis,
             profile,
             selected_policy.preferences_weight,
+        ),
+        _evidence_component(
+            "capability",
+            evidence.capability,
+            selected_policy.capability_weight,
+        ),
+        _evidence_component(
+            "action_or_problem",
+            evidence.action_or_problem,
+            selected_policy.action_problem_weight,
+        ),
+        _evidence_component(
+            "platform",
+            evidence.platform,
+            selected_policy.platform_weight,
+        ),
+        _evidence_component(
+            "technology",
+            evidence.technology,
+            selected_policy.technology_weight,
         ),
     )
     relevance_score = _quantize(
@@ -724,6 +761,27 @@ def _preferences_component(
         weight,
         tuple(evidence),
     )
+
+
+def _evidence_component(
+    name: str,
+    match: EvidenceDimensionMatch,
+    weight: Decimal,
+) -> StructuredScoreComponent:
+    if match.value is EvidenceMatch.UNKNOWN:
+        return _score_component(name, None, weight)
+    score = Decimal("1") if match.value is EvidenceMatch.YES else Decimal("0")
+    evidence = match.evidence
+    if match.value is EvidenceMatch.NO:
+        evidence = tuple(
+            sorted(
+                (
+                    *(f"opportunity:{value}" for value in match.opportunity_values),
+                    *(f"profile:{value}" for value in match.profile_values),
+                )
+            )
+        )
+    return _score_component(name, score, weight, evidence)
 
 
 def _opportunity_quality_score(analysis: OpportunityAnalysis) -> Decimal:

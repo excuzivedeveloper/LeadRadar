@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from freelancer_bot.config import RuntimeConfig
 from freelancer_bot.match_decisions import (
+    MatchDecisionCode,
     MatchScoringInput,
     decide_and_rank_matches,
     match_decision_policy_from_config,
@@ -63,8 +64,13 @@ class MatchingControlsTest(unittest.TestCase):
 
         for role, skills, category in negatives:
             trace = _trace(profile, role, skills, category, policy)
-            self.assertFalse(trace.hard_filter_eligible, role)
+            self.assertTrue(trace.hard_filter_eligible, role)
             self.assertFalse(trace.eligible, role)
+            self.assertEqual(
+                trace.decision_code,
+                MatchDecisionCode.BELOW_RELEVANCE_THRESHOLD,
+                role,
+            )
 
 
 def _profile() -> SearchProfileRecord:
