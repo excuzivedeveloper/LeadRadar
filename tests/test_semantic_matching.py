@@ -90,10 +90,13 @@ class SemanticMatchingTest(unittest.TestCase):
         provider = DeterministicHashEmbeddingProvider()
         opportunity = _opportunity()
         semantically_aligned = _profile(
-            roles=("Automation engineer",),
-            skills=("Bots",),
+            roles=("Developer",),
+            skills=("webhooks",),
             categories=("Telegram",),
-            semantic_text="Python Telegram bot automation integrations",
+            semantic_text=(
+                "Python developer Build and integrate a Telegram automation "
+                "bot Telegram Python Telegram API"
+            ),
         )
         category_only = _profile(
             roles=("Designer",),
@@ -113,7 +116,14 @@ class SemanticMatchingTest(unittest.TestCase):
 
         self.assertEqual(result.status, SemanticStatus.AVAILABLE)
         self.assertGreater(aligned.semantic_similarity, weak.semantic_similarity)
-        self.assertGreater(aligned.combined_relevance_score, weak.combined_relevance_score)
+        self.assertGreater(
+            aligned.combined_relevance_score,
+            aligned.structured.user_relevance_score,
+        )
+        self.assertGreater(
+            aligned.combined_relevance_score,
+            weak.combined_relevance_score,
+        )
         self.assertGreater(aligned.combined_score, weak.combined_score)
         self.assertLess(weak.semantic_similarity, Decimal("0.5000"))
         self.assertEqual(aligned.semantic_matching_version, SEMANTIC_MATCHING_VERSION)
