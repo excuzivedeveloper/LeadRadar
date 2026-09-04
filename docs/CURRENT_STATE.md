@@ -38,6 +38,14 @@ SHADOW_DURABLE_PERSISTENCE=YES
 SHADOW_LIVE_VALIDATED=NO
 PRODUCTION_MATCH_POLICY_CHANGED=NO
 DELIVERY_POLICY_CHANGED=NO
+PR15_REVIEW_STATUS=CHANGES_REQUESTED_DOCS_ONLY
+PR15_RUNTIME_IMPLEMENTATION_REVIEW=PASS
+PR15_MIGRATION_IMPLEMENTATION_REVIEW=PASS
+PR15_PRODUCTION_ISOLATION_REVIEW=PASS
+PR15_MERGED=NO
+PR15_PRODUCTION_SYNCED=NO
+PR15_MIGRATION_APPLIED_PRODUCTION=NO
+PR15_SHADOW_LIVE_VALIDATED=NO
 PR13_REVIEWED=YES
 PR13_MERGED=YES
 PR13_REPEAT_BOUNDED_CANARY=COMPLETED
@@ -52,12 +60,21 @@ USEFUL_DELIVERY_PROVEN=NO
 READY_FOR_PERSISTENT_RUNTIME=NO
 ```
 
-The exact next execution stage after review/merge/production sync is bounded
-runtime shadow observation before any persistent runtime decision:
+The exact next execution sequence is:
 
 ```text
-BOUNDED_RUNTIME_SHADOW_CANARY
+docs-only fix
+-> narrow re-review
+-> owner merge authorization
+-> production code sync
+-> alembic upgrade 20260904_0039
+-> verify ALEMBIC_CURRENT=ALEMBIC_HEADS=20260904_0039
+-> separately authorized BOUNDED_RUNTIME_SHADOW_CANARY
 ```
+
+The bounded runtime shadow canary must not run before migration `20260904_0039`
+is applied and verified, because durable shadow persistence depends on the new
+table. Persistent runtime remains a separate later gate.
 
 OpenRouter implementation and runtime configuration are present, and the first
 bounded Opportunity Analysis path has passed. Discovery, catch-up, legacy
