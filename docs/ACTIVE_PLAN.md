@@ -71,12 +71,31 @@ SHADOW_DURABLE_PERSISTENCE=YES
 SHADOW_LIVE_VALIDATED=NO
 PRODUCTION_MATCH_POLICY_CHANGED=NO
 DELIVERY_POLICY_CHANGED=NO
+PR15_REVIEW_STATUS=CHANGES_REQUESTED_DOCS_ONLY
+PR15_MERGED=NO
+PR15_PRODUCTION_SYNCED=NO
+PR15_MIGRATION_APPLIED_PRODUCTION=NO
 ```
 
-Current next execution stage after PR15 review, merge and production sync:
+Current gate:
 
 ```text
-BOUNDED_RUNTIME_SHADOW_CANARY
+PR15_DOCS_ONLY_FIX_AND_NARROW_RE_REVIEW
+```
+
+Required execution sequence:
+
+```text
+1. close the docs-only MEDIUM finding
+2. narrow re-review
+3. owner merge authorization
+4. production code sync
+5. alembic upgrade 20260904_0039
+6. verify ALEMBIC_CURRENT=ALEMBIC_HEADS=20260904_0039
+7. separately authorize BOUNDED_RUNTIME_SHADOW_CANARY
+8. collect fresh shadow traces
+9. assess quality
+10. keep persistent runtime as a separate later gate
 ```
 
 ## Step 0 — Pre-AI ingestion/shadow validation
@@ -247,7 +266,9 @@ to end before persistent runtime is considered.
 
 ## Step 5 — Bounded runtime evidence-shadow canary
 
-**Next gate after independent review, merge and production sync.**
+**Next runtime gate only after docs re-review, owner merge authorization,
+production code sync, Alembic upgrade to `20260904_0039`, and verification that
+`ALEMBIC_CURRENT=ALEMBIC_HEADS=20260904_0039`.**
 
 PR15 wires the PR14 OpportunityAnalysisV2 evidence-aware matching shadow into
 the normal fresh matching/delivery runtime path as one-way instrumentation. It
