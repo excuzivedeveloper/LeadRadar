@@ -1,15 +1,16 @@
 # LeadRadar — Known Limitations and Validation Gaps
 
 **Status:** CANONICAL  
-**Last verified:** 2026-08-30
-**Implementation baseline:** `d92b0446be19f391bb8f479387b27d914c081e35`
+**Last verified:** 2026-09-04
+**Implementation baseline:** `eddc972a111f75ac2c634a3a56aba61672060d36`
 
 This document distinguishes code that exists from behavior that has actually
 been validated in the current deployment.
 
-## Pre-AI blocker status
+## Completed blocker status
 
-The previous live-ingestion blocker is closed.
+The previous live-ingestion blocker is closed, and the first bounded
+Opportunity Analysis canary has passed.
 
 The project has now observed a natural Telegram message through:
 
@@ -20,8 +21,7 @@ Telegram live update
 -> legacy-filter shadow row
 ```
 
-with matching shadow schema/filter SHA and zero AI calls, Opportunities or
-deliveries.
+with matching shadow schema/filter SHA and no delivery.
 
 The root deployment prerequisite was Telegram channel membership of the dedicated
 collector. Current approved-source membership is 13/13.
@@ -31,24 +31,37 @@ Therefore:
 ```text
 SHADOW_LIVE_EVIDENCE=YES
 OPENROUTER_IMPLEMENTATION_READY=YES
-OPENROUTER_RUNTIME_CONFIGURED=NO
-LIVE_AI_ANALYSIS_VALIDATED=NO
-READY_FOR_OPENROUTER_CONFIGURATION=YES
-READY_FOR_BOUNDED_AI_ANALYSIS=NO
+OPENROUTER_RUNTIME_CONFIGURED=YES
+OPENROUTER_API_KEY_CONFIGURED=YES
+LIVE_AI_ANALYSIS_VALIDATED=YES
+READY_FOR_OPENROUTER_CONFIGURATION=COMPLETE
+READY_FOR_BOUNDED_AI_ANALYSIS=COMPLETE
+PR13_REVIEWED=YES
+PR13_MERGED=YES
+PR13_REPEAT_BOUNDED_CANARY=COMPLETED
+RUNTIME_STOPPED=YES
+OUTSTANDING_JOBS=0
+FRESH_NATURAL_LEAD=1
+FRESH_SAMPLE=C++/HFT
+OA_PIPELINE=PASS
+MATCHING_PIPELINE=PASS
+PR13_RU_EN_WEB_REPAIR_RESULT=INCONCLUSIVE_NO_RELEVANT_RU_EN_WEB_SAMPLE
+USEFUL_DELIVERY_PROVEN=NO
+READY_FOR_PERSISTENT_RUNTIME=NO
 ```
 
-The next limitation/gate is OpenRouter configuration-only, then bounded live AI
-validation, not ingestion.
+The next limitation/gate is useful owner delivery from relevant live
+Opportunity evidence, not ingestion or first-provider configuration.
 
 ## Current top limitations
 
-1. **P0 — OpenRouter Opportunity Analysis is not live-validated.** First-class
-   OpenRouter Opportunity support is implemented, offline-tested and
-   server-synced, but runtime key/configuration and live model behavior are not
-   validated yet.
-2. **P0 — No live end-to-end lead delivery yet.** Matching and personalized
-   delivery are implemented/tested, but no real AI-produced Opportunity has been
-   matched and delivered in this deployment.
+1. **P0 — Useful live owner delivery is not proven.** Matching and
+   personalized delivery are implemented/tested, and a fresh C++/HFT natural
+   sample passed Opportunity Analysis and matching, but useful owner delivery
+   has not yet been proven.
+2. **P0 — PR13 RU/EN web repair live result is inconclusive.** PR13 is
+   reviewed, merged and repeat-canaried, but the fresh sample was C++/HFT rather
+   than a relevant RU/EN web sample.
 3. **P1 — Collector membership is required external state.** PostgreSQL
    `APPROVED` status and public-history readability do not guarantee live update
    delivery. Deployment/preflight must also verify Telegram membership.
@@ -66,7 +79,8 @@ validation, not ingestion.
    confidently.
 8. **P1 — OpenRouter model availability/cost are external.**
    `minimax/minimax-m3:free` availability, pricing and rate/free-tier limits can
-   change outside the repository and must be reverified before live validation.
+   change outside the repository and must be reverified before further live
+   validation or expanded use.
 9. **P1 — Opportunity Analysis has no separate enable switch.** Once the
    matching provider key is configured, full `--run` can process pending
    `opportunity.analysis.v1` jobs and make provider calls. `AI_REPLY_ENABLED`
@@ -89,10 +103,10 @@ validation, not ingestion.
     delivery is disabled.
 16. **P2 — Synthetic fixtures are not production-quality evidence.** Tests are
     necessary but do not substitute for bounded live validation.
-17. **P2 — OpportunityAnalysisV2 evidence-aware matching is shadow-only.**
-    `IMPLEMENTED_IN_SHADOW=YES`, `PRODUCTION_MATCH_POLICY_CHANGED=NO` and
-    `LIVE_VALIDATED=NO`; the trace is an offline evaluation surface, not current
-    delivery policy.
+17. **P2 — PR14 OpportunityAnalysisV2 evidence-aware matching is shadow-only.**
+    `PR14_IMPLEMENTED_IN_SHADOW=YES`,
+    `PR14_PRODUCTION_MATCH_POLICY_CHANGED=NO` and `PR14_LIVE_VALIDATED=NO`; the
+    trace is an offline evaluation surface, not current delivery policy.
 18. **P2 — Persistent runtime is intentionally absent.** No LeadRadar daemon is
     authorized, so unattended continuity/restart behavior is not yet proven.
 

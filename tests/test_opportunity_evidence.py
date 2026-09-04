@@ -14,11 +14,14 @@ from freelancer_bot.opportunity_analysis import (
     OpportunityAnalysis,
 )
 from freelancer_bot.opportunity_evidence import (
+    EvidenceConfidence,
     EvidenceDimension,
     EvidenceItem,
     EvidenceOrigin,
+    EvidencePolarity,
     EvidenceShadowDecision,
     EvidenceSource,
+    EvidenceVerification,
     OPPORTUNITY_ANALYSIS_V2_SCHEMA_VERSION,
     build_opportunity_analysis_v2,
     derive_profile_evidence,
@@ -47,129 +50,202 @@ FIXTURE_PATH = Path("tests/fixtures/opportunity_evidence_shadow_v2_cases.v1.json
 
 
 class OpportunityEvidenceContractTest(unittest.TestCase):
-    def test_opportunity_analysis_v2_schema_and_v1_backward_compatibility(self):
+    def test_v2_schema_has_semantic_shadow_fields_and_preserves_v1(self):
         analysis = _analysis()
-        v2 = build_opportunity_analysis_v2(analysis)
+        v2 = build_opportunity_analysis_v2(
+            analysis,
+            raw_message_text="Нужен Telegram bot на Python",
+        )
         schema = v2.model_json_schema()
 
         self.assertEqual(v2.schema_version, OPPORTUNITY_ANALYSIS_V2_SCHEMA_VERSION)
         self.assertEqual(v2.base_schema_version, OPPORTUNITY_ANALYSIS_SCHEMA_VERSION)
         self.assertIs(v2.analysis.__class__, OpportunityAnalysis)
         self.assertFalse(schema["additionalProperties"])
+        self.assertIn("business_problems", schema["properties"])
+        self.assertIn("desired_outcomes", schema["properties"])
+        self.assertIn("solution_types", schema["properties"])
+        self.assertIn("required_capabilities", schema["properties"])
+        self.assertIn("uncertainties", schema["properties"])
         self.assertEqual(analysis.schema_version, OPPORTUNITY_ANALYSIS_SCHEMA_VERSION)
 
-    def test_evidence_item_validation_blocks_unverified_explicit_evidence(self):
-        payload = {
+    def test_evidence_item_axes_are_independent_and_validated(self):
+        base = {
             "dimension": "platform",
             "concept_id": "vk",
             "label": "VK",
-            "origin": "explicit",
+            "origin": "raw_explicit",
             "source": "opportunity",
             "raw_span": "вк",
-            "field_path": "analysis.task_summary",
-            "verified": False,
-            "verifier_version": "explicit-evidence-verifier.v1",
+            "field_path": "raw_message_text",
+            "verification": "raw_span_verified",
+            "confidence": "high",
+            "polarity": "positive",
+            "authoritative": True,
+            "verifier_version": "explicit-evidence-verifier.v2",
         }
+        parsed = EvidenceItem.model_validate_json(json.dumps(base), strict=True)
 
-        with self.assertRaises(ValidationError):
-            EvidenceItem.model_validate(payload, strict=True)
+        self.assertEqual(parsed.verification, EvidenceVerification.RAW_SPAN_VERIFIED)
+        self.assertEqual(parsed.confidence, EvidenceConfidence.HIGH)
+        self.assertEqual(parsed.polarity, EvidencePolarity.POSITIVE)
+        self.assertTrue(parsed.counts_as_positive)
 
-    def test_raw_span_verifier_accepts_only_exact_supplied_text(self):
-        item = EvidenceItem(
-            dimension=EvidenceDimension.PLATFORM,
-            concept_id="vk",
-            label="VK",
-            origin=EvidenceOrigin.EXPLICIT,
-            source=EvidenceSource.OPPORTUNITY,
-            raw_span="вк",
-            field_path="analysis.task_summary",
-            verified=True,
-            verifier_version="explicit-evidence-verifier.v1",
+        invalid_cases = (
+            {**base, "verification": "model_only"},
+            {**base, "polarity": "negated"},
+            {**base, "confidence": "low"},
         )
+        for payload in invalid_cases:
+            with self.subTest(payload=payload):
+                with self.assertRaises(ValidationError):
+                    EvidenceItem.model_validate_json(json.dumps(payload), strict=True)
 
-        self.assertTrue(
-            explicit_evidence_is_grounded(
-                item,
-                {"analysis.task_summary": "Нужен ИИ-менеджер в ВК"},
-            )
-        )
-        self.assertFalse(
-            explicit_evidence_is_grounded(
-                item,
-                {"analysis.task_summary": "Нужен ИИ-менеджер"},
-            )
+    def test_raw_message_fastapi_hallucination_control(self):
+        v2 = build_opportunity_analysis_v2(
+            _analysis(skills=("FastAPI",), task_summary="Нужен ИИ-менеджер для заявок"),
+            raw_message_text="Нужен ИИ-менеджер для заявок",
         )
 
-    def test_vk_ai_manager_preserves_explicit_vs_inferred_boundary(self):
-        analysis = _analysis(
-            category="ai assistant",
-            role_title="ИИ-менеджер в ВК",
-            skills=(),
-            task_summary="Нужен ИИ-менеджер в ВК для обработки заявок.",
-        )
+        fastapi = _items(v2.evidence).get(("technology", "fastapi"))
 
-        v2 = build_opportunity_analysis_v2(analysis)
-        evidence = {
-            (item.dimension.value, item.concept_id): item for item in v2.evidence
-        }
+        self.assertIsNone(fastapi)
 
-        self.assertEqual(evidence[("platform", "vk")].origin, EvidenceOrigin.EXPLICIT)
-        self.assertTrue(evidence[("platform", "vk")].verified)
-        self.assertEqual(
-            evidence[("solution_type", "ai_assistant")].origin,
-            EvidenceOrigin.EXPLICIT,
+    def test_raw_message_fastapi_true_explicit_control(self):
+        v2 = build_opportunity_analysis_v2(
+            _analysis(skills=("FastAPI",), task_summary="Нужен FastAPI разработчик"),
+            raw_message_text="Нужен FastAPI разработчик",
         )
-        self.assertEqual(
-            evidence[("capability", "chat_automation")].origin,
-            EvidenceOrigin.INFERRED,
+        fastapi = _items(v2.evidence)[("technology", "fastapi")]
+
+        self.assertEqual(fastapi.origin, EvidenceOrigin.RAW_EXPLICIT)
+        self.assertEqual(fastapi.verification, EvidenceVerification.RAW_SPAN_VERIFIED)
+        self.assertTrue(explicit_evidence_is_grounded(fastapi, "Нужен FastAPI разработчик"))
+
+    def test_negated_react_and_not_telegram_use_vk_controls(self):
+        for raw_text in ("React не нужен", "без React"):
+            with self.subTest(raw_text=raw_text):
+                v2 = build_opportunity_analysis_v2(
+                    _analysis(skills=("React",), task_summary=raw_text),
+                    raw_message_text=raw_text,
+                )
+                trace = evidence_aware_shadow_trace(
+                    v2,
+                    _profile(
+                        roles=("React developer",),
+                        skills=("React",),
+                        categories=("frontend",),
+                        semantic_text="React",
+                    ),
+                )
+                react = _items(v2.evidence)[("technology", "react")]
+
+                self.assertEqual(react.polarity, EvidencePolarity.NEGATED)
+                self.assertFalse(react.counts_as_positive)
+                self.assertFalse(any(match.counts_as_positive for match in trace.matches))
+                self.assertEqual(trace.decision, EvidenceShadowDecision.NO_EVIDENCE_MATCH)
+
+        v2 = build_opportunity_analysis_v2(
+            _analysis(
+                category="VK automation",
+                role_title="VK bot",
+                skills=("Telegram",),
+                task_summary="не Telegram, нужен VK",
+            ),
+            raw_message_text="не Telegram, нужен VK",
         )
-        self.assertEqual(
-            evidence[("capability", "lead_handling")].origin,
-            EvidenceOrigin.INFERRED,
+        evidence = _items(v2.evidence)
+
+        self.assertEqual(evidence[("platform", "telegram")].polarity, EvidencePolarity.NEGATED)
+        self.assertEqual(evidence[("platform", "vk")].polarity, EvidencePolarity.POSITIVE)
+
+    def test_internal_llm_api_is_not_openai_raw_explicit(self):
+        v2 = build_opportunity_analysis_v2(
+            _analysis(
+                category="AI integration",
+                role_title="LLM integration",
+                skills=("internal LLM API",),
+                task_summary="Need integration with our internal LLM API",
+            ),
+            raw_message_text="Need integration with our internal LLM API",
         )
+        evidence = _items(v2.evidence)
+
         self.assertNotIn(("technology", "openai_api"), evidence)
-        self.assertNotIn(("technology", "fastapi"), evidence)
-        self.assertNotIn(("technology", "react"), evidence)
-        self.assertNotIn(("technology", "python"), evidence)
+        self.assertIn(("capability", "llm_ai_integration"), evidence)
 
-    def test_search_profile_capabilities_are_derived_deterministically(self):
-        profile = _profile(
-            roles=("Backend engineer",),
-            skills=("FastAPI", "Playwright", "OpenAI-compatible API"),
-            categories=("Telegram automation",),
-            semantic_text=(
-                "React Next.js web apps, OpenAI-compatible APIs, FastAPI "
-                "webhooks, Playwright browser automation, Telegram aiogram bots"
+    def test_generic_guard_blocks_generic_only_combinations(self):
+        cases = (
+            (
+                "Need bot website",
+                _analysis(category="bot website", role_title="bot website", task_summary="bot website"),
+                _profile(roles=("Bot website developer",), skills=(), categories=("web",), semantic_text="bot web"),
+            ),
+            (
+                "AI automation",
+                _analysis(category="AI automation", role_title="AI automation", task_summary="AI automation"),
+                _profile(roles=("Automation specialist",), skills=(), categories=("automation",), semantic_text="automation"),
+            ),
+            (
+                "backend web",
+                _analysis(category="backend web", role_title="backend web", task_summary="backend web"),
+                _profile(roles=("Backend web developer",), skills=(), categories=("web",), semantic_text="backend web"),
             ),
         )
 
-        concepts = {
-            (item.dimension.value, item.concept_id): item
-            for item in derive_profile_evidence(profile).evidence
-        }
+        for raw_text, analysis, profile in cases:
+            with self.subTest(raw_text=raw_text):
+                trace = evidence_aware_shadow_trace(
+                    build_opportunity_analysis_v2(analysis, raw_message_text=raw_text),
+                    profile,
+                )
 
-        for concept in (
-            "react_next_web",
-            "llm_ai_integration",
-            "backend_api",
-            "api_webhook_integration",
-            "browser_automation",
-            "telegram_automation",
-        ):
-            self.assertIn(("capability", concept), concepts)
-            self.assertIn(
-                concepts[("capability", concept)].origin,
-                {EvidenceOrigin.DERIVED, EvidenceOrigin.INFERRED},
-            )
+                self.assertTrue(trace.generic_signal_blocked)
+                self.assertEqual(trace.decision, EvidenceShadowDecision.WEAK_OR_GENERIC)
+                self.assertLess(trace.score, Decimal("0.4000"))
 
-    def test_shadow_trace_dedupes_by_dimension_and_concept(self):
-        trace = evidence_aware_shadow_trace(
+    def test_profile_semantic_text_cannot_mint_authoritative_capability(self):
+        semantic_only = _profile(
+            roles=("Designer",),
+            skills=("Figma",),
+            categories=("UI",),
+            semantic_text="React Next.js web apps",
+        )
+        structured = _profile(
+            roles=("Designer",),
+            skills=("React", "Next.js"),
+            categories=("UI",),
+            semantic_text="general web summary",
+        )
+
+        semantic_items = _items(derive_profile_evidence(semantic_only).evidence)
+        structured_items = _items(derive_profile_evidence(structured).evidence)
+
+        self.assertFalse(
+            semantic_items[("capability", "react_next_web")].authoritative
+        )
+        self.assertEqual(
+            semantic_items[("capability", "react_next_web")].origin,
+            EvidenceOrigin.SEMANTIC_TEXT_HINT,
+        )
+        self.assertTrue(structured_items[("capability", "react_next_web")].authoritative)
+        self.assertEqual(
+            structured_items[("capability", "react_next_web")].origin,
+            EvidenceOrigin.DERIVED_RULE,
+        )
+
+    def test_shadow_trace_dedupes_synonyms_by_dimension_and_concept(self):
+        v2 = build_opportunity_analysis_v2(
             _analysis(
                 category="web dashboard",
                 role_title="React Next.js developer",
                 skills=("React", "Next.js"),
-                task_summary="Build React and Next.js dashboard in React.",
+                task_summary="Build React ReactJS and Next.js next js dashboard.",
             ),
+            raw_message_text="Build React ReactJS and Next.js next js dashboard.",
+        )
+        trace = evidence_aware_shadow_trace(
+            v2,
             _profile(
                 roles=("Frontend engineer",),
                 skills=("React", "Next.js"),
@@ -182,90 +258,72 @@ class OpportunityEvidenceContractTest(unittest.TestCase):
         self.assertEqual(len(identities), len(set(identities)))
         self.assertIn((EvidenceDimension.CAPABILITY, "react_next_web"), identities)
         self.assertTrue(trace.current_policy_changed is False)
+        self.assertTrue(trace.shadow_weights_experimental)
+        self.assertTrue(trace.shadow_score_not_production_policy)
 
-    def test_generic_signal_guard_blocks_bot_only_match(self):
-        trace = evidence_aware_shadow_trace(
-            _analysis(
-                category="bot",
-                role_title="AI bot",
-                skills=(),
-                task_summary="Need an AI bot.",
-            ),
-            _profile(
-                roles=("Bot developer",),
-                skills=(),
-                categories=("automation",),
-                semantic_text="bot automation",
-            ),
-        )
-
-        self.assertTrue(trace.generic_signal_blocked)
-        self.assertEqual(trace.decision, EvidenceShadowDecision.WEAK_OR_GENERIC)
-        self.assertLess(trace.score, Decimal("0.4000"))
-
-    def test_versioned_conversational_boundary_fixture(self):
+    def test_versioned_fixture_drives_behavioral_assertions(self):
         fixture = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
 
         self.assertEqual(
             fixture["schema_version"],
-            "opportunity-evidence-shadow-v2-cases.v1",
+            "opportunity-evidence-shadow-v2-cases.v2",
         )
-        self.assertEqual(len({case["case_id"] for case in fixture["cases"]}), 3)
+        families = {
+            family: sum(case["family"] == family for case in fixture["cases"])
+            for family in ("conversational", "technical", "boundary")
+        }
+        self.assertGreaterEqual(families["conversational"], 10)
+        self.assertGreaterEqual(families["technical"], 4)
+        self.assertGreaterEqual(families["boundary"], 14)
+
         for case in fixture["cases"]:
             with self.subTest(case_id=case["case_id"]):
-                analysis = _analysis(**case["opportunity"])
-                profile = _profile(**case["profile"])
-                v2 = build_opportunity_analysis_v2(analysis)
-                trace = evidence_aware_shadow_trace(v2, profile)
-                expected = case["expected"]
-                opportunity_concepts = {
-                    (item.dimension.value, item.concept_id) for item in v2.evidence
+                v2 = build_opportunity_analysis_v2(
+                    _analysis(**case["opportunity"]),
+                    raw_message_text=case["raw_message_text"],
+                )
+                trace = evidence_aware_shadow_trace(v2, _profile(**case["profile"]))
+                evidence = _items(v2.evidence)
+                positive = {
+                    key
+                    for key, item in evidence.items()
+                    if item.counts_as_positive
+                }
+                non_positive = {
+                    key
+                    for key, item in evidence.items()
+                    if not item.counts_as_positive
                 }
 
-                if expected.get("platform"):
-                    self.assertIn(
-                        ("platform", expected["platform"]),
-                        opportunity_concepts,
-                    )
-                if expected.get("solution_type"):
-                    self.assertIn(
-                        ("solution_type", expected["solution_type"]),
-                        opportunity_concepts,
-                    )
-                for concept in expected.get("must_not_infer_technologies", []):
-                    self.assertNotIn(("technology", concept), opportunity_concepts)
-                if "generic_signal_blocked" in expected:
-                    self.assertEqual(
-                        trace.generic_signal_blocked,
-                        expected["generic_signal_blocked"],
-                    )
-                if "deduped_match_count_max" in expected:
-                    self.assertLessEqual(
-                        trace.deduped_match_count,
-                        expected["deduped_match_count_max"],
-                    )
-                self.assertEqual(trace.decision.value, expected["shadow_decision"])
+                for dimension, concept in case["expected_positive"]:
+                    self.assertIn((dimension, concept), positive)
+                for dimension, concept in case["expected_absent"]:
+                    self.assertNotIn((dimension, concept), evidence)
+                for dimension, concept in case["expected_non_positive"]:
+                    self.assertIn((dimension, concept), non_positive)
+                self.assertEqual(trace.decision.value, case["expected_decision"])
 
     def test_current_match_decision_regression_stays_outside_shadow(self):
-        opportunity = _opportunity_record(
-            _analysis(
-                category="bot",
-                role_title="AI bot",
-                skills=(),
-                task_summary="Need an AI bot.",
-            )
+        opportunity = _opportunity_record(_analysis())
+        v2 = build_opportunity_analysis_v2(
+            opportunity.analysis,
+            raw_message_text="Нужен Telegram bot на Python",
         )
-        shadow = evidence_aware_shadow_trace(opportunity.analysis, _profile())
+        shadow = evidence_aware_shadow_trace(v2, _profile())
 
         self.assertEqual(opportunity.analysis.schema_version, "opportunity_analysis.v1")
         self.assertFalse(shadow.current_policy_changed)
+
+
+def _items(evidence: tuple[EvidenceItem, ...]) -> dict[tuple[str, str], EvidenceItem]:
+    return {(item.dimension.value, item.concept_id): item for item in evidence}
 
 
 def _analysis(
     *,
     category: str = "telegram_development",
     role_title: str = "Telegram bot developer",
-    skills: tuple[str, ...] = ("Python", "Telegram Bot API"),
+    skills: tuple[str, ...] | list[str] = ("Python", "Telegram Bot API"),
     task_summary: str = "Build a Telegram bot",
 ) -> OpportunityAnalysis:
     return OpportunityAnalysis.model_validate_json(

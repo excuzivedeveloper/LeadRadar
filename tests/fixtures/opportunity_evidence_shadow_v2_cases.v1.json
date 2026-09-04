@@ -1,65 +1,346 @@
 {
-  "schema_version": "opportunity-evidence-shadow-v2-cases.v1",
+  "schema_version": "opportunity-evidence-shadow-v2-cases.v2",
   "cases": [
     {
-      "case_id": "vk_ai_manager_explicit_platform_no_tech_hallucination",
-      "opportunity": {
-        "category": "ai assistant",
-        "role_title": "ИИ-менеджер в ВК",
-        "skills": [],
-        "task_summary": "Нужен ИИ-менеджер в ВК для обработки заявок из сообщений."
-      },
-      "profile": {
-        "roles": ["AI automation engineer"],
-        "skills": ["OpenAI-compatible API"],
-        "categories": ["VK chat automation"],
-        "semantic_text": "AI assistant and VK chat automation for lead handling"
-      },
-      "expected": {
-        "platform": "vk",
-        "solution_type": "ai_assistant",
-        "must_not_infer_technologies": ["openai_api", "fastapi", "react", "python"],
-        "shadow_decision": "strong_eligible"
-      }
+      "case_id": "conv_bot_answers_customers",
+      "family": "conversational",
+      "raw_message_text": "нужен бот чтобы отвечал клиентам",
+      "opportunity": {"category": "chat automation", "role_title": "бот для ответов клиентам", "skills": [], "task_summary": "нужен бот чтобы отвечал клиентам"},
+      "profile": {"roles": ["Chat automation developer"], "skills": [], "categories": ["customer replies"], "semantic_text": "bot automation"},
+      "expected_positive": [["desired_outcome", "auto_customer_replies"], ["capability", "chat_automation"]],
+      "expected_absent": [],
+      "expected_non_positive": [],
+      "expected_decision": "strong_eligible"
     },
     {
-      "case_id": "generic_ai_bot_alone_is_guarded",
-      "opportunity": {
-        "category": "bot",
-        "role_title": "AI bot",
-        "skills": [],
-        "task_summary": "Need an AI bot."
-      },
-      "profile": {
-        "roles": ["Bot developer"],
-        "skills": [],
-        "categories": ["automation"],
-        "semantic_text": "bot automation"
-      },
-      "expected": {
-        "generic_signal_blocked": true,
-        "shadow_decision": "weak_or_generic"
-      }
+      "case_id": "conv_lost_requests",
+      "family": "conversational",
+      "raw_message_text": "хочу чтобы заявки не терялись",
+      "opportunity": {"category": "lead handling", "role_title": "автоматизация заявок", "skills": [], "task_summary": "чтобы заявки не терялись"},
+      "profile": {"roles": ["Lead handling specialist"], "skills": [], "categories": ["lost requests"], "semantic_text": "lead workflow"},
+      "expected_positive": [["business_problem", "lost_requests"], ["capability", "lead_handling"]],
+      "expected_absent": [],
+      "expected_non_positive": [],
+      "expected_decision": "strong_eligible"
     },
     {
-      "case_id": "react_next_profile_capability_derives_once",
-      "opportunity": {
-        "category": "web dashboard",
-        "role_title": "React Next.js developer",
-        "skills": ["React", "Next.js"],
-        "task_summary": "Build a frontend dashboard in React and Next.js."
-      },
-      "profile": {
-        "roles": ["Frontend engineer"],
-        "skills": ["React", "Next.js"],
-        "categories": ["web development"],
-        "semantic_text": "React Next.js web apps and dashboards"
-      },
-      "expected": {
-        "capability": "react_next_web",
-        "deduped_match_count_max": 4,
-        "shadow_decision": "strong_eligible"
-      }
+      "case_id": "conv_vk_ai_manager",
+      "family": "conversational",
+      "raw_message_text": "Нужен ИИ-менеджер в ВК для обработки заявок",
+      "opportunity": {"category": "ai assistant", "role_title": "ИИ-менеджер в ВК", "skills": ["FastAPI"], "task_summary": "ИИ-менеджер в ВК для заявок"},
+      "profile": {"roles": ["AI automation engineer"], "skills": [], "categories": ["VK chat automation"], "semantic_text": "AI assistant and VK chat automation"},
+      "expected_positive": [["platform", "vk"], ["solution_type", "ai_assistant"], ["capability", "lead_handling"]],
+      "expected_absent": [["technology", "fastapi"], ["technology", "openai_api"], ["technology", "python"], ["technology", "react"]],
+      "expected_non_positive": [],
+      "expected_decision": "strong_eligible"
+    },
+    {
+      "case_id": "conv_routine_automation",
+      "family": "conversational",
+      "raw_message_text": "надо автоматизировать рутину",
+      "opportunity": {"category": "automation", "role_title": "automation helper", "skills": [], "task_summary": "автоматизировать рутину"},
+      "profile": {"roles": ["Automation specialist"], "skills": [], "categories": ["routine automation"], "semantic_text": "routine automation"},
+      "expected_positive": [["capability", "routine_automation"]],
+      "expected_absent": [],
+      "expected_non_positive": [],
+      "expected_decision": "weak_or_generic"
+    },
+    {
+      "case_id": "conv_data_to_sheet",
+      "family": "conversational",
+      "raw_message_text": "хочу чтобы данные сами летели в таблицу",
+      "opportunity": {"category": "sheets automation", "role_title": "таблица автоматизация", "skills": [], "task_summary": "данные сами летели в таблицу"},
+      "profile": {"roles": ["Automation engineer"], "skills": ["Google Sheets"], "categories": ["spreadsheet"], "semantic_text": "data to spreadsheet"},
+      "expected_positive": [["desired_outcome", "data_to_sheets"], ["capability", "sheets_automation"]],
+      "expected_absent": [],
+      "expected_non_positive": [],
+      "expected_decision": "strong_eligible"
+    },
+    {
+      "case_id": "conv_classifieds_new_items",
+      "family": "conversational",
+      "raw_message_text": "нужно собирать объявления и присылать новые",
+      "opportunity": {"category": "classifieds monitoring", "role_title": "парсер объявлений", "skills": [], "task_summary": "собирать объявления и присылать новые"},
+      "profile": {"roles": ["Parser developer"], "skills": [], "categories": ["classifieds"], "semantic_text": "new listings monitoring"},
+      "expected_positive": [["capability", "classifieds_monitoring"], ["action_or_problem", "scrape"]],
+      "expected_absent": [["platform", "web"]],
+      "expected_non_positive": [],
+      "expected_decision": "strong_eligible"
+    },
+    {
+      "case_id": "conv_price_monitoring",
+      "family": "conversational",
+      "raw_message_text": "надо мониторить цены",
+      "opportunity": {"category": "price monitoring", "role_title": "мониторинг цен", "skills": [], "task_summary": "мониторить цены"},
+      "profile": {"roles": ["Monitoring engineer"], "skills": [], "categories": ["price monitoring"], "semantic_text": "monitor prices"},
+      "expected_positive": [["capability", "price_monitoring"]],
+      "expected_absent": [],
+      "expected_non_positive": [],
+      "expected_decision": "strong_eligible"
+    },
+    {
+      "case_id": "conv_telegram_booking_bot",
+      "family": "conversational",
+      "raw_message_text": "Need Telegram booking bot",
+      "opportunity": {"category": "booking bot", "role_title": "Telegram booking bot", "skills": [], "task_summary": "Telegram booking bot"},
+      "profile": {"roles": ["Telegram bot developer"], "skills": [], "categories": ["booking bot"], "semantic_text": "booking bot"},
+      "expected_positive": [["platform", "telegram"], ["solution_type", "booking_bot"], ["capability", "telegram_automation"]],
+      "expected_absent": [],
+      "expected_non_positive": [],
+      "expected_decision": "strong_eligible"
+    },
+    {
+      "case_id": "conv_ai_crm_integration",
+      "family": "conversational",
+      "raw_message_text": "Need AI + CRM integration",
+      "opportunity": {"category": "AI CRM integration", "role_title": "AI integration developer", "skills": [], "task_summary": "AI + CRM integration"},
+      "profile": {"roles": ["Integration engineer"], "skills": [], "categories": ["CRM integration"], "semantic_text": "AI integration"},
+      "expected_positive": [["capability", "platform_integration"], ["capability", "llm_ai_integration"]],
+      "expected_absent": [["technology", "openai_api"]],
+      "expected_non_positive": [],
+      "expected_decision": "strong_eligible"
+    },
+    {
+      "case_id": "conv_service_replies_collects_numbers",
+      "family": "conversational",
+      "raw_message_text": "сервис отвечает клиентам и собирает номера",
+      "opportunity": {"category": "lead handling", "role_title": "сервис ответов", "skills": [], "task_summary": "сервис отвечает клиентам и собирает номера"},
+      "profile": {"roles": ["Lead handling automation"], "skills": [], "categories": ["customer replies"], "semantic_text": "collect leads"},
+      "expected_positive": [["desired_outcome", "auto_customer_replies"], ["capability", "lead_handling"]],
+      "expected_absent": [],
+      "expected_non_positive": [],
+      "expected_decision": "strong_eligible"
+    },
+    {
+      "case_id": "tech_fastapi_openai_webhook",
+      "family": "technical",
+      "raw_message_text": "Need FastAPI + OpenAI API + webhook integration",
+      "opportunity": {"category": "backend api", "role_title": "FastAPI developer", "skills": ["FastAPI", "OpenAI API", "webhook"], "task_summary": "FastAPI OpenAI API webhook"},
+      "profile": {"roles": ["Backend engineer"], "skills": ["FastAPI", "OpenAI API"], "categories": ["webhook integration"], "semantic_text": "api"},
+      "expected_positive": [["technology", "fastapi"], ["technology", "openai_api"], ["capability", "api_webhook_integration"]],
+      "expected_absent": [],
+      "expected_non_positive": [],
+      "expected_decision": "strong_eligible"
+    },
+    {
+      "case_id": "tech_react_next",
+      "family": "technical",
+      "raw_message_text": "Need React + Next.js dashboard",
+      "opportunity": {"category": "web dashboard", "role_title": "React Next.js developer", "skills": ["React", "Next.js"], "task_summary": "React Next.js"},
+      "profile": {"roles": ["Frontend engineer"], "skills": ["React", "Next.js"], "categories": ["web development"], "semantic_text": "frontend"},
+      "expected_positive": [["technology", "react"], ["technology", "nextjs"], ["capability", "react_next_web"]],
+      "expected_absent": [],
+      "expected_non_positive": [],
+      "expected_decision": "strong_eligible"
+    },
+    {
+      "case_id": "tech_playwright_browser",
+      "family": "technical",
+      "raw_message_text": "Build Playwright browser automation",
+      "opportunity": {"category": "browser automation", "role_title": "Playwright engineer", "skills": ["Playwright"], "task_summary": "Playwright browser automation"},
+      "profile": {"roles": ["Browser automation engineer"], "skills": ["Playwright"], "categories": ["automation"], "semantic_text": "browser automation"},
+      "expected_positive": [["technology", "playwright"], ["capability", "browser_automation"]],
+      "expected_absent": [["platform", "web"]],
+      "expected_non_positive": [],
+      "expected_decision": "strong_eligible"
+    },
+    {
+      "case_id": "tech_postgres_redis_backend",
+      "family": "technical",
+      "raw_message_text": "Need PostgreSQL + Redis backend",
+      "opportunity": {"category": "backend", "role_title": "backend engineer", "skills": ["PostgreSQL", "Redis"], "task_summary": "PostgreSQL Redis backend"},
+      "profile": {"roles": ["Backend engineer"], "skills": ["PostgreSQL", "Redis"], "categories": ["backend"], "semantic_text": "backend"},
+      "expected_positive": [["technology", "postgresql"], ["technology", "redis"], ["capability", "backend_api"]],
+      "expected_absent": [["technology", "react"]],
+      "expected_non_positive": [],
+      "expected_decision": "strong_eligible"
+    },
+    {
+      "case_id": "boundary_browser_not_generic_web",
+      "family": "boundary",
+      "raw_message_text": "Playwright browser automation",
+      "opportunity": {"category": "browser automation", "role_title": "Playwright", "skills": ["Playwright"], "task_summary": "browser automation"},
+      "profile": {"roles": ["Web developer"], "skills": ["HTML"], "categories": ["web development"], "semantic_text": "web"},
+      "expected_positive": [],
+      "expected_absent": [["platform", "web"]],
+      "expected_non_positive": [],
+      "expected_decision": "no_evidence_match"
+    },
+    {
+      "case_id": "boundary_scraping_not_frontend",
+      "family": "boundary",
+      "raw_message_text": "нужен парсер объявлений",
+      "opportunity": {"category": "scraping", "role_title": "parser", "skills": [], "task_summary": "собирать объявления"},
+      "profile": {"roles": ["Frontend engineer"], "skills": ["React"], "categories": ["frontend"], "semantic_text": "frontend"},
+      "expected_positive": [],
+      "expected_absent": [["technology", "react"], ["capability", "react_next_web"]],
+      "expected_non_positive": [],
+      "expected_decision": "no_evidence_match"
+    },
+    {
+      "case_id": "boundary_seo_not_web_development",
+      "family": "boundary",
+      "raw_message_text": "Нужен SEO аудит сайта",
+      "opportunity": {"category": "SEO", "role_title": "SEO specialist", "skills": [], "task_summary": "SEO аудит сайта"},
+      "profile": {"roles": ["Web developer"], "skills": ["React"], "categories": ["web development"], "semantic_text": "web development"},
+      "expected_positive": [["platform", "web"]],
+      "expected_absent": [["technology", "react"], ["capability", "react_next_web"]],
+      "expected_non_positive": [],
+      "expected_decision": "weak_or_generic"
+    },
+    {
+      "case_id": "boundary_opencart_not_react",
+      "family": "boundary",
+      "raw_message_text": "OpenCart доработка магазина",
+      "opportunity": {"category": "OpenCart", "role_title": "OpenCart developer", "skills": ["OpenCart"], "task_summary": "OpenCart shop"},
+      "profile": {"roles": ["React developer"], "skills": ["React"], "categories": ["frontend"], "semantic_text": "React"},
+      "expected_positive": [],
+      "expected_absent": [["technology", "react"], ["capability", "react_next_web"]],
+      "expected_non_positive": [],
+      "expected_decision": "no_evidence_match"
+    },
+    {
+      "case_id": "boundary_bot_without_telegram",
+      "family": "boundary",
+      "raw_message_text": "Need a bot for website chat",
+      "opportunity": {"category": "bot", "role_title": "bot developer", "skills": [], "task_summary": "bot for website chat"},
+      "profile": {"roles": ["Telegram bot developer"], "skills": [], "categories": ["Telegram"], "semantic_text": "Telegram"},
+      "expected_positive": [],
+      "expected_absent": [["platform", "telegram"]],
+      "expected_non_positive": [],
+      "expected_decision": "weak_or_generic"
+    },
+    {
+      "case_id": "boundary_automation_not_backend",
+      "family": "boundary",
+      "raw_message_text": "Need workflow automation",
+      "opportunity": {"category": "automation", "role_title": "automation", "skills": [], "task_summary": "automation"},
+      "profile": {"roles": ["Backend engineer"], "skills": ["FastAPI"], "categories": ["backend"], "semantic_text": "backend"},
+      "expected_positive": [],
+      "expected_absent": [["capability", "backend_api"], ["technology", "fastapi"]],
+      "expected_non_positive": [],
+      "expected_decision": "no_evidence_match"
+    },
+    {
+      "case_id": "boundary_site_without_react",
+      "family": "boundary",
+      "raw_message_text": "Нужен сайт",
+      "opportunity": {"category": "site", "role_title": "site developer", "skills": [], "task_summary": "Нужен сайт"},
+      "profile": {"roles": ["React developer"], "skills": ["React"], "categories": ["frontend"], "semantic_text": "React Next.js"},
+      "expected_positive": [],
+      "expected_absent": [["technology", "react"], ["technology", "nextjs"], ["capability", "react_next_web"]],
+      "expected_non_positive": [],
+      "expected_decision": "weak_or_generic"
+    },
+    {
+      "case_id": "boundary_ai_without_openai",
+      "family": "boundary",
+      "raw_message_text": "Need AI feature",
+      "opportunity": {"category": "AI", "role_title": "AI developer", "skills": [], "task_summary": "AI feature"},
+      "profile": {"roles": ["OpenAI developer"], "skills": ["OpenAI API"], "categories": ["AI integration"], "semantic_text": "OpenAI API"},
+      "expected_positive": [["capability", "llm_ai_integration"]],
+      "expected_absent": [["technology", "openai_api"]],
+      "expected_non_positive": [],
+      "expected_decision": "strong_eligible"
+    },
+    {
+      "case_id": "boundary_vk_without_vk_api",
+      "family": "boundary",
+      "raw_message_text": "Нужен бот в ВК",
+      "opportunity": {"category": "VK bot", "role_title": "VK bot", "skills": [], "task_summary": "бот в ВК"},
+      "profile": {"roles": ["VK automation developer"], "skills": [], "categories": ["VK"], "semantic_text": "VK API"},
+      "expected_positive": [["platform", "vk"]],
+      "expected_absent": [["technology", "openai_api"], ["technology", "fastapi"]],
+      "expected_non_positive": [],
+      "expected_decision": "strong_eligible"
+    },
+    {
+      "case_id": "boundary_portal_without_react",
+      "family": "boundary",
+      "raw_message_text": "Need customer portal",
+      "opportunity": {"category": "portal", "role_title": "customer portal", "skills": [], "task_summary": "customer portal"},
+      "profile": {"roles": ["React developer"], "skills": ["React"], "categories": ["frontend"], "semantic_text": "React"},
+      "expected_positive": [],
+      "expected_absent": [["technology", "react"], ["capability", "react_next_web"]],
+      "expected_non_positive": [],
+      "expected_decision": "weak_or_generic"
+    },
+    {
+      "case_id": "boundary_internal_llm_api_not_openai",
+      "family": "boundary",
+      "raw_message_text": "Need integration with our internal LLM API",
+      "opportunity": {"category": "AI integration", "role_title": "LLM integration", "skills": ["internal LLM API"], "task_summary": "internal LLM API integration"},
+      "profile": {"roles": ["AI integration engineer"], "skills": ["OpenAI API"], "categories": ["AI integration"], "semantic_text": "llm api"},
+      "expected_positive": [["capability", "llm_ai_integration"]],
+      "expected_absent": [["technology", "openai_api"]],
+      "expected_non_positive": [],
+      "expected_decision": "strong_eligible"
+    },
+    {
+      "case_id": "boundary_generic_bot_website",
+      "family": "boundary",
+      "raw_message_text": "Need bot website",
+      "opportunity": {"category": "bot website", "role_title": "bot website", "skills": [], "task_summary": "bot website"},
+      "profile": {"roles": ["Bot website developer"], "skills": [], "categories": ["web"], "semantic_text": "bot web"},
+      "expected_positive": [["capability", "chat_automation"], ["platform", "web"]],
+      "expected_absent": [],
+      "expected_non_positive": [],
+      "expected_decision": "weak_or_generic"
+    },
+    {
+      "case_id": "boundary_negated_react",
+      "family": "boundary",
+      "raw_message_text": "React не нужен",
+      "opportunity": {"category": "frontend", "role_title": "frontend developer", "skills": ["React"], "task_summary": "React не нужен"},
+      "profile": {"roles": ["React developer"], "skills": ["React"], "categories": ["frontend"], "semantic_text": "React"},
+      "expected_positive": [],
+      "expected_absent": [],
+      "expected_non_positive": [["technology", "react"]],
+      "expected_decision": "no_evidence_match"
+    },
+    {
+      "case_id": "boundary_without_react",
+      "family": "boundary",
+      "raw_message_text": "без React",
+      "opportunity": {"category": "frontend", "role_title": "frontend developer", "skills": ["React"], "task_summary": "без React"},
+      "profile": {"roles": ["React developer"], "skills": ["React"], "categories": ["frontend"], "semantic_text": "React"},
+      "expected_positive": [],
+      "expected_absent": [],
+      "expected_non_positive": [["technology", "react"]],
+      "expected_decision": "no_evidence_match"
+    },
+    {
+      "case_id": "boundary_not_telegram_use_vk",
+      "family": "boundary",
+      "raw_message_text": "не Telegram, нужен VK",
+      "opportunity": {"category": "VK automation", "role_title": "VK bot", "skills": ["Telegram"], "task_summary": "не Telegram, нужен VK"},
+      "profile": {"roles": ["Telegram bot developer"], "skills": [], "categories": ["Telegram"], "semantic_text": "Telegram"},
+      "expected_positive": [],
+      "expected_absent": [],
+      "expected_non_positive": [["platform", "telegram"]],
+      "expected_decision": "weak_or_generic"
+    },
+    {
+      "case_id": "boundary_generic_ai_automation",
+      "family": "boundary",
+      "raw_message_text": "AI automation",
+      "opportunity": {"category": "AI automation", "role_title": "AI automation", "skills": [], "task_summary": "AI automation"},
+      "profile": {"roles": ["Automation specialist"], "skills": [], "categories": ["automation"], "semantic_text": "automation"},
+      "expected_positive": [["capability", "routine_automation"]],
+      "expected_absent": [["technology", "openai_api"]],
+      "expected_non_positive": [],
+      "expected_decision": "weak_or_generic"
+    },
+    {
+      "case_id": "boundary_generic_backend_web",
+      "family": "boundary",
+      "raw_message_text": "backend web",
+      "opportunity": {"category": "backend web", "role_title": "backend web", "skills": [], "task_summary": "backend web"},
+      "profile": {"roles": ["Backend web developer"], "skills": [], "categories": ["web"], "semantic_text": "backend web"},
+      "expected_positive": [["platform", "web"], ["capability", "backend_api"]],
+      "expected_absent": [["technology", "fastapi"], ["technology", "react"]],
+      "expected_non_positive": [],
+      "expected_decision": "weak_or_generic"
     }
   ]
 }
