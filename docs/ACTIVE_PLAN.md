@@ -2,7 +2,7 @@
 
 **Status:** CANONICAL / ACTIVE  
 **Last verified:** 2026-09-04
-**Implementation baseline:** `eddc972a111f75ac2c634a3a56aba61672060d36`
+**Implementation baseline:** `359dc17fbf4632e84b0a74f01ac201a426cf4556`
 
 This file defines execution order. A later capability being implemented in code
 does not mean it may be enabled before earlier gates pass.
@@ -65,12 +65,37 @@ READY_FOR_PERSISTENT_RUNTIME=NO
 PR14_IMPLEMENTED_IN_SHADOW=YES
 PR14_PRODUCTION_MATCH_POLICY_CHANGED=NO
 PR14_LIVE_VALIDATED=NO
+PR14_EVIDENCE_RUNTIME_INSTRUMENTATION_IMPLEMENTED=YES
+SHADOW_RUNTIME_WIRED=YES
+SHADOW_DURABLE_PERSISTENCE=YES
+SHADOW_LIVE_VALIDATED=NO
+PRODUCTION_MATCH_POLICY_CHANGED=NO
+DELIVERY_POLICY_CHANGED=NO
+PR15_REVIEW_STATUS=CHANGES_REQUESTED_DOCS_ONLY
+PR15_MERGED=NO
+PR15_PRODUCTION_SYNCED=NO
+PR15_MIGRATION_APPLIED_PRODUCTION=NO
 ```
 
-Current next execution stage:
+Current gate:
 
 ```text
-BOUNDED_USEFUL_OWNER_DELIVERY_VALIDATION
+PR15_DOCS_ONLY_FIX_AND_NARROW_RE_REVIEW
+```
+
+Required execution sequence:
+
+```text
+1. close the docs-only MEDIUM finding
+2. narrow re-review
+3. owner merge authorization
+4. production code sync
+5. alembic upgrade 20260904_0039
+6. verify ALEMBIC_CURRENT=ALEMBIC_HEADS=20260904_0039
+7. separately authorize BOUNDED_RUNTIME_SHADOW_CANARY
+8. collect fresh shadow traces
+9. assess quality
+10. keep persistent runtime as a separate later gate
 ```
 
 ## Step 0 — Pre-AI ingestion/shadow validation
@@ -239,16 +264,51 @@ With valid live Opportunities and an active owner SearchProfile:
 This stage still must prove the intended user-facing useful lead-card flow end
 to end before persistent runtime is considered.
 
-## Step 5 — Evaluate accumulated legacy-filter shadow evidence
+## Step 5 — Bounded runtime evidence-shadow canary
+
+**Next runtime gate only after docs re-review, owner merge authorization,
+production code sync, Alembic upgrade to `20260904_0039`, and verification that
+`ALEMBIC_CURRENT=ALEMBIC_HEADS=20260904_0039`.**
+
+PR15 wires the PR14 OpportunityAnalysisV2 evidence-aware matching shadow into
+the normal fresh matching/delivery runtime path as one-way instrumentation. It
+adds separate durable persistence for `opportunity_evidence_shadow_traces`.
+
+Required invariants:
+
+```text
+CURRENT_MATCHER_RUNS_FIRST=YES
+CURRENT_DELIVERY_POLICY_REMAINS_AUTHORITY=YES
+SHADOW_FAILURE_FAIL_OPEN=YES
+PRODUCTION_MATCH_POLICY_CHANGED=NO
+DELIVERY_POLICY_CHANGED=NO
+THRESHOLDS_CHANGED=NO
+SEMANTIC_WEIGHTS_CHANGED=NO
+HARD_FILTERS_CHANGED=NO
+SHADOW_EXTRA_OA_CALLS=0
+SHADOW_EXTRA_PROVIDER_CALLS=0
+```
+
+The canary must prove, for bounded fresh traffic only:
+
+- current match trace exists;
+- current delivery decision is unchanged;
+- shadow trace exists in the separate table;
+- raw source is identified by `raw_message_id` plus raw content hash;
+- evidence concept IDs, versions, shadow decision, score and generic guard are
+  recorded without printing raw message text.
+
+This gate does not authorize persistent runtime or policy changes.
+
+## Step 6 — Evaluate accumulated legacy-filter and evidence-shadow data
 
 The legacy matcher is already live-observed in shadow, but one sample is not
 enough to justify redesign.
 
-PR14 OpportunityAnalysisV2 evidence-aware matching shadow is available for
-offline evaluation and false-positive boundary review, but it does not change
-the ordered live gates above. It is not authorization to alter production
-matching thresholds, delivery policy, provider configuration, discovery,
-catch-up or persistent runtime.
+PR14 OpportunityAnalysisV2 evidence-aware matching shadow is wired for runtime
+observation by PR15, but it still does not change production matching
+thresholds, rank, delivery policy, provider configuration, discovery, catch-up
+or persistent runtime.
 
 Collect enough natural evidence before deciding whether to change:
 
@@ -261,7 +321,7 @@ Known candidate issue: substring stop-word matching can reject legitimate text.
 Any change must be narrow, evidence-backed and independently reviewed. Do not
 weaken the filter merely to manufacture output.
 
-## Step 6 — Source discovery/audit rollout
+## Step 7 — Source discovery/audit rollout
 
 **Later stage.**
 
@@ -273,7 +333,7 @@ behavior is proven.
 
 Do not combine discovery rollout with first AI setup or first delivery canary.
 
-## Step 7 — Persistent runtime deployment
+## Step 8 — Persistent runtime deployment
 
 **Not currently authorized.**
 

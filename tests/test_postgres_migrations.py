@@ -326,6 +326,47 @@ class PostgresMigrationTest(unittest.TestCase):
             finally:
                 engine.dispose()
 
+    def test_opportunity_evidence_shadow_trace_migration_is_additive(self):
+        with temporary_database() as database_url:
+            config = alembic_config(database_url)
+            command.upgrade(config, "20260904_0039")
+            engine = sa.create_engine(database_url)
+            try:
+                inspector = sa.inspect(engine)
+                self.assertIn(
+                    "opportunity_evidence_shadow_traces",
+                    inspector.get_table_names(),
+                )
+                uniques = {
+                    item["name"]
+                    for item in inspector.get_unique_constraints(
+                        "opportunity_evidence_shadow_traces"
+                    )
+                }
+                self.assertIn(
+                    "uq_opportunity_evidence_shadow_traces_trace_version",
+                    uniques,
+                )
+                indexes = {
+                    item["name"]
+                    for item in inspector.get_indexes(
+                        "opportunity_evidence_shadow_traces"
+                    )
+                }
+                self.assertIn(
+                    "ix_opportunity_evidence_shadow_traces_match_run",
+                    indexes,
+                )
+                command.downgrade(config, "20260902_0038")
+                inspector = sa.inspect(engine)
+                self.assertNotIn(
+                    "opportunity_evidence_shadow_traces",
+                    inspector.get_table_names(),
+                )
+                self.assertIn("match_traces", inspector.get_table_names())
+            finally:
+                engine.dispose()
+
 
 EXPECTED_TABLES = {
     "ai_call_telemetry",
@@ -372,6 +413,7 @@ EXPECTED_TABLES = {
     "message_prefilter_results",
     "message_prefilter_shadow_evaluations",
     "opportunity_analysis_cache",
+    "opportunity_evidence_shadow_traces",
     "opportunities",
     "opportunity_analysis_links",
     "opportunity_lifecycle_events",

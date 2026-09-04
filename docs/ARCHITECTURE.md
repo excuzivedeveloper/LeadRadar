@@ -2,7 +2,7 @@
 
 **Status:** CANONICAL  
 **Last verified:** 2026-08-31
-**Implementation baseline:** `eddc972a111f75ac2c634a3a56aba61672060d36`
+**Implementation baseline:** `359dc17fbf4632e84b0a74f01ac201a426cf4556`
 
 ## Purpose
 
@@ -111,11 +111,22 @@ PostgreSQL is V2 source of truth for collector/source state, raw messages,
 prefilter/shadow evidence, durable jobs, AI telemetry/cache, Opportunities,
 SearchProfiles, matching, deliveries, feedback and entitlement state.
 
-Alembic is the V2 schema path. Current deployment revision:
+Alembic is the V2 schema path. The current production deployment remains at:
 
 ```text
-20260825_0037
+PRODUCTION_ALEMBIC_CURRENT=20260902_0038
 ```
+
+PR #15 introduces the next repository migration head:
+
+```text
+PR15_REPOSITORY_ALEMBIC_HEAD=20260904_0039
+```
+
+PR #15 is not yet merged or deployed. Before any bounded runtime shadow canary,
+production must first sync the reviewed PR #15 code, apply Alembic
+`20260904_0039`, and verify
+`ALEMBIC_CURRENT=ALEMBIC_HEADS=20260904_0039`.
 
 SQLite remains legacy compatibility only. `LEGACY_DELIVERY_ENABLED=false` in the
 current deployment.
@@ -344,16 +355,52 @@ inference.
 
 Zero matches is a valid result.
 
-An additional OpportunityAnalysisV2 evidence-aware matching slice exists for
-offline shadow evaluation only:
+An additional OpportunityAnalysisV2 evidence-aware matching slice is wired into
+the normal fresh matching/delivery path as observational runtime shadow
+instrumentation:
 
 ```text
 PR14_IMPLEMENTED_IN_SHADOW=YES
+PR14_EVIDENCE_RUNTIME_INSTRUMENTATION_IMPLEMENTED=YES
+SHADOW_RUNTIME_WIRED=YES
+SHADOW_DURABLE_PERSISTENCE=YES
 PR14_PRODUCTION_MATCH_POLICY_CHANGED=NO
-PR14_LIVE_VALIDATED=NO
+SHADOW_LIVE_VALIDATED=NO
 SHADOW_WEIGHTS_EXPERIMENTAL=YES
 SHADOW_SCORE_NOT_PRODUCTION_POLICY=YES
 ```
+
+The runtime order remains:
+
+```text
+MatchingDeliveryJobProcessor
+-> CandidateMatchingService.generate_matches()
+-> MatchTraceRepository.persist_batch()
+-> PersonalizedDeliveryService.schedule_run()
+-> OpportunityEvidenceShadowRecorder.record_match_run()
+```
+
+The current matcher and delivery scheduling remain authoritative. Shadow output
+cannot affect current eligibility, relevance score, rank, delivery scheduling or
+durable job success. Shadow failure logs a safe structured event and fails open.
+
+Shadow persistence is a separate append-only PostgreSQL table:
+
+```text
+opportunity_evidence_shadow_traces
+schema_version=opportunity_evidence_shadow_trace.v1
+shadow_version=opportunity-evidence-shadow.v2
+raw_source_policy_version=opportunity-evidence-raw-source.v1
+UNIQUE(match_trace_id, shadow_version)
+```
+
+The table stores current decision fields beside the independent shadow decision
+and score. It stores `raw_message_id` plus `raw_content_sha256`, not the raw
+Telegram message body. The JSON payload contains sanitized evidence concepts,
+axes, match concepts, decision, score, independent dimensions and version flags;
+it deliberately excludes raw text, contact text, Telegram usernames, email
+addresses, phone numbers, transport metadata, profile semantic text and raw/profile
+spans.
 
 The V2 shadow slice records explicit raw-span evidence separately from inferred
 capability/solution evidence. `RAW_EXPLICIT` evidence must be verified against
