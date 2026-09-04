@@ -1,0 +1,69 @@
+{
+  "schema_version": "owner-mvp-canary-matching-regressions.v1",
+  "cases": [
+    {
+      "case_id": "owner_mvp_ru_en_web_positive_a",
+      "profile": {
+        "roles": ["Full-stack разработчик"],
+        "skills": ["JavaScript", "TypeScript", "React", "Next.js"],
+        "categories": ["веб-разработка"],
+        "semantic_text": "веб-разработка | Full-stack разработчик | JavaScript | TypeScript | React | Next.js"
+      },
+      "opportunity": {
+        "category": "web development",
+        "role_title": "Full-stack React Next.js developer",
+        "skills": ["React", "Next.js", "JavaScript", "TypeScript"],
+        "task_summary": "Build a React/Next web application and integrate product features."
+      },
+      "expected": {
+        "hard_filter_eligible": true,
+        "candidate_survives": true,
+        "profile_platform_contains_web": true,
+        "combined_relevance_score_minimum": "0.3000",
+        "decision_not": "below_relevance_threshold"
+      }
+    },
+    {
+      "case_id": "owner_mvp_ru_en_web_positive_b",
+      "profile": {
+        "roles": ["Full-stack разработчик"],
+        "skills": ["JavaScript", "TypeScript", "React", "Next.js"],
+        "categories": ["веб-разработка"],
+        "semantic_text": "веб-разработка | Full-stack разработчик | JavaScript | TypeScript | React | Next.js"
+      },
+      "opportunity": {
+        "category": "website development",
+        "role_title": "Full-stack product engineer",
+        "skills": ["React", "Next.js", "API integration"],
+        "task_summary": "Need full stack product integration for a Next.js customer portal."
+      },
+      "expected": {
+        "hard_filter_eligible": true,
+        "candidate_survives": true,
+        "cross_lingual_web_evidence": true,
+        "combined_relevance_score_minimum": "0.3000",
+        "decision_not": "below_relevance_threshold"
+      }
+    },
+    {
+      "case_id": "owner_mvp_opencart_seo_control",
+      "profile": {
+        "roles": ["Full-stack разработчик"],
+        "skills": ["JavaScript", "TypeScript", "React", "Next.js"],
+        "categories": ["веб-разработка"],
+        "semantic_text": "веб-разработка | Full-stack разработчик | JavaScript | TypeScript | React | Next.js"
+      },
+      "opportunity": {
+        "category": "website",
+        "role_title": "OpenCart SEO specialist",
+        "skills": ["OpenCart", "SEO"],
+        "task_summary": "Need OpenCart SEO fixes and catalog metadata cleanup."
+      },
+      "expected": {
+        "web_platform_recognition_may_be": true,
+        "react_next_fullstack_capability_must_not_be_invented": true,
+        "eligible": false
+      }
+    }
+  ]
+}

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import json
+from pathlib import Path
 import unittest
 
 from freelancer_bot.match_decisions import (
@@ -21,6 +23,76 @@ from tests.test_semantic_matching import _profile as _base_profile
 
 
 class MatchingSuccessorTest(unittest.TestCase):
+    def test_owner_mvp_canary_regression_fixture_is_sanitized_and_bounded(self):
+        fixture = json.loads(
+            Path("tests/fixtures/owner_mvp_canary_matching_regressions.v1.json")
+            .read_text(encoding="utf-8")
+        )
+
+        self.assertEqual(
+            fixture["schema_version"],
+            "owner-mvp-canary-matching-regressions.v1",
+        )
+        self.assertEqual(
+            {case["case_id"] for case in fixture["cases"]},
+            {
+                "owner_mvp_ru_en_web_positive_a",
+                "owner_mvp_ru_en_web_positive_b",
+                "owner_mvp_opencart_seo_control",
+            },
+        )
+
+    def test_owner_mvp_canary_ru_profile_survives_en_react_next_web_case(self):
+        trace = _decision_trace(
+            _opportunity(
+                role_title="Full-stack React Next.js developer",
+                skills=("React", "Next.js", "JavaScript", "TypeScript"),
+                category="web development",
+                task_summary="Build a React/Next web application and integrate product features.",
+                language=None,
+                location=None,
+            ),
+            _owner_web_profile(),
+        )
+
+        self.assertTrue(trace.hard_filter_eligible)
+        self.assertTrue(trace.eligible)
+        self.assertNotEqual(trace.decision_code, MatchDecisionCode.BELOW_RELEVANCE_THRESHOLD)
+
+    def test_owner_mvp_canary_ru_profile_survives_en_product_integration_case(self):
+        trace = _decision_trace(
+            _opportunity(
+                role_title="Full-stack product engineer",
+                skills=("React", "Next.js", "API integration"),
+                category="website development",
+                task_summary="Need full stack product integration for a Next.js customer portal.",
+                language=None,
+                location=None,
+            ),
+            _owner_web_profile(),
+        )
+
+        self.assertTrue(trace.hard_filter_eligible)
+        self.assertTrue(trace.eligible)
+        self.assertNotEqual(trace.decision_code, MatchDecisionCode.BELOW_RELEVANCE_THRESHOLD)
+
+    def test_owner_mvp_canary_opencart_seo_control_is_not_forced_eligible(self):
+        trace = _decision_trace(
+            _opportunity(
+                role_title="OpenCart SEO specialist",
+                skills=("OpenCart", "SEO"),
+                category="website",
+                task_summary="Need OpenCart SEO fixes and catalog metadata cleanup.",
+                language=None,
+                location=None,
+            ),
+            _owner_web_profile(),
+        )
+
+        self.assertTrue(trace.hard_filter_eligible)
+        self.assertFalse(trace.eligible)
+        self.assertEqual(trace.decision_code, MatchDecisionCode.BELOW_RELEVANCE_THRESHOLD)
+
     def test_weak_relevant_without_exact_target_overlap_survives_retrieval(self):
         opportunity = _opportunity(
             role_title="Webhook integration builder",
@@ -211,3 +283,16 @@ def _profile(*, preferences_languages=("English",), **overrides):
         excluded_categories=(),
     )
     return replace(_base_profile(**overrides), preferences=preferences)
+
+
+def _owner_web_profile():
+    return _profile(
+        roles=("Full-stack разработчик",),
+        skills=("JavaScript", "TypeScript", "React", "Next.js"),
+        categories=("веб-разработка",),
+        semantic_text=(
+            "веб-разработка | Full-stack разработчик | JavaScript | "
+            "TypeScript | React | Next.js"
+        ),
+        preferences_languages=None,
+    )

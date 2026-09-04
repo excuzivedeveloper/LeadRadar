@@ -63,6 +63,34 @@ EVALUATED_AT = datetime(2026, 8, 14, 18, 37, tzinfo=timezone.utc)
 
 
 class MatchDecisionTest(unittest.TestCase):
+    def test_default_threshold_stays_0300_for_ru_en_web_canary_repair(self):
+        policy = MatchDecisionPolicy()
+        opportunity = _opportunity(
+            role_title="Full-stack React Next.js developer",
+            skills=("React", "Next.js", "JavaScript", "TypeScript"),
+            category="web development",
+            task_summary="Build a React/Next web application and integrate product features.",
+        )
+        profile = _profile(
+            roles=("Full-stack разработчик",),
+            skills=("JavaScript", "TypeScript", "React", "Next.js"),
+            categories=("веб-разработка",),
+            semantic_text=(
+                "веб-разработка | Full-stack разработчик | JavaScript | "
+                "TypeScript | React | Next.js"
+            ),
+        )
+
+        trace = decide_and_rank_matches(
+            (_scoring(opportunity, (profile,)),),
+            evaluated_at=EVALUATED_AT,
+            policy=policy,
+        ).traces[0]
+
+        self.assertEqual(policy.minimum_relevance_score, Decimal("0.3000"))
+        self.assertGreaterEqual(trace.combined_relevance_score, Decimal("0.3000"))
+        self.assertEqual(trace.decision_code, MatchDecisionCode.ELIGIBLE)
+
     def test_newer_otherwise_equal_opportunity_ranks_first_per_profile(self):
         profile = _profile()
         old = _seen_at(_opportunity(), EVALUATED_AT - timedelta(days=2))
