@@ -1,8 +1,8 @@
 # LeadRadar — Active Plan
 
 **Status:** CANONICAL / ACTIVE  
-**Last verified:** 2026-08-31
-**Implementation baseline:** `d92b0446be19f391bb8f479387b27d914c081e35`
+**Last verified:** 2026-09-04
+**Implementation baseline:** `eddc972a111f75ac2c634a3a56aba61672060d36`
 
 This file defines execution order. A later capability being implemented in code
 does not mean it may be enabled before earlier gates pass.
@@ -21,6 +21,9 @@ CANONICAL_DOC_SYNC_FOR_LIVE_EVIDENCE_AND_MEMBERSHIP
 OPENROUTER_FIRST_CLASS_OPPORTUNITY_IMPLEMENTATION
 OPENROUTER_IMPLEMENTATION_SERVER_SYNC
 OPENROUTER_MINIMAX_CONFIGURATION_ONLY
+BOUNDED_ONE_SHOT_OPENROUTER_OPPORTUNITY_ANALYSIS
+PR13_RU_EN_OWNER_CANARY_REPAIR
+PR13_REPEAT_BOUNDED_OWNER_MVP_CANARY
 ```
 
 The collector membership hypothesis is now experimentally confirmed:
@@ -43,17 +46,31 @@ OPENROUTER_RUNTIME_CONFIGURED=YES
 OPENROUTER_API_KEY_CONFIGURED=YES
 OPPORTUNITY_ANALYSIS_PROVIDER=openrouter
 OPPORTUNITY_ANALYSIS_MODEL=minimax/minimax-m3:free
-PROVIDER_LIVE_CALLS=0
-LIVE_AI_ANALYSIS_VALIDATED=NO
+LIVE_AI_ANALYSIS_VALIDATED=YES
 READY_FOR_OPENROUTER_CONFIGURATION=COMPLETE
-READY_FOR_BOUNDED_AI_ANALYSIS=YES
+READY_FOR_BOUNDED_AI_ANALYSIS=COMPLETE
 PERSISTENT_RUNTIME_AUTHORIZED=NO
+PR13_REVIEWED=YES
+PR13_MERGED=YES
+PR13_REPEAT_BOUNDED_CANARY=COMPLETED
+RUNTIME_STOPPED=YES
+OUTSTANDING_JOBS=0
+FRESH_NATURAL_LEAD=1
+FRESH_SAMPLE=C++/HFT
+OA_PIPELINE=PASS
+MATCHING_PIPELINE=PASS
+PR13_RU_EN_WEB_REPAIR_RESULT=INCONCLUSIVE_NO_RELEVANT_RU_EN_WEB_SAMPLE
+USEFUL_DELIVERY_PROVEN=NO
+READY_FOR_PERSISTENT_RUNTIME=NO
+PR14_IMPLEMENTED_IN_SHADOW=YES
+PR14_PRODUCTION_MATCH_POLICY_CHANGED=NO
+PR14_LIVE_VALIDATED=NO
 ```
 
 Current next execution stage:
 
 ```text
-BOUNDED_ONE_SHOT_OPENROUTER_OPPORTUNITY_ANALYSIS
+BOUNDED_USEFUL_OWNER_DELIVERY_VALIDATION
 ```
 
 ## Step 0 — Pre-AI ingestion/shadow validation
@@ -129,7 +146,6 @@ OPENROUTER_API_KEY_CONFIGURED=YES
 OPPORTUNITY_ANALYSIS_PROVIDER=openrouter
 OPPORTUNITY_ANALYSIS_MODEL=minimax/minimax-m3:free
 AI_SECRET_REPRINTED=NO
-PROVIDER_LIVE_CALLS=0
 AI_JOB_PROCESSING_OCCURRED=NO
 READY_FOR_BOUNDED_AI_ANALYSIS=YES
 LIVE_AI_ANALYSIS_VALIDATED=NO
@@ -138,8 +154,7 @@ PERSISTENT_RUNTIME_AUTHORIZED=NO
 
 ## Step 2 — Bounded first live OpenRouter Opportunity analysis
 
-**Status: NEXT EXECUTION STAGE after the one-shot command implementation is
-merged and server-synced.**
+**Status: COMPLETE.**
 
 Use one narrowly bounded Opportunity Analysis validation with OpenRouter and
 `minimax/minimax-m3:free`.
@@ -171,6 +186,14 @@ Goals:
 Do not enable personalized delivery, discovery, catch-up or persistent runtime
 in the same first AI canary.
 
+Observed result:
+
+```text
+OA_PIPELINE=PASS
+OUTSTANDING_JOBS=0
+RUNTIME_STOPPED=YES
+```
+
 ## Step 3 — Owner SearchProfile/onboarding validation
 
 Validate the owner-facing V2 SearchProfile path with the selected onboarding AI
@@ -188,6 +211,22 @@ Do not add additional users.
 
 ## Step 4 — Bounded matching and owner-only delivery
 
+**Status: PARTIAL.**
+
+PR13 was reviewed, merged and repeat-canaried. A fresh natural C++/HFT lead
+exercised the Opportunity Analysis and matching pipelines successfully, but it
+did not provide a relevant RU/EN web sample. Therefore:
+
+```text
+PR13_REPEAT_BOUNDED_CANARY=COMPLETED
+FRESH_NATURAL_LEAD=1
+FRESH_SAMPLE=C++/HFT
+MATCHING_PIPELINE=PASS
+PR13_RU_EN_WEB_REPAIR_RESULT=INCONCLUSIVE_NO_RELEVANT_RU_EN_WEB_SAMPLE
+USEFUL_DELIVERY_PROVEN=NO
+READY_FOR_PERSISTENT_RUNTIME=NO
+```
+
 With valid live Opportunities and an active owner SearchProfile:
 
 - run deterministic matching;
@@ -197,13 +236,19 @@ With valid live Opportunities and an active owner SearchProfile:
 - verify delivery action callbacks;
 - verify no retry storm and no non-owner send.
 
-This is the first stage that should prove the intended user-facing lead-card flow
-end to end.
+This stage still must prove the intended user-facing useful lead-card flow end
+to end before persistent runtime is considered.
 
 ## Step 5 — Evaluate accumulated legacy-filter shadow evidence
 
 The legacy matcher is already live-observed in shadow, but one sample is not
 enough to justify redesign.
+
+PR14 OpportunityAnalysisV2 evidence-aware matching shadow is available for
+offline evaluation and false-positive boundary review, but it does not change
+the ordered live gates above. It is not authorization to alter production
+matching thresholds, delivery policy, provider configuration, discovery,
+catch-up or persistent runtime.
 
 Collect enough natural evidence before deciding whether to change:
 

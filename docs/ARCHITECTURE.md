@@ -2,7 +2,7 @@
 
 **Status:** CANONICAL  
 **Last verified:** 2026-08-31
-**Implementation baseline:** `d92b0446be19f391bb8f479387b27d914c081e35`
+**Implementation baseline:** `eddc972a111f75ac2c634a3a56aba61672060d36`
 
 ## Purpose
 
@@ -219,9 +219,10 @@ matching against active SearchProfiles
 personalized owner-allowlisted delivery
 ```
 
-The first four live stages through shadow telemetry have now been observed with a
-natural Telegram message. AI analysis and later stages have not yet been live-
-validated in this deployment.
+The first four live stages through shadow telemetry have been observed with a
+natural Telegram message. The bounded Opportunity Analysis path has also passed
+for a fresh natural C++/HFT sample, and matching pipeline execution passed in
+the PR13 repeat bounded canary. Useful owner delivery remains unproven.
 
 ## V2 cheap prefilter vs legacy filter
 
@@ -305,11 +306,11 @@ There is no separate `OPPORTUNITY_ANALYSIS_ENABLED` switch in the current
 implementation. `AI_REPLY_ENABLED=false` does not disable Opportunity Analysis;
 it disables reply drafting only.
 
-The pre-AI gate has passed, OpenRouter implementation is server-synced, and
-runtime OpenRouter configuration is present for the selected Opportunity
-Analysis route. No live provider call has occurred yet. The next gate is a
-bounded one-job live Opportunity Analysis canary through
-`--opportunity-analysis-job-id <UUID>`, not full `--run`.
+The pre-AI gate has passed, OpenRouter implementation is server-synced, runtime
+OpenRouter configuration is present for the selected Opportunity Analysis route,
+and the bounded one-job Opportunity Analysis canary has passed. Full `--run`
+remains inappropriate as a substitute for a narrowly scoped validation command
+when a gate requires one explicit job.
 
 With the intended canary configuration:
 
@@ -342,6 +343,38 @@ multilingual embedding model and does not add broad conversational-intent
 inference.
 
 Zero matches is a valid result.
+
+An additional OpportunityAnalysisV2 evidence-aware matching slice exists for
+offline shadow evaluation only:
+
+```text
+PR14_IMPLEMENTED_IN_SHADOW=YES
+PR14_PRODUCTION_MATCH_POLICY_CHANGED=NO
+PR14_LIVE_VALIDATED=NO
+SHADOW_WEIGHTS_EXPERIMENTAL=YES
+SHADOW_SCORE_NOT_PRODUCTION_POLICY=YES
+```
+
+The V2 shadow slice records explicit raw-span evidence separately from inferred
+capability/solution evidence. `RAW_EXPLICIT` evidence must be verified against
+the original raw message text, not merely against AI-produced
+`OpportunityAnalysis` fields. The contract keeps independent origin,
+verification, confidence and polarity axes; negated, contradicted or unknown
+evidence is not positive match evidence.
+
+For example, `VK`/`ВК`/`ВКонтакте` is an explicit platform concept, while
+`ИИ-менеджер в ВК` may support an explicit AI-assistant solution type and
+inferred chat/lead-handling capability. It must not claim OpenAI, FastAPI,
+React, Python or VK API/backend technology unless that technology is explicitly
+present in the original raw message or in authoritative structured
+SearchProfile fields. Free-form SearchProfile semantic text is only a low
+confidence hint and cannot mint authoritative derived capabilities by itself.
+Shadow matches are anti-double-counted by canonical `dimension + concept_id` and
+include a generic-signal guard so generic AI/bot/automation/web/backend language
+alone or in generic-only combinations is not treated as strong eligibility.
+
+This shadow trace does not feed current hard filters, thresholds, rank scores,
+delivery decisions or persisted match decisions.
 
 Personalized delivery is PostgreSQL-backed and protected by the owner allowlist.
 Blocked non-allowlisted personalized deliveries are terminally suppressed.

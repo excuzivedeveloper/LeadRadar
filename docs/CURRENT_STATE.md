@@ -1,13 +1,15 @@
 # LeadRadar — Current State
 
 **Status:** CANONICAL  
-**Snapshot date:** 2026-08-31
-**Implementation baseline:** `d92b0446be19f391bb8f479387b27d914c081e35`
-**Current deployed repository head:** `d92b0446be19f391bb8f479387b27d914c081e35`
+**Snapshot date:** 2026-09-04
+**Implementation baseline:** `eddc972a111f75ac2c634a3a56aba61672060d36`
+**Current deployed repository head:** `eddc972a111f75ac2c634a3a56aba61672060d36`
 
 ## Executive status
 
-LeadRadar has completed the **pre-AI live ingestion/shadow gate**.
+LeadRadar has completed the pre-AI live ingestion/shadow gate, OpenRouter
+configuration, the bounded one-shot Opportunity Analysis gate, and the PR13
+repeat bounded Owner MVP canary.
 
 Current gate status:
 
@@ -23,36 +25,51 @@ OPENROUTER_RUNTIME_CONFIGURED=YES
 OPENROUTER_API_KEY_CONFIGURED=YES
 OPPORTUNITY_ANALYSIS_PROVIDER=openrouter
 OPPORTUNITY_ANALYSIS_MODEL=minimax/minimax-m3:free
-PROVIDER_LIVE_CALLS=0
-LIVE_AI_ANALYSIS_VALIDATED=NO
+LIVE_AI_ANALYSIS_VALIDATED=YES
 READY_FOR_OPENROUTER_CONFIGURATION=COMPLETE
-READY_FOR_BOUNDED_AI_ANALYSIS=YES
+READY_FOR_BOUNDED_AI_ANALYSIS=COMPLETE
 PERSISTENT_RUNTIME_AUTHORIZED=NO
+PR14_IMPLEMENTED_IN_SHADOW=YES
+PR14_PRODUCTION_MATCH_POLICY_CHANGED=NO
+PR14_LIVE_VALIDATED=NO
+PR13_REVIEWED=YES
+PR13_MERGED=YES
+PR13_REPEAT_BOUNDED_CANARY=COMPLETED
+RUNTIME_STOPPED=YES
+OUTSTANDING_JOBS=0
+FRESH_NATURAL_LEAD=1
+FRESH_SAMPLE=C++/HFT
+OA_PIPELINE=PASS
+MATCHING_PIPELINE=PASS
+PR13_RU_EN_WEB_REPAIR_RESULT=INCONCLUSIVE_NO_RELEVANT_RU_EN_WEB_SAMPLE
+USEFUL_DELIVERY_PROVEN=NO
+READY_FOR_PERSISTENT_RUNTIME=NO
 ```
 
-The exact next execution stage after this one-shot implementation is merged and
-server-synced is:
+The exact next execution stage remains bounded owner-value validation before any
+persistent runtime decision:
 
 ```text
-BOUNDED_ONE_SHOT_OPENROUTER_OPPORTUNITY_ANALYSIS
+BOUNDED_USEFUL_OWNER_DELIVERY_VALIDATION
 ```
 
-OpenRouter implementation and runtime configuration are present, but no live
-provider call has occurred. Discovery, catch-up, legacy delivery and persistent
-runtime remain disabled.
+OpenRouter implementation and runtime configuration are present, and the first
+bounded Opportunity Analysis path has passed. Discovery, catch-up, legacy
+delivery and persistent runtime remain disabled. A useful owner delivery is not
+yet proven.
 
 ## Repository and migration state
 
 Application implementation baseline:
 
 ```text
-d92b0446be19f391bb8f479387b27d914c081e35
+eddc972a111f75ac2c634a3a56aba61672060d36
 ```
 
 Current server repository head:
 
 ```text
-d92b0446be19f391bb8f479387b27d914c081e35
+eddc972a111f75ac2c634a3a56aba61672060d36
 ```
 
 Runtime/tooling baseline:
@@ -80,6 +97,7 @@ Relevant merged adaptation milestones:
   outbound delivery defense in depth.
 - PR #4 — canonical self-contained documentation for new agents.
 - PR #6 — first-class OpenRouter Opportunity Analysis provider support.
+- PR #13 — RU/EN owner-canary matching repair, reviewed and merged.
 
 PR #6 was independently forensically reviewed with no findings, merged, and
 server-synced to the same head. Offline validation passed:
@@ -269,10 +287,9 @@ Current runtime state:
 OPENROUTER_IMPLEMENTATION_READY=YES
 OPENROUTER_RUNTIME_CONFIGURED=YES
 OPENROUTER_API_KEY_CONFIGURED=YES
-PROVIDER_LIVE_CALLS=0
-LIVE_AI_ANALYSIS_VALIDATED=NO
+LIVE_AI_ANALYSIS_VALIDATED=YES
 READY_FOR_OPENROUTER_CONFIGURATION=COMPLETE
-READY_FOR_BOUNDED_AI_ANALYSIS=YES
+READY_FOR_BOUNDED_AI_ANALYSIS=COMPLETE
 ```
 
 Important runtime invariant: the current implementation has no separate
@@ -282,8 +299,7 @@ construct the analyzer, activate the `opportunity.analysis.v1` handler, claim
 existing pending analysis jobs and make provider calls. `AI_REPLY_ENABLED=false`
 does not disable Opportunity Analysis; it gates reply drafting only.
 
-This branch adds the production-safe operator entrypoint for the first bounded
-AI canary:
+The production-safe operator entrypoint for the first bounded AI canary is:
 
 ```bash
 python -m freelancer_bot --opportunity-analysis-job-id <UUID>
@@ -395,6 +411,28 @@ dfbf1d19b29963c43e01eb9512e6817343a2274182be4c0d562466f0898cec5e
 No additional full-runtime canary was required for the rollout because the pilot
 already proved membership -> live update -> raw -> prefilter -> shadow.
 
+### PR13 repeat bounded Owner MVP canary
+
+PR13 was reviewed, merged and server-synced to production head
+`eddc972a111f75ac2c634a3a56aba61672060d36`. The repeat bounded canary is
+complete and the runtime is stopped.
+
+Observed:
+
+```text
+OUTSTANDING_JOBS=0
+FRESH_NATURAL_LEAD=1
+FRESH_SAMPLE=C++/HFT
+OA_PIPELINE=PASS
+MATCHING_PIPELINE=PASS
+PR13_RU_EN_WEB_REPAIR_RESULT=INCONCLUSIVE_NO_RELEVANT_RU_EN_WEB_SAMPLE
+USEFUL_DELIVERY_PROVEN=NO
+READY_FOR_PERSISTENT_RUNTIME=NO
+```
+
+The PR13 RU/EN web repair was not invalidated; the canary did not contain a
+relevant fresh RU/EN web sample.
+
 ## Implemented vs currently live-validated
 
 | Capability | Implemented | Current deployment/live evidence |
@@ -408,11 +446,12 @@ already proved membership -> live update -> raw -> prefilter -> shadow.
 | Cheap V2 prefilter | yes | **live-validated** |
 | Legacy-filter shadow telemetry | yes | **live-validated** |
 | OpenRouter Opportunity provider | yes | offline tests and server sync passed; runtime configured |
-| OpenRouter runtime configuration | n/a | **configured; zero live calls** |
-| Opportunity AI analysis | yes | no live provider call/model response validated |
+| OpenRouter runtime configuration | n/a | configured; bounded Opportunity Analysis canary completed |
+| Opportunity AI analysis | yes | bounded live path passed for one fresh natural lead sample |
+| OpportunityAnalysisV2 evidence-aware matching shadow | yes; deterministic explicit-evidence contract and SearchProfile-derived capability/platform surface | offline tests only; `PR14_IMPLEMENTED_IN_SHADOW=YES`, `PR14_PRODUCTION_MATCH_POLICY_CHANGED=NO`, `PR14_LIVE_VALIDATED=NO` |
 | Canonical Opportunities/dedup | yes | not live-validated with real AI output |
 | SearchProfiles/onboarding | yes | owner UI exists; AI onboarding not enabled |
-| Matching | yes; includes local high-precision RU/EN technical concept bridge | production runtime live-validated; latest Owner MVP canary exposed RU↔EN false negatives; PR13 repair still requires independent review and repeat bounded canary |
+| Matching | yes; includes local high-precision RU/EN technical concept bridge | PR13 reviewed/merged; repeat bounded canary completed with C++/HFT sample; RU/EN web repair result inconclusive because no relevant fresh RU/EN web sample appeared |
 | Personalized delivery | yes | owner-only boundary validated; no live lead delivery yet |
 | Owner-only bot access | yes | owner positive path live-validated |
 | Source discovery/audit | yes | disabled |
@@ -426,14 +465,13 @@ continuing. Historical values are invalid and must not be reused.
 
 ## What remains
 
-The ingestion/shadow gate is complete. Remaining ordered gates are:
+The ingestion/shadow, OpenRouter one-shot Opportunity Analysis and PR13 repeat
+bounded Owner MVP canary gates are complete. Remaining ordered gates are:
 
-1. merge and server-sync the one-shot Opportunity Analysis command;
-2. bounded one-job live OpenRouter Opportunity analysis;
-3. owner SearchProfile/onboarding validation for the chosen AI route;
-4. bounded matching + personalized delivery to the owner;
-5. later decision on legacy-filter tuning from accumulated shadow evidence;
-6. later source discovery/audit rollout if desired;
-7. persistent runtime only after bounded end-to-end validation.
+1. prove useful owner delivery from a relevant live Opportunity;
+2. keep PR14 evidence-aware matching as offline shadow only until reviewed;
+3. later decision on legacy-filter/evidence tuning from accumulated shadow evidence;
+4. later source discovery/audit rollout if desired;
+5. persistent runtime only after bounded end-to-end validation.
 
 The authoritative order is in `docs/ACTIVE_PLAN.md`.
