@@ -111,11 +111,22 @@ PostgreSQL is V2 source of truth for collector/source state, raw messages,
 prefilter/shadow evidence, durable jobs, AI telemetry/cache, Opportunities,
 SearchProfiles, matching, deliveries, feedback and entitlement state.
 
-Alembic is the V2 schema path. Current deployment revision:
+Alembic is the V2 schema path. The current production deployment remains at:
 
 ```text
-20260825_0037
+PRODUCTION_ALEMBIC_CURRENT=20260902_0038
 ```
+
+PR #15 introduces the next repository migration head:
+
+```text
+PR15_REPOSITORY_ALEMBIC_HEAD=20260904_0039
+```
+
+PR #15 is not yet merged or deployed. Before any bounded runtime shadow canary,
+production must first sync the reviewed PR #15 code, apply Alembic
+`20260904_0039`, and verify
+`ALEMBIC_CURRENT=ALEMBIC_HEADS=20260904_0039`.
 
 SQLite remains legacy compatibility only. `LEGACY_DELIVERY_ENABLED=false` in the
 current deployment.
