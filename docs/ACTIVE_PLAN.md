@@ -48,6 +48,9 @@ LIVE_AI_ANALYSIS_VALIDATED=NO
 READY_FOR_OPENROUTER_CONFIGURATION=COMPLETE
 READY_FOR_BOUNDED_AI_ANALYSIS=YES
 PERSISTENT_RUNTIME_AUTHORIZED=NO
+OPPORTUNITY_EVIDENCE_V2_IMPLEMENTED_IN_SHADOW=YES
+PRODUCTION_MATCH_POLICY_CHANGED=NO
+OPPORTUNITY_EVIDENCE_V2_LIVE_VALIDATED=NO
 ```
 
 Current next execution stage:
@@ -204,6 +207,12 @@ end to end.
 
 The legacy matcher is already live-observed in shadow, but one sample is not
 enough to justify redesign.
+
+OpportunityAnalysisV2 evidence-aware matching shadow is available for offline
+evaluation and false-positive boundary review, but it does not change the
+ordered live gates above. It is not authorization to alter production matching
+thresholds, delivery policy, provider configuration, discovery, catch-up or
+persistent runtime.
 
 Collect enough natural evidence before deciding whether to change:
 

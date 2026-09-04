@@ -89,7 +89,11 @@ validation, not ingestion.
     delivery is disabled.
 16. **P2 — Synthetic fixtures are not production-quality evidence.** Tests are
     necessary but do not substitute for bounded live validation.
-17. **P2 — Persistent runtime is intentionally absent.** No LeadRadar daemon is
+17. **P2 — OpportunityAnalysisV2 evidence-aware matching is shadow-only.**
+    `IMPLEMENTED_IN_SHADOW=YES`, `PRODUCTION_MATCH_POLICY_CHANGED=NO` and
+    `LIVE_VALIDATED=NO`; the trace is an offline evaluation surface, not current
+    delivery policy.
+18. **P2 — Persistent runtime is intentionally absent.** No LeadRadar daemon is
     authorized, so unattended continuity/restart behavior is not yet proven.
 
 ## What the membership investigation changed

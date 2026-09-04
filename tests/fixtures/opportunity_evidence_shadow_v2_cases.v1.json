@@ -1,0 +1,65 @@
+{
+  "schema_version": "opportunity-evidence-shadow-v2-cases.v1",
+  "cases": [
+    {
+      "case_id": "vk_ai_manager_explicit_platform_no_tech_hallucination",
+      "opportunity": {
+        "category": "ai assistant",
+        "role_title": "ИИ-менеджер в ВК",
+        "skills": [],
+        "task_summary": "Нужен ИИ-менеджер в ВК для обработки заявок из сообщений."
+      },
+      "profile": {
+        "roles": ["AI automation engineer"],
+        "skills": ["OpenAI-compatible API"],
+        "categories": ["VK chat automation"],
+        "semantic_text": "AI assistant and VK chat automation for lead handling"
+      },
+      "expected": {
+        "platform": "vk",
+        "solution_type": "ai_assistant",
+        "must_not_infer_technologies": ["openai_api", "fastapi", "react", "python"],
+        "shadow_decision": "strong_eligible"
+      }
+    },
+    {
+      "case_id": "generic_ai_bot_alone_is_guarded",
+      "opportunity": {
+        "category": "bot",
+        "role_title": "AI bot",
+        "skills": [],
+        "task_summary": "Need an AI bot."
+      },
+      "profile": {
+        "roles": ["Bot developer"],
+        "skills": [],
+        "categories": ["automation"],
+        "semantic_text": "bot automation"
+      },
+      "expected": {
+        "generic_signal_blocked": true,
+        "shadow_decision": "weak_or_generic"
+      }
+    },
+    {
+      "case_id": "react_next_profile_capability_derives_once",
+      "opportunity": {
+        "category": "web dashboard",
+        "role_title": "React Next.js developer",
+        "skills": ["React", "Next.js"],
+        "task_summary": "Build a frontend dashboard in React and Next.js."
+      },
+      "profile": {
+        "roles": ["Frontend engineer"],
+        "skills": ["React", "Next.js"],
+        "categories": ["web development"],
+        "semantic_text": "React Next.js web apps and dashboards"
+      },
+      "expected": {
+        "capability": "react_next_web",
+        "deduped_match_count_max": 4,
+        "shadow_decision": "strong_eligible"
+      }
+    }
+  ]
+}

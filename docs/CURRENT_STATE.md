@@ -28,6 +28,9 @@ LIVE_AI_ANALYSIS_VALIDATED=NO
 READY_FOR_OPENROUTER_CONFIGURATION=COMPLETE
 READY_FOR_BOUNDED_AI_ANALYSIS=YES
 PERSISTENT_RUNTIME_AUTHORIZED=NO
+OPPORTUNITY_EVIDENCE_V2_IMPLEMENTED_IN_SHADOW=YES
+PRODUCTION_MATCH_POLICY_CHANGED=NO
+OPPORTUNITY_EVIDENCE_V2_LIVE_VALIDATED=NO
 ```
 
 The exact next execution stage after this one-shot implementation is merged and
@@ -410,6 +413,7 @@ already proved membership -> live update -> raw -> prefilter -> shadow.
 | OpenRouter Opportunity provider | yes | offline tests and server sync passed; runtime configured |
 | OpenRouter runtime configuration | n/a | **configured; zero live calls** |
 | Opportunity AI analysis | yes | no live provider call/model response validated |
+| OpportunityAnalysisV2 evidence-aware matching shadow | yes; deterministic explicit-evidence contract and SearchProfile-derived capability/platform surface | offline tests only; `IMPLEMENTED_IN_SHADOW=YES`, `PRODUCTION_MATCH_POLICY_CHANGED=NO`, `LIVE_VALIDATED=NO` |
 | Canonical Opportunities/dedup | yes | not live-validated with real AI output |
 | SearchProfiles/onboarding | yes | owner UI exists; AI onboarding not enabled |
 | Matching | yes; includes local high-precision RU/EN technical concept bridge | production runtime live-validated; latest Owner MVP canary exposed RU↔EN false negatives; PR13 repair still requires independent review and repeat bounded canary |

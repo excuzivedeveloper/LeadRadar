@@ -343,6 +343,29 @@ inference.
 
 Zero matches is a valid result.
 
+An additional OpportunityAnalysisV2 evidence-aware matching slice exists for
+offline shadow evaluation only:
+
+```text
+OPPORTUNITY_EVIDENCE_V2_IMPLEMENTED_IN_SHADOW=YES
+PRODUCTION_MATCH_POLICY_CHANGED=NO
+OPPORTUNITY_EVIDENCE_V2_LIVE_VALIDATED=NO
+```
+
+The V2 shadow slice records explicit raw-span evidence separately from inferred
+capability/solution evidence. For example, `VK`/`ВК`/`ВКонтакте` is an explicit
+platform concept, while `ИИ-менеджер в ВК` may support an explicit AI-assistant
+solution type and inferred chat/lead-handling capability. It must not claim
+OpenAI, FastAPI, React, Python or VK API/backend technology unless that
+technology is explicitly present in the supplied Opportunity/SearchProfile
+text. Shadow matches are anti-double-counted by canonical
+`dimension + concept_id` and include a generic-signal guard so generic
+AI/bot/automation/web/backend language alone is not treated as strong
+eligibility.
+
+This shadow trace does not feed current hard filters, thresholds, rank scores,
+delivery decisions or persisted match decisions.
+
 Personalized delivery is PostgreSQL-backed and protected by the owner allowlist.
 Blocked non-allowlisted personalized deliveries are terminally suppressed.
 
