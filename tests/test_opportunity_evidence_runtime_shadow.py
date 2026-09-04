@@ -421,7 +421,6 @@ class OpportunityEvidenceRuntimeShadowPostgresTest(unittest.IsolatedAsyncioTestC
             external_user_id=external_user_id,
             profile_id=confirmed.profile.id,
             expected_revision=confirmed.profile.revision,
-            start_trial=False,
         )
         return activated.profile.profile
 
