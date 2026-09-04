@@ -9,9 +9,13 @@ from .config import RuntimeConfig
 from .delivery import DeliveryScheduleReport, PersonalizedDeliveryService
 from .match_decisions import match_decision_policy_from_config
 from .matching_service import CandidateMatchingService, MatchGenerationOutcome
+from .metrics import MetricNames, MetricsSink, NoOpMetrics
 from .observability import log_event
 from .persistence.database import Database
 from .persistence.jobs import DurableJobRepository, JobClaim
+from .persistence.opportunity_evidence_shadow import (
+    OpportunityEvidenceShadowRecorder,
+)
 
 
 MATCHING_DELIVERY_JOB_TYPE = "opportunity.matching_delivery.v1"
@@ -66,21 +70,34 @@ class MatchingDeliveryJobProcessor:
         *,
         matching: CandidateMatchingService | None = None,
         deliveries: PersonalizedDeliveryService | None = None,
+        evidence_shadow_recorder: OpportunityEvidenceShadowRecorder | None = None,
         jobs: DurableJobRepository | None = None,
+        metrics: MetricsSink | None = None,
         logger: logging.Logger | None = None,
     ) -> None:
         self._database = database
         self._config = config
+        self._metrics = metrics or NoOpMetrics()
         self._jobs = jobs or DurableJobRepository()
         self._matching = matching or CandidateMatchingService(
             database,
+            metrics=self._metrics,
             logger=logger,
         )
         self._deliveries = deliveries or PersonalizedDeliveryService(
             database,
+            metrics=self._metrics,
             logger=logger,
         )
         self._logger = logger or logging.getLogger(__name__)
+        self._evidence_shadow_recorder = (
+            evidence_shadow_recorder
+            or OpportunityEvidenceShadowRecorder(
+                database,
+                metrics=self._metrics,
+                logger=self._logger,
+            )
+        )
 
     async def __call__(self, claim: JobClaim) -> MatchingDeliveryOutcome:
         return await self.process(claim)
@@ -116,6 +133,25 @@ class MatchingDeliveryJobProcessor:
             matching=generated,
             delivery=scheduled,
         )
+        try:
+            shadow_report = await self._evidence_shadow_recorder.record_match_run(
+                generated.persistence.traces,
+            )
+        except Exception as error:
+            self._metrics.increment(
+                MetricNames.MATCHING_EVIDENCE_SHADOW_FAILURES,
+                tags={"error_type": type(error).__name__},
+            )
+            log_event(
+                self._logger,
+                logging.WARNING,
+                "matching.opportunity_evidence_shadow_failed",
+                match_run_id=generated.persistence.run.id,
+                opportunity_id=opportunity_id,
+                shadow_version="opportunity-evidence-shadow.v2",
+                error_type=type(error).__name__,
+            )
+            shadow_report = None
         log_event(
             self._logger,
             logging.INFO,
@@ -130,6 +166,18 @@ class MatchingDeliveryJobProcessor:
             delivery_failure_count=len(scheduled.failures),
             user_specific_llm_calls=generated.report.user_specific_llm_calls,
             opportunity_analyzer_calls=generated.report.opportunity_analyzer_calls,
+            evidence_shadow_attempted=(
+                None if shadow_report is None else shadow_report.attempted
+            ),
+            evidence_shadow_created=(
+                None if shadow_report is None else shadow_report.created
+            ),
+            evidence_shadow_reused=(
+                None if shadow_report is None else shadow_report.reused
+            ),
+            evidence_shadow_failed=(
+                None if shadow_report is None else shadow_report.failed
+            ),
         )
         return result
 

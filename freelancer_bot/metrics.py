@@ -39,6 +39,11 @@ class MetricNames:
     MATCHING_TRACES_REUSED = "matching.traces_reused"
     MATCHING_USER_SPECIFIC_LLM_CALLS = "matching.user_specific_llm_calls"
     MATCHING_OPPORTUNITY_ANALYZER_CALLS = "matching.opportunity_analyzer_calls"
+    MATCHING_EVIDENCE_SHADOW_ATTEMPTED = "matching.evidence_shadow.attempted"
+    MATCHING_EVIDENCE_SHADOW_CREATED = "matching.evidence_shadow.created"
+    MATCHING_EVIDENCE_SHADOW_REUSED = "matching.evidence_shadow.reused"
+    MATCHING_EVIDENCE_SHADOW_FAILURES = "matching.evidence_shadow.failures"
+    MATCHING_EVIDENCE_SHADOW_DECISIONS = "matching.evidence_shadow.decisions"
 
     DELIVERIES_SCHEDULED = "delivery.scheduled"
     DELIVERIES_REUSED = "delivery.reused"

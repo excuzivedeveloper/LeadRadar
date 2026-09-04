@@ -2,8 +2,8 @@
 
 **Status:** CANONICAL  
 **Snapshot date:** 2026-09-04
-**Implementation baseline:** `eddc972a111f75ac2c634a3a56aba61672060d36`
-**Current deployed repository head:** `eddc972a111f75ac2c634a3a56aba61672060d36`
+**Implementation baseline:** `359dc17fbf4632e84b0a74f01ac201a426cf4556`
+**Current deployed repository head:** `359dc17fbf4632e84b0a74f01ac201a426cf4556`
 
 ## Executive status
 
@@ -32,6 +32,12 @@ PERSISTENT_RUNTIME_AUTHORIZED=NO
 PR14_IMPLEMENTED_IN_SHADOW=YES
 PR14_PRODUCTION_MATCH_POLICY_CHANGED=NO
 PR14_LIVE_VALIDATED=NO
+PR14_EVIDENCE_RUNTIME_INSTRUMENTATION_IMPLEMENTED=YES
+SHADOW_RUNTIME_WIRED=YES
+SHADOW_DURABLE_PERSISTENCE=YES
+SHADOW_LIVE_VALIDATED=NO
+PRODUCTION_MATCH_POLICY_CHANGED=NO
+DELIVERY_POLICY_CHANGED=NO
 PR13_REVIEWED=YES
 PR13_MERGED=YES
 PR13_REPEAT_BOUNDED_CANARY=COMPLETED
@@ -46,11 +52,11 @@ USEFUL_DELIVERY_PROVEN=NO
 READY_FOR_PERSISTENT_RUNTIME=NO
 ```
 
-The exact next execution stage remains bounded owner-value validation before any
-persistent runtime decision:
+The exact next execution stage after review/merge/production sync is bounded
+runtime shadow observation before any persistent runtime decision:
 
 ```text
-BOUNDED_USEFUL_OWNER_DELIVERY_VALIDATION
+BOUNDED_RUNTIME_SHADOW_CANARY
 ```
 
 OpenRouter implementation and runtime configuration are present, and the first
@@ -60,16 +66,16 @@ yet proven.
 
 ## Repository and migration state
 
-Application implementation baseline:
+Production implementation baseline:
 
 ```text
-eddc972a111f75ac2c634a3a56aba61672060d36
+359dc17fbf4632e84b0a74f01ac201a426cf4556
 ```
 
 Current server repository head:
 
 ```text
-eddc972a111f75ac2c634a3a56aba61672060d36
+359dc17fbf4632e84b0a74f01ac201a426cf4556
 ```
 
 Runtime/tooling baseline:
@@ -78,7 +84,8 @@ Runtime/tooling baseline:
 Python=3.14.7
 uv=0.12.2
 PostgreSQL=18.x
-Alembic head=20260825_0037
+Production Alembic current=20260902_0038
+Repository Alembic head after PR15=20260904_0039
 ```
 
 The current migration set includes:
@@ -86,6 +93,8 @@ The current migration set includes:
 ```text
 message_prefilter_shadow_evaluations
 schema=legacy-filter-shadow.v1
+opportunity_evidence_shadow_traces
+schema=opportunity_evidence_shadow_trace.v1
 ```
 
 Relevant merged adaptation milestones:
@@ -448,7 +457,7 @@ relevant fresh RU/EN web sample.
 | OpenRouter Opportunity provider | yes | offline tests and server sync passed; runtime configured |
 | OpenRouter runtime configuration | n/a | configured; bounded Opportunity Analysis canary completed |
 | Opportunity AI analysis | yes | bounded live path passed for one fresh natural lead sample |
-| OpportunityAnalysisV2 evidence-aware matching shadow | yes; deterministic explicit-evidence contract and SearchProfile-derived capability/platform surface | offline tests only; `PR14_IMPLEMENTED_IN_SHADOW=YES`, `PR14_PRODUCTION_MATCH_POLICY_CHANGED=NO`, `PR14_LIVE_VALIDATED=NO` |
+| OpportunityAnalysisV2 evidence-aware matching shadow | yes; deterministic explicit-evidence contract and SearchProfile-derived capability/platform surface | wired into fresh matching runtime in shadow mode with separate durable persistence; `PR14_EVIDENCE_RUNTIME_INSTRUMENTATION_IMPLEMENTED=YES`, `SHADOW_RUNTIME_WIRED=YES`, `SHADOW_DURABLE_PERSISTENCE=YES`, `PRODUCTION_MATCH_POLICY_CHANGED=NO`, `DELIVERY_POLICY_CHANGED=NO`, `SHADOW_LIVE_VALIDATED=NO` |
 | Canonical Opportunities/dedup | yes | not live-validated with real AI output |
 | SearchProfiles/onboarding | yes | owner UI exists; AI onboarding not enabled |
 | Matching | yes; includes local high-precision RU/EN technical concept bridge | PR13 reviewed/merged; repeat bounded canary completed with C++/HFT sample; RU/EN web repair result inconclusive because no relevant fresh RU/EN web sample appeared |
@@ -466,10 +475,13 @@ continuing. Historical values are invalid and must not be reused.
 ## What remains
 
 The ingestion/shadow, OpenRouter one-shot Opportunity Analysis and PR13 repeat
-bounded Owner MVP canary gates are complete. Remaining ordered gates are:
+bounded Owner MVP canary gates are complete. PR15 adds runtime evidence shadow
+instrumentation but does not validate it on live traffic. Remaining ordered
+gates are:
 
-1. prove useful owner delivery from a relevant live Opportunity;
-2. keep PR14 evidence-aware matching as offline shadow only until reviewed;
+1. run a bounded runtime shadow canary after independent review, merge and
+   production sync;
+2. prove useful owner delivery from a relevant live Opportunity;
 3. later decision on legacy-filter/evidence tuning from accumulated shadow evidence;
 4. later source discovery/audit rollout if desired;
 5. persistent runtime only after bounded end-to-end validation.

@@ -2954,6 +2954,114 @@ sa.Index(
     match_traces.c.evaluated_at,
 )
 
+opportunity_evidence_shadow_traces = sa.Table(
+    "opportunity_evidence_shadow_traces",
+    metadata,
+    sa.Column("id", UUID(as_uuid=True), primary_key=True),
+    sa.Column("schema_version", sa.String(64), nullable=False),
+    sa.Column("shadow_version", sa.String(64), nullable=False),
+    sa.Column("ontology_version", sa.String(64), nullable=False),
+    sa.Column(
+        "match_trace_id",
+        UUID(as_uuid=True),
+        sa.ForeignKey("match_traces.id", ondelete="RESTRICT"),
+        nullable=False,
+    ),
+    sa.Column(
+        "match_run_id",
+        UUID(as_uuid=True),
+        sa.ForeignKey("match_evaluation_runs.id", ondelete="RESTRICT"),
+        nullable=False,
+    ),
+    sa.Column(
+        "opportunity_id",
+        UUID(as_uuid=True),
+        sa.ForeignKey("opportunities.id", ondelete="RESTRICT"),
+        nullable=False,
+    ),
+    sa.Column(
+        "search_profile_id",
+        UUID(as_uuid=True),
+        sa.ForeignKey("search_profiles.id", ondelete="RESTRICT"),
+        nullable=False,
+    ),
+    sa.Column("profile_revision", sa.Integer(), nullable=False),
+    sa.Column(
+        "raw_message_id",
+        UUID(as_uuid=True),
+        sa.ForeignKey("raw_messages.id", ondelete="RESTRICT"),
+        nullable=False,
+    ),
+    sa.Column("raw_source_policy_version", sa.String(64), nullable=False),
+    sa.Column("raw_content_sha256", sa.String(64), nullable=False),
+    sa.Column("current_decision_code", sa.String(40), nullable=False),
+    sa.Column("current_eligible", sa.Boolean(), nullable=False),
+    sa.Column("current_combined_relevance_score", sa.Numeric(6, 5)),
+    sa.Column("current_final_rank_score", sa.Numeric(6, 5)),
+    sa.Column("shadow_decision", sa.String(40), nullable=False),
+    sa.Column("shadow_score", sa.Numeric(6, 5), nullable=False),
+    sa.Column("generic_signal_blocked", sa.Boolean(), nullable=False),
+    sa.Column("shadow_payload", JSONB(), nullable=False),
+    sa.Column("payload_sha256", sa.String(64), nullable=False),
+    sa.Column("evaluated_at", sa.DateTime(timezone=True), nullable=False),
+    sa.Column(
+        "created_at",
+        sa.DateTime(timezone=True),
+        nullable=False,
+        server_default=sa.func.now(),
+    ),
+    sa.CheckConstraint(
+        "schema_version ~ '^[a-z0-9][a-z0-9._-]{0,63}$' "
+        "AND shadow_version ~ '^[a-z0-9][a-z0-9._-]{0,63}$' "
+        "AND ontology_version ~ '^[a-z0-9][a-z0-9._-]{0,63}$' "
+        "AND raw_source_policy_version ~ '^[a-z0-9][a-z0-9._-]{0,63}$'",
+        name="evidence_shadow_versions_valid",
+    ),
+    sa.CheckConstraint("profile_revision >= 1", name="evidence_shadow_revision_valid"),
+    sa.CheckConstraint(
+        "raw_content_sha256 ~ '^[0-9a-f]{64}$' "
+        "AND payload_sha256 ~ '^[0-9a-f]{64}$'",
+        name="evidence_shadow_hashes_valid",
+    ),
+    sa.CheckConstraint(
+        "current_decision_code IN ('eligible', 'hard_rejected', "
+        "'freshness_expired', 'below_relevance_threshold', "
+        "'below_rank_score_threshold')",
+        name="evidence_shadow_current_decision_valid",
+    ),
+    sa.CheckConstraint(
+        "shadow_decision IN ('strong_eligible', 'weak_or_generic', "
+        "'no_evidence_match')",
+        name="evidence_shadow_decision_valid",
+    ),
+    sa.CheckConstraint(
+        "shadow_score BETWEEN 0 AND 1",
+        name="evidence_shadow_score_valid",
+    ),
+    sa.CheckConstraint(
+        "jsonb_typeof(shadow_payload) = 'object'",
+        name="evidence_shadow_payload_object",
+    ),
+    sa.UniqueConstraint(
+        "match_trace_id",
+        "shadow_version",
+        name="uq_opportunity_evidence_shadow_traces_trace_version",
+    ),
+)
+
+sa.Index(
+    "ix_opportunity_evidence_shadow_traces_match_run",
+    opportunity_evidence_shadow_traces.c.match_run_id,
+    opportunity_evidence_shadow_traces.c.created_at,
+    opportunity_evidence_shadow_traces.c.id,
+)
+sa.Index(
+    "ix_opportunity_evidence_shadow_traces_opportunity",
+    opportunity_evidence_shadow_traces.c.opportunity_id,
+    opportunity_evidence_shadow_traces.c.search_profile_id,
+    opportunity_evidence_shadow_traces.c.created_at,
+)
+
 personalized_deliveries = sa.Table(
     "personalized_deliveries",
     metadata,

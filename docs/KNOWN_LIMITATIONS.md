@@ -2,7 +2,7 @@
 
 **Status:** CANONICAL  
 **Last verified:** 2026-09-04
-**Implementation baseline:** `eddc972a111f75ac2c634a3a56aba61672060d36`
+**Implementation baseline:** `359dc17fbf4632e84b0a74f01ac201a426cf4556`
 
 This document distinguishes code that exists from behavior that has actually
 been validated in the current deployment.
@@ -48,6 +48,12 @@ MATCHING_PIPELINE=PASS
 PR13_RU_EN_WEB_REPAIR_RESULT=INCONCLUSIVE_NO_RELEVANT_RU_EN_WEB_SAMPLE
 USEFUL_DELIVERY_PROVEN=NO
 READY_FOR_PERSISTENT_RUNTIME=NO
+PR14_EVIDENCE_RUNTIME_INSTRUMENTATION_IMPLEMENTED=YES
+SHADOW_RUNTIME_WIRED=YES
+SHADOW_DURABLE_PERSISTENCE=YES
+SHADOW_LIVE_VALIDATED=NO
+PRODUCTION_MATCH_POLICY_CHANGED=NO
+DELIVERY_POLICY_CHANGED=NO
 ```
 
 The next limitation/gate is useful owner delivery from relevant live
@@ -103,10 +109,12 @@ Opportunity evidence, not ingestion or first-provider configuration.
     delivery is disabled.
 16. **P2 — Synthetic fixtures are not production-quality evidence.** Tests are
     necessary but do not substitute for bounded live validation.
-17. **P2 — PR14 OpportunityAnalysisV2 evidence-aware matching is shadow-only.**
-    `PR14_IMPLEMENTED_IN_SHADOW=YES`,
-    `PR14_PRODUCTION_MATCH_POLICY_CHANGED=NO` and `PR14_LIVE_VALIDATED=NO`; the
-    trace is an offline evaluation surface, not current delivery policy.
+17. **P2 — PR14/PR15 OpportunityAnalysisV2 evidence-aware matching is runtime
+    shadow instrumentation only.** `PR14_EVIDENCE_RUNTIME_INSTRUMENTATION_IMPLEMENTED=YES`,
+    `SHADOW_RUNTIME_WIRED=YES`, `SHADOW_DURABLE_PERSISTENCE=YES`,
+    `PRODUCTION_MATCH_POLICY_CHANGED=NO`, `DELIVERY_POLICY_CHANGED=NO` and
+    `SHADOW_LIVE_VALIDATED=NO`; the trace is an observational evidence surface,
+    not current matching or delivery policy.
 18. **P2 — Persistent runtime is intentionally absent.** No LeadRadar daemon is
     authorized, so unattended continuity/restart behavior is not yet proven.
 
