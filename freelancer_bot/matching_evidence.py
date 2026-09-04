@@ -6,12 +6,13 @@ import re
 import unicodedata
 
 from .lexical_matching import lexical_concepts
+from .matching_concepts import canonical_matching_concepts
 from .opportunity_analysis import OpportunityAnalysis
 from .persistence.search_profiles import SearchProfileRecord
 
 
 MATCHING_EVIDENCE_SCHEMA_VERSION = "matching-evidence.v1"
-MATCHING_EVIDENCE_ONTOLOGY_VERSION = "matching-evidence-ontology.v1"
+MATCHING_EVIDENCE_ONTOLOGY_VERSION = "matching-evidence-ontology.v2"
 
 
 class EvidenceMatch(str, Enum):
@@ -43,6 +44,12 @@ _PATTERNS: dict[str, tuple[str, ...]] = {
     "telegram": ("telegram", "телеграм", "тг", "бот telegram", "telegram bot"),
     "whatsapp": ("whatsapp", "ватсап", "wa bot"),
     "web": (
+        "web",
+        "веб",
+        "web development",
+        "website development",
+        "веб разработка",
+        "веб-разработка",
         "website",
         "web site",
         "webapp",
@@ -74,6 +81,15 @@ _PATTERNS: dict[str, tuple[str, ...]] = {
     "docker": ("docker",),
     "kotlin": ("kotlin",),
     "openai_api": ("openai api", "chatgpt api", "llm api", "gpt api"),
+    "frontend": ("frontend", "front-end", "front end", "фронтенд", "фронтэнд"),
+    "backend": ("backend", "back-end", "back end", "бекенд", "бэкенд"),
+    "fullstack": (
+        "fullstack",
+        "full-stack",
+        "full stack",
+        "full-stack разработчик",
+        "fullstack developer",
+    ),
 }
 
 _CAPABILITY_RULES: dict[str, tuple[str, ...]] = {
@@ -337,7 +353,7 @@ def _concepts_for_rules(
     rules: dict[str, tuple[str, ...]],
 ) -> frozenset[str]:
     normalized = _normalize(text)
-    words = lexical_concepts(normalized)
+    words = lexical_concepts(normalized) | canonical_matching_concepts(normalized)
     found: set[str] = set()
     for concept, patterns in rules.items():
         if any(_pattern_matches(normalized, words, pattern) for pattern in patterns):

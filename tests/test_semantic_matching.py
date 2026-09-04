@@ -40,6 +40,18 @@ NOW = datetime(2026, 8, 14, 16, 0, tzinfo=timezone.utc)
 
 
 class SemanticMatchingTest(unittest.TestCase):
+    def test_ru_en_web_profile_and_opportunity_share_canonical_hash_features(self):
+        provider = DeterministicHashEmbeddingProvider()
+        ru_profile = "веб-разработка | Full-stack разработчик | React | Next.js"
+        en_opportunity = "web development | full stack developer | React | Next.js"
+
+        ru = provider.embed(ru_profile)
+        en = provider.embed(en_opportunity)
+
+        self.assertEqual(ru.model, LOCAL_EMBEDDING_MODEL)
+        self.assertEqual(ru.model_version, LOCAL_EMBEDDING_MODEL_VERSION)
+        self.assertGreater(_cosine(ru.vector, en.vector), Decimal("0.3000"))
+
     def test_compound_terms_and_technical_aliases_keep_local_overlap(self):
         provider = DeterministicHashEmbeddingProvider()
 
@@ -78,10 +90,13 @@ class SemanticMatchingTest(unittest.TestCase):
         provider = DeterministicHashEmbeddingProvider()
         opportunity = _opportunity()
         semantically_aligned = _profile(
-            roles=("Automation engineer",),
-            skills=("Bots",),
+            roles=("Developer",),
+            skills=("webhooks",),
             categories=("Telegram",),
-            semantic_text="Python Telegram bot automation integrations",
+            semantic_text=(
+                "Python developer Build and integrate a Telegram automation "
+                "bot Telegram Python Telegram API"
+            ),
         )
         category_only = _profile(
             roles=("Designer",),
@@ -104,6 +119,10 @@ class SemanticMatchingTest(unittest.TestCase):
         self.assertGreater(
             aligned.combined_relevance_score,
             aligned.structured.user_relevance_score,
+        )
+        self.assertGreater(
+            aligned.combined_relevance_score,
+            weak.combined_relevance_score,
         )
         self.assertGreater(aligned.combined_score, weak.combined_score)
         self.assertLess(weak.semantic_similarity, Decimal("0.5000"))

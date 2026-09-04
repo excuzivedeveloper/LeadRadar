@@ -15,6 +15,7 @@ from freelancer_bot.matching import (
     score_narrowed_candidates,
 )
 from freelancer_bot.lexical_matching import labels_have_overlap
+from freelancer_bot.matching_evidence import EvidenceMatch, derive_matching_evidence
 from freelancer_bot.opportunity_analysis import OpportunityAnalysis
 from freelancer_bot.persistence.database import Database
 from freelancer_bot.persistence.opportunities import (
@@ -45,6 +46,34 @@ NOW = datetime(2026, 8, 14, 14, 0, tzinfo=timezone.utc)
 
 
 class StructuredMatchingScoreTest(unittest.TestCase):
+    def test_ru_web_owner_profile_scores_en_react_next_web_opportunity(self):
+        profile = _profile(
+            roles=("Full-stack разработчик",),
+            skills=("JavaScript", "TypeScript", "React", "Next.js"),
+            categories=("веб-разработка",),
+            languages=None,
+            geographies=None,
+            work_modes=None,
+        )
+        opportunity = _opportunity(
+            role_title="Full-stack React Next.js developer",
+            skills=("React", "Next.js", "JavaScript", "TypeScript"),
+            category="web development",
+            language=None,
+            location=None,
+            remote=None,
+        )
+
+        score = score_candidate_structured(opportunity, profile)
+        evidence = derive_matching_evidence(opportunity.analysis, profile)
+
+        self.assertIs(evidence.platform.value, EvidenceMatch.YES)
+        self.assertIn("web", evidence.platform.evidence)
+        self.assertIs(evidence.technology.value, EvidenceMatch.YES)
+        self.assertGreater(score.component("category").score, Decimal("0"))
+        self.assertGreater(score.component("role").score, Decimal("0"))
+        self.assertGreater(score.component("skills").score, Decimal("0"))
+
     def test_generalized_lexical_equivalents_are_structured_and_explainable(self):
         profile = _profile(
             roles=("python-разработчик",),

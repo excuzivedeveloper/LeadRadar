@@ -412,7 +412,7 @@ already proved membership -> live update -> raw -> prefilter -> shadow.
 | Opportunity AI analysis | yes | no live provider call/model response validated |
 | Canonical Opportunities/dedup | yes | not live-validated with real AI output |
 | SearchProfiles/onboarding | yes | owner UI exists; AI onboarding not enabled |
-| Matching | yes | not live-validated end to end |
+| Matching | yes; includes local high-precision RU/EN technical concept bridge | production runtime live-validated; latest Owner MVP canary exposed RU↔EN false negatives; PR13 repair still requires independent review and repeat bounded canary |
 | Personalized delivery | yes | owner-only boundary validated; no live lead delivery yet |
 | Owner-only bot access | yes | owner positive path live-validated |
 | Source discovery/audit | yes | disabled |

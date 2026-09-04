@@ -5,8 +5,12 @@ from decimal import Decimal
 import re
 import unicodedata
 
+from .matching_concepts import (
+    canonical_matching_concepts,
+    canonical_matching_token_sequence,
+)
 
-LEXICAL_NORMALIZATION_VERSION = "lexical-concepts.v3"
+LEXICAL_NORMALIZATION_VERSION = "lexical-concepts.v4"
 _SCORE_QUANTUM = Decimal("0.0001")
 _MINIMUM_TARGET_LABEL_SIMILARITY = Decimal("0.6000")
 _GENERIC_TARGET_CONCEPTS = frozenset(
@@ -93,11 +97,16 @@ def lexical_token_sequence(value: str) -> tuple[str, ...]:
     """Return deterministic concept-bearing tokens in source order."""
 
     normalized = normalize_lexical_text(value)
-    return tuple(
+    tokens = tuple(
         canonical
         for token in _TOKEN_PATTERN.findall(normalized)
         if _usable_token(token)
         if (canonical := _canonical_token(token)) is not None
+    )
+    return tuple(
+        dict.fromkeys(
+            (*tokens, *canonical_matching_token_sequence(normalized))
+        )
     )
 
 
@@ -105,6 +114,7 @@ def lexical_concepts(value: str) -> frozenset[str]:
     """Return the normalized lexical concepts in a label."""
 
     concepts = set(lexical_token_sequence(value))
+    concepts.update(canonical_matching_concepts(value))
     for token in tuple(concepts):
         concepts.update(_token_variants(token))
     return frozenset(concepts)

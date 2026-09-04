@@ -23,17 +23,18 @@ from .lexical_matching import (
     lexical_concepts,
     lexical_token_sequence,
 )
+from .matching_concepts import canonical_matching_concepts
 from .persistence.opportunities import CanonicalOpportunityRecord
 from .persistence.search_profiles import SearchProfileRecord
 from .persistence.source_metrics import SourceQualitySnapshot
 
 
-SEMANTIC_REPRESENTATION_SCHEMA_VERSION = "semantic-representation.v1"
-SEMANTIC_MATCHING_VERSION = "semantic-matching-score.v3"
+SEMANTIC_REPRESENTATION_SCHEMA_VERSION = "semantic-representation.v2"
+SEMANTIC_MATCHING_VERSION = "semantic-matching-score.v4"
 SEMANTIC_MATCHING_POLICY_VERSION = "semantic-matching-policy.v1"
 LOCAL_EMBEDDING_PROVIDER = "local-feature-hash"
-LOCAL_EMBEDDING_MODEL = "word-bigram-char-translit-hash-384"
-LOCAL_EMBEDDING_MODEL_VERSION = "word-bigram-char-translit-hash.v3"
+LOCAL_EMBEDDING_MODEL = "word-bigram-char-translit-canonical-hash-384"
+LOCAL_EMBEDDING_MODEL_VERSION = "word-bigram-char-translit-canonical-hash.v4"
 
 _VERSION_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]{0,99}$")
 _SCORE_QUANTUM = Decimal("0.0001")
@@ -120,7 +121,7 @@ class DeterministicHashEmbeddingProvider:
         if cache_size < 1 or cache_size > 100_000:
             raise ValueError("embedding cache_size must be between 1 and 100000")
         self._dimensions = dimensions
-        self.model = f"word-bigram-char-translit-hash-{dimensions}"
+        self.model = f"word-bigram-char-translit-canonical-hash-{dimensions}"
         self._cache_size = cache_size
         self._cache: OrderedDict[str, SemanticRepresentation] = OrderedDict()
         self._hits = 0
@@ -401,7 +402,7 @@ def _feature_hash_vector(text: str, dimensions: int) -> tuple[float, ...]:
         return tuple(0.0 for _ in range(dimensions))
     concepts = tuple(
         concept
-        for concept in sorted(lexical_concepts(text))
+        for concept in sorted(lexical_concepts(text) | canonical_matching_concepts(text))
         if concept not in _GENERIC_TOKENS
     )
     acronym = lexical_acronym(text)

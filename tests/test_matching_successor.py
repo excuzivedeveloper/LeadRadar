@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from decimal import Decimal
+import json
+from pathlib import Path
 import unittest
 
 from freelancer_bot.match_decisions import (
@@ -21,6 +24,74 @@ from tests.test_semantic_matching import _profile as _base_profile
 
 
 class MatchingSuccessorTest(unittest.TestCase):
+    def test_owner_mvp_canary_regression_fixture_drives_behavior(self):
+        fixture = _owner_mvp_canary_fixture()
+
+        self.assertEqual(
+            fixture["schema_version"],
+            "owner-mvp-canary-matching-regressions.v1",
+        )
+        self.assertEqual(
+            {case["case_id"] for case in fixture["cases"]},
+            {
+                "owner_mvp_ru_en_web_positive_a",
+                "owner_mvp_ru_en_web_positive_b",
+                "owner_mvp_opencart_seo_control",
+            },
+        )
+
+        cases = {case["case_id"]: case for case in fixture["cases"]}
+        self.assertEqual(
+            cases["owner_mvp_ru_en_web_positive_a"]["profile"],
+            cases["owner_mvp_ru_en_web_positive_b"]["profile"],
+        )
+        self.assertNotEqual(
+            cases["owner_mvp_ru_en_web_positive_a"]["opportunity"],
+            cases["owner_mvp_ru_en_web_positive_b"]["opportunity"],
+        )
+
+        for case in fixture["cases"]:
+            with self.subTest(case_id=case["case_id"]):
+                trace, evidence = _fixture_decision_and_evidence(case)
+                expected = case["expected"]
+
+                if "hard_filter_eligible" in expected:
+                    self.assertEqual(
+                        trace.hard_filter_eligible,
+                        expected["hard_filter_eligible"],
+                    )
+                if "candidate_survives" in expected:
+                    self.assertEqual(
+                        trace.hard_filter_eligible,
+                        expected["candidate_survives"],
+                    )
+                if "combined_relevance_score_minimum" in expected:
+                    self.assertIsNotNone(trace.combined_relevance_score)
+                    self.assertGreaterEqual(
+                        trace.combined_relevance_score,
+                        Decimal(expected["combined_relevance_score_minimum"]),
+                    )
+                if expected.get("decision_not") == "below_relevance_threshold":
+                    self.assertNotEqual(
+                        trace.decision_code,
+                        MatchDecisionCode.BELOW_RELEVANCE_THRESHOLD,
+                    )
+                if expected.get("profile_platform_contains_web"):
+                    self.assertIn("web", evidence.platform.profile_values)
+                if expected.get("cross_lingual_web_evidence"):
+                    self.assertIn("web", evidence.platform.evidence)
+                if "eligible" in expected:
+                    self.assertEqual(trace.eligible, expected["eligible"])
+                if expected.get("react_next_fullstack_capability_must_not_be_invented"):
+                    self.assertNotIn(
+                        "react_next_web",
+                        evidence.capability.opportunity_values,
+                    )
+                    self.assertNotIn(
+                        "fullstack_product_integration",
+                        evidence.capability.opportunity_values,
+                    )
+
     def test_weak_relevant_without_exact_target_overlap_survives_retrieval(self):
         opportunity = _opportunity(
             role_title="Webhook integration builder",
@@ -178,6 +249,43 @@ def _decision_trace(opportunity, profile):
         evaluated_at=NOW,
         policy=MatchDecisionPolicy(),
     ).traces[0]
+
+
+def _fixture_decision_and_evidence(case):
+    profile = _fixture_profile(case["profile"])
+    opportunity = _fixture_opportunity(case["opportunity"])
+    return _decision_trace(opportunity, profile), derive_matching_evidence(
+        opportunity.analysis,
+        profile,
+    )
+
+
+def _fixture_profile(raw):
+    return _profile(
+        roles=tuple(raw["roles"]),
+        skills=tuple(raw["skills"]),
+        categories=tuple(raw["categories"]),
+        semantic_text=raw["semantic_text"],
+        preferences_languages=None,
+    )
+
+
+def _fixture_opportunity(raw):
+    return _opportunity(
+        role_title=raw["role_title"],
+        skills=tuple(raw["skills"]),
+        category=raw["category"],
+        task_summary=raw["task_summary"],
+        language=None,
+        location=None,
+    )
+
+
+def _owner_mvp_canary_fixture():
+    return json.loads(
+        Path("tests/fixtures/owner_mvp_canary_matching_regressions.v1.json")
+        .read_text(encoding="utf-8")
+    )
 
 
 def _opportunity(*, language="English", location="Berlin", **overrides):

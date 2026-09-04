@@ -333,8 +333,15 @@ surface and must not be confused with the V2 matching SearchProfile.
 
 ## Matching and delivery
 
-Canonical Opportunities enter deterministic/structured matching. Zero matches is
-a valid result.
+Canonical Opportunities enter deterministic/structured matching. Matching now
+uses a shared local high-precision bilingual concept bridge for explicit
+RU/EN technical concepts such as web development, frontend/backend, full-stack
+and specific web technologies. The same bridge feeds lexical overlap, structured
+matching evidence and deterministic local feature hashing; it is not a learned
+multilingual embedding model and does not add broad conversational-intent
+inference.
+
+Zero matches is a valid result.
 
 Personalized delivery is PostgreSQL-backed and protected by the owner allowlist.
 Blocked non-allowlisted personalized deliveries are terminally suppressed.
