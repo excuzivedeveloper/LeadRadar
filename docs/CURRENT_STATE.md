@@ -59,8 +59,12 @@ SOURCE_AUDIT_AUTHORIZED=NO
 AUTO_APPROVE_AUTHORIZED=NO
 AUTO_JOIN_AUTHORIZED=NO
 
-OWNER_DELIVERY_GATE=IN_PROGRESS_OR_NEXT
+OWNER_DELIVERY_CANARY=COMPLETED
+OWNER_DELIVERY_CANARY_VERDICT=INCONCLUSIVE_NO_FRESH_RELEVANT_OWNER_DELIVERY
+OWNER_ONLY_DELIVERY_SAFETY=PASS
+REAL_OWNER_DELIVERY_PROVEN=NO
 USEFUL_DELIVERY_PROVEN=NO
+OA_OPENROUTER_RELIABILITY_FINDING=YES
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 READY_FOR_PERSISTENT_RUNTIME=NO
 ```
@@ -68,13 +72,11 @@ READY_FOR_PERSISTENT_RUNTIME=NO
 The exact next execution sequence is:
 
 ```text
-complete bounded Owner Delivery Canary
--> prove runtime stopped
--> inspect body-free fresh live/match/delivery evidence
--> publish exact report to temporary GitHub evidence branch
--> ORCHESTRATOR reads actual GitHub report
--> PASS only on a real fresh owner-only sent delivery
--> INCONCLUSIVE if no relevant natural lead arrives
+read-only/offline OA/OpenRouter reliability diagnosis
+-> classify provider/rate-limit vs invalid-output/grounding vs retry-policy causes
+-> implement a narrow fix only if evidence justifies it
+-> independent review before any production change
+-> repeat bounded Owner Delivery Canary later
 -> persistent runtime remains a separate later gate
 ```
 
@@ -519,6 +521,55 @@ VERDICT=PASS
 The exact evidence report was independently read from temporary GitHub branch
 `evidence/pr15-shadow-canary-20260905`; persistent runtime was not authorized.
 
+### Owner Delivery Canary
+
+The separately authorized 3600-second Owner Delivery Canary completed on
+2026-09-05. The final actual report was independently read from temporary GitHub
+evidence branch `evidence/owner-delivery-canary-20260905`.
+
+Verified result:
+
+```text
+FRESH_LIVE_RAW_COUNT=4
+FRESH_LIVE_OPPORTUNITY_COUNT=2
+FRESH_LIVE_MATCH_TRACE_COUNT=2
+FRESH_LIVE_ELIGIBLE_MATCH_COUNT=0
+
+NEW_PERSONALIZED_DELIVERY_COUNT=0
+NEW_NON_OWNER_DELIVERY_COUNT=0
+FRESH_OWNER_SENT_DELIVERY_COUNT=0
+
+OWNER_ONLY_DELIVERY_SAFETY=PASS
+REAL_OWNER_DELIVERY_PROVEN=NO
+
+RUNNING_DURABLE_JOB_COUNT_AFTER_CANARY=0
+QUEUED_DURABLE_JOB_COUNT_AFTER_CANARY=0
+
+VERDICT=INCONCLUSIVE_NO_FRESH_RELEVANT_OWNER_DELIVERY
+```
+
+Evidence commit:
+
+```text
+273ec1fb83b3726b8c086f6bd80fc8487ebcb530
+```
+
+Report SHA-256:
+
+```text
+3997b167b7a96f1718343f623406f7332a3af47e7642a81e42838b7e64caa7c8
+```
+
+The result is inconclusive rather than failed because no fresh Opportunity was
+eligible under the unchanged production matcher. No delivery was scheduled or
+sent, and no non-owner delivery occurred.
+
+During the same bounded runtime, separate server evidence showed an OA/OpenRouter
+reliability issue: two `opportunity.analysis.v1` jobs completed and two failed
+with `OpportunityAnalysisOutputError`; observed failures included invalid or
+ungrounded model output, and one retry encountered provider HTTP 429. This
+finding is tracked separately from the formal delivery-canary verdict.
+
 ## Implemented vs currently live-validated
 
 | Capability | Implemented | Current deployment/live evidence |
@@ -538,7 +589,7 @@ The exact evidence report was independently read from temporary GitHub branch
 | Canonical Opportunities/dedup | yes | not live-validated with real AI output |
 | SearchProfiles/onboarding | yes | owner UI exists; AI onboarding not enabled |
 | Matching | yes; includes local high-precision RU/EN technical concept bridge | PR13 reviewed/merged; repeat bounded canary completed with C++/HFT sample; RU/EN web repair result inconclusive because no relevant fresh RU/EN web sample appeared |
-| Personalized delivery | yes | owner-only boundary validated; no live lead delivery yet |
+| Personalized delivery | yes | bounded Owner Delivery Canary completed INCONCLUSIVE; owner-only safety passed; no eligible fresh match and no real sent delivery yet |
 | Owner-only bot access | yes | owner positive path live-validated |
 | Source discovery/audit | yes | bounded WEB_ONLY candidate discovery live-used (15→20 sources; candidates 2→7); persistent/Telegram discovery and Source Audit remain disabled |
 | Persistent runtime/service | supporting code exists | **not authorized/deployed** |
@@ -557,17 +608,19 @@ are complete.
 
 Remaining ordered work:
 
-1. finish the bounded Owner Delivery Canary and prove a real fresh owner-only
-   sent delivery, or record an honest INCONCLUSIVE result if no relevant natural
-   lead arrives;
-2. continue separate bounded WEB_ONLY candidate discovery during development
+1. diagnose the observed OA/OpenRouter reliability failures read-only/offline;
+2. if evidence justifies a change, apply the narrowest fix and independently
+   review it before another live run;
+3. repeat the bounded Owner Delivery Canary later to prove a real fresh
+   owner-only sent delivery;
+4. continue separate bounded WEB_ONLY candidate discovery during development
    when useful, without auto-approval, joining, Source Audit or Telegram
    discovery;
-3. evaluate accumulated matching/shadow evidence before any threshold or policy
+5. evaluate accumulated matching/shadow evidence before any threshold or policy
    changes;
-4. separately review candidate promotion/joining and broader discovery/audit
+6. separately review candidate promotion/joining and broader discovery/audit
    rollout;
-5. authorize persistent runtime only after bounded end-to-end Owner MVP
+7. authorize persistent runtime only after bounded end-to-end Owner MVP
    validation and operational safeguards are complete.
 
 The authoritative order is in `docs/ACTIVE_PLAN.md`.
