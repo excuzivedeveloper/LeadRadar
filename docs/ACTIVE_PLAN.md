@@ -2,7 +2,7 @@
 
 **Status:** CANONICAL / ACTIVE  
 **Last verified:** 2026-09-05
-**Implementation baseline:** `a48b125bb486ad2b5f138840c8f8398a66f73088`
+**Implementation baseline:** `e3d2628bc3511a3b61c65378e633d752107d4cd4`
 
 This file defines execution order. A later capability being implemented in code
 does not mean it may be enabled before earlier gates pass.
@@ -67,8 +67,8 @@ PR14_PRODUCTION_MATCH_POLICY_CHANGED=NO
 PR15_MERGED=YES
 PR15_PRODUCTION_SYNCED=YES
 PR15_MIGRATION_APPLIED_PRODUCTION=YES
-ALEMBIC_CURRENT=20260904_0039
-ALEMBIC_HEADS=20260904_0039
+ALEMBIC_CURRENT=20260905_0040
+ALEMBIC_HEADS=20260905_0040
 SHADOW_RUNTIME_WIRED=YES
 SHADOW_DURABLE_PERSISTENCE=YES
 SHADOW_LIVE_VALIDATED=YES
@@ -92,14 +92,15 @@ OA_OPENROUTER_RELIABILITY_FINDING=YES
 OA_OPENROUTER_RELIABILITY_REVIEW=COMPLETE
 OA_OPENROUTER_RELIABILITY_VERDICT=E_MIXED
 OA_CODE_FIX_REQUIRED=YES
-PR17_OPEN=YES
-PR17_HEAD=85a33864c50cd690e1b2f4fc967b6365ffeba937
-PR17_FIRST_REVIEW=CHANGES_REQUESTED
-PR17_FIRST_REVIEW_FINDING_COUNT=1
-PR17_FIRST_REVIEW_FINDING_SEVERITY=MEDIUM
-PR17_NARROW_REREVIEW=APPROVE
-PR17_PREVIOUS_MEDIUM_RESOLVED=YES
-PR17_READY_FOR_OWNER_MERGE_AUTHORIZATION=YES
+PR17_MERGED=YES
+PR17_MERGE_COMMIT=e3d2628bc3511a3b61c65378e633d752107d4cd4
+PR17_REVIEWED_HEAD=85a33864c50cd690e1b2f4fc967b6365ffeba937
+PR17_PRODUCTION_SYNCED=YES
+PR17_ALEMBIC_APPLIED=YES
+PR17_ALEMBIC=20260905_0040
+PR17_PRODUCTION_SYNC_VERIFIED=YES
+PR17_PRODUCTION_SYNC_EVIDENCE_SHA256=0f868835279da07a9b45624facc7a0c24163828481dda7a875b5f57594548b5c
+PR17_RUNTIME_STOPPED=YES
 OA_PROVIDER_ROUTE_SWITCH_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 READY_FOR_PERSISTENT_RUNTIME=NO
@@ -108,20 +109,20 @@ READY_FOR_PERSISTENT_RUNTIME=NO
 Current gate:
 
 ```text
-OWNER_MERGE_AUTHORIZATION_FOR_PR17
+OWNER_AUTHORIZATION_FOR_REPEAT_BOUNDED_OWNER_DELIVERY_CANARY
 ```
 
 Required execution sequence:
 
 ```text
-1. obtain explicit Owner authorization to merge PR #17 at exact head 85a33864c50cd690e1b2f4fc967b6365ffeba937
-2. merge PR #17 only if exact head/state still match
-3. production runtime remains stopped
-4. sync production checkout to the resulting main merge head
-5. apply Alembic 20260905_0040 and verify current=head
-6. run offline/config/migration verification before any live runtime
-7. separately authorize a new bounded Owner Delivery Canary
-8. keep provider/model route unchanged for that canary
+1. obtain separate Owner authorization for a repeat bounded Owner Delivery Canary
+2. reverify production head e3d2628bc3511a3b61c65378e633d752107d4cd4 and Alembic 20260905_0040
+3. keep discovery/catch-up/AI reply/fallback disabled
+4. keep provider/model route unchanged for the first post-PR17 canary
+5. allow only owner-recipient delivery within the bounded canary authorization
+6. prove runtime stopped after the bounded window
+7. inspect body-free OA/matching/delivery evidence and durable retry telemetry
+8. publish exact evidence separately before final verdict
 9. continue bounded WEB_ONLY candidate discovery separately when useful
 10. keep persistent runtime unauthorized
 ```
@@ -470,8 +471,50 @@ The follow-up was exactly one commit changing only
 `freelancer_bot/worker.py` and `tests/test_worker.py`, with CI green on the
 exact reviewed head.
 
-PR #17 is therefore code-review complete but remains unmerged. The current gate
-is explicit Owner merge authorization for that exact head.
+PR #17 was subsequently merged, production-synced, migrated to `20260905_0040`,
+and independently verified with runtime remaining stopped.
+
+### PR17 production sync + migration
+
+**Status: COMPLETE / PASS.**
+
+PR #17 is merged and production-synced at:
+
+```text
+PRODUCTION_HEAD=e3d2628bc3511a3b61c65378e633d752107d4cd4
+ORIGIN_MAIN=e3d2628bc3511a3b61c65378e633d752107d4cd4
+ALEMBIC_CURRENT=20260905_0040
+ALEMBIC_HEADS=20260905_0040
+```
+
+Offline production verification confirmed:
+
+```text
+WORKER_RETRY_HINT_GENERIC_CAP_SECONDS=3600.0
+OA_DURABLE_MAX_ATTEMPTS=3
+OA_429_FALLBACK_SECONDS=60
+OA_429_CAP_SECONDS=300
+AI_TELEMETRY_DURABLE_COLUMNS_PRESENT=YES
+AI_TELEMETRY_DURABLE_CONSTRAINTS_PRESENT=YES
+CHECK_CONFIG=PASS
+ALEMBIC_CHECK_HEADS=PASS
+SAFETY_FLAGS_GATE=PASS
+RUNTIME_STOPPED=YES
+LIVE_PROVIDER_CALLS=0
+TELEGRAM_CALLS=0
+RUNTIME_STARTS=0
+FINAL_VERDICT=PASS
+```
+
+The production-sync evidence was independently read from
+`evidence/pr17-production-sync-20260905`, commit
+`14dc4171085c498fd193bcde41d1ffb202c5fccf`, with report SHA-256
+`0f868835279da07a9b45624facc7a0c24163828481dda7a875b5f57594548b5c`.
+The evidence commit has one parent, the production/main head, and only one
+evidence file. The evidence branch remains unmerged and main remains unchanged.
+
+A new bounded Owner Delivery Canary is **not** authorized by this production
+sync gate and requires separate Owner authorization.
 
 ## Step 6 — Evaluate accumulated legacy-filter and evidence-shadow data
 
