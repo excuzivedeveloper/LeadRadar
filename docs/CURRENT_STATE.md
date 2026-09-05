@@ -69,10 +69,13 @@ OA_OPENROUTER_RELIABILITY_REVIEW=COMPLETE
 OA_OPENROUTER_RELIABILITY_VERDICT=E_MIXED
 OA_CODE_FIX_REQUIRED=YES
 PR17_OPEN=YES
-PR17_REVIEWED_HEAD=18943124732166fb51807cd4d8ff531c6542504b
+PR17_HEAD=85a33864c50cd690e1b2f4fc967b6365ffeba937
 PR17_FIRST_REVIEW=CHANGES_REQUESTED
 PR17_FIRST_REVIEW_FINDING_COUNT=1
 PR17_FIRST_REVIEW_FINDING_SEVERITY=MEDIUM
+PR17_NARROW_REREVIEW=APPROVE
+PR17_PREVIOUS_MEDIUM_RESOLVED=YES
+PR17_READY_FOR_OWNER_MERGE_AUTHORIZATION=YES
 OA_PROVIDER_ROUTE_SWITCH_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 READY_FOR_PERSISTENT_RUNTIME=NO
@@ -81,14 +84,13 @@ READY_FOR_PERSISTENT_RUNTIME=NO
 The exact next execution sequence is:
 
 ```text
-fix the single PR17 MEDIUM in generic DurableWorker retry-hint normalization
--> add generic non-OA worker regression coverage
--> keep OA/OpenRouter behavior otherwise unchanged
--> narrow re-review only this finding
--> if approved, request Owner merge authorization
--> after merge/sync keep runtime stopped
--> apply Alembic 20260905_0040 and verify current=head
--> only then authorize a new bounded Owner Delivery Canary
+obtain Owner merge authorization for PR #17 exact head 85a33864c50cd690e1b2f4fc967b6365ffeba937
+-> merge only if exact PR head/state still match
+-> keep production runtime stopped
+-> sync production checkout to resulting main merge head
+-> apply Alembic 20260905_0040
+-> verify Alembic current=head and production worktree clean
+-> then separately authorize a new bounded Owner Delivery Canary
 -> persistent runtime remains a separate later gate
 ```
 
@@ -634,6 +636,30 @@ The only required correction is defensive normalization of generic
 must fall back safely, valid hints must be capped, and malformed hints must not
 break terminal/non-retryable failure recording. A generic non-OA regression test
 is required.
+
+### PR #17 narrow re-review approval
+
+PR #17 follow-up head:
+
+```text
+85a33864c50cd690e1b2f4fc967b6365ffeba937
+```
+
+Narrow re-review of the only previous MEDIUM concluded:
+
+```text
+PREVIOUS_MEDIUM_RESOLVED=YES
+GENERIC_WORKER_RETRY_HINT_SAFETY=PASS
+WORKER_RETRY_HINT_GENERIC_CAP_SECONDS=3600.0
+OA_BEHAVIOR_CHANGED=NO
+MIGRATION_CHANGED=NO
+FINAL_VERDICT=APPROVE
+```
+
+The follow-up consists of one commit and only two files:
+`freelancer_bot/worker.py` and `tests/test_worker.py`. CI is green on the
+exact approved head. PR #17 is review-complete and awaiting explicit Owner merge
+authorization.
 
 ## Implemented vs currently live-validated
 
