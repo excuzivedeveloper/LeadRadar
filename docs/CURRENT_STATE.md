@@ -65,6 +65,10 @@ OWNER_ONLY_DELIVERY_SAFETY=PASS
 REAL_OWNER_DELIVERY_PROVEN=NO
 USEFUL_DELIVERY_PROVEN=NO
 OA_OPENROUTER_RELIABILITY_FINDING=YES
+OA_OPENROUTER_RELIABILITY_REVIEW=COMPLETE
+OA_OPENROUTER_RELIABILITY_VERDICT=E_MIXED
+OA_CODE_FIX_REQUIRED=YES
+OA_PROVIDER_ROUTE_SWITCH_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 READY_FOR_PERSISTENT_RUNTIME=NO
 ```
@@ -72,11 +76,15 @@ READY_FOR_PERSISTENT_RUNTIME=NO
 The exact next execution sequence is:
 
 ```text
-read-only/offline OA/OpenRouter reliability diagnosis
--> classify provider/rate-limit vs invalid-output/grounding vs retry-policy causes
--> implement a narrow fix only if evidence justifies it
--> independent review before any production change
--> repeat bounded Owner Delivery Canary later
+implement narrow OA/OpenRouter reliability fix offline
+-> make exhausted output/grounding failures terminal at durable layer
+-> keep transient network/429/5xx durable-retryable under explicit OA envelope
+-> add bounded 429 pacing / Retry-After support
+-> add body-free failure-reason telemetry and durable-attempt correlation
+-> add regression tests
+-> independent review
+-> no provider/model switch in this fix
+-> repeat bounded Owner Delivery Canary only after reviewed production sync
 -> persistent runtime remains a separate later gate
 ```
 
@@ -570,6 +578,37 @@ with `OpportunityAnalysisOutputError`; observed failures included invalid or
 ungrounded model output, and one retry encountered provider HTTP 429. This
 finding is tracked separately from the formal delivery-canary verdict.
 
+### OA / OpenRouter reliability diagnosis
+
+A narrow read-only/offline review after the Owner Delivery Canary completed with:
+
+```text
+VERDICT=E — MIXED
+SEVERITY=MEDIUM
+CURRENT_MAX_PROVIDER_CALLS_PER_OA_JOB=3
+FAIL_CLOSED=YES
+DOWNSTREAM_MATCHING_SAFETY=PASS
+```
+
+Confirmed issues:
+
+- `OpportunityAnalysisOutputError` inherits retryability, so exhausted output
+  validation/grounding failures can consume generic durable retries;
+- the OA enqueue path relies on the generic durable default
+  `max_attempts=3`;
+- HTTP 429 is retryable but generic worker pacing is flat and does not honor
+  provider `Retry-After`;
+- the current OpenRouter path uses `json_object` plus schema-in-prompt rather
+  than native strict `json_schema`;
+- persisted telemetry collapses rate-limit, transport, schema and grounding
+  failures too aggressively.
+
+Grounding correctly failed closed and must remain strict. No immediate provider
+or model switch is authorized from this evidence alone.
+
+The next engineering gate is a narrow offline code/retry-policy fix followed by
+independent review. No production change is authorized by the diagnosis itself.
+
 ## Implemented vs currently live-validated
 
 | Capability | Implemented | Current deployment/live evidence |
@@ -608,19 +647,20 @@ are complete.
 
 Remaining ordered work:
 
-1. diagnose the observed OA/OpenRouter reliability failures read-only/offline;
-2. if evidence justifies a change, apply the narrowest fix and independently
-   review it before another live run;
-3. repeat the bounded Owner Delivery Canary later to prove a real fresh
-   owner-only sent delivery;
+1. implement the narrow OA/OpenRouter reliability remediation offline;
+2. independently review the resulting PR before any merge or production action;
+3. after reviewed production sync, repeat the bounded Owner Delivery Canary to
+   prove a real fresh owner-only sent delivery;
 4. continue separate bounded WEB_ONLY candidate discovery during development
    when useful, without auto-approval, joining, Source Audit or Telegram
    discovery;
 5. evaluate accumulated matching/shadow evidence before any threshold or policy
    changes;
-6. separately review candidate promotion/joining and broader discovery/audit
+6. evaluate provider/model strict-schema capability later as a separate gate,
+   not as part of the immediate fix;
+7. separately review candidate promotion/joining and broader discovery/audit
    rollout;
-7. authorize persistent runtime only after bounded end-to-end Owner MVP
+8. authorize persistent runtime only after bounded end-to-end Owner MVP
    validation and operational safeguards are complete.
 
 The authoritative order is in `docs/ACTIVE_PLAN.md`.
