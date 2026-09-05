@@ -22,6 +22,11 @@ from freelancer_bot.match_decisions import (
     decide_and_rank_matches,
     match_decision_policy_from_config,
 )
+from freelancer_bot.matching import (
+    STRUCTURED_SCORING_POLICY_VERSION,
+    STRUCTURED_SCORING_VERSION,
+    StructuredScoringPolicy,
+)
 from freelancer_bot.matching_service import CandidateMatchingService
 from freelancer_bot.metrics import InMemoryMetrics, MetricNames
 from freelancer_bot.opportunity_analysis import (
@@ -63,6 +68,188 @@ EVALUATED_AT = datetime(2026, 8, 14, 18, 37, tzinfo=timezone.utc)
 
 
 class MatchDecisionTest(unittest.TestCase):
+    def test_strong_multidimensional_technical_evidence_survives_untyped_red_flag_cap(self):
+        profile = _owner_web_saas_profile()
+        opportunity = _owner_web_saas_opportunity(
+            quality=Decimal("0.1000"),
+            red_flags=(
+                "sanitized risk signal one",
+                "sanitized risk signal two",
+                "sanitized risk signal three",
+                "sanitized risk signal four",
+            ),
+        )
+        opportunity = _seen_at(opportunity, EVALUATED_AT - timedelta(days=6))
+        old_policy = replace(
+            StructuredScoringPolicy(),
+            version="structured-matching-policy.v5-compat",
+            strong_evidence_red_flag_penalty_cap=Decimal("0.3200"),
+        )
+
+        pre_fix_trace = decide_and_rank_matches(
+            (_scoring(opportunity, (profile,), structured_policy=old_policy),),
+            evaluated_at=EVALUATED_AT,
+            policy=MatchDecisionPolicy(),
+        ).traces[0]
+        post_fix_trace = decide_and_rank_matches(
+            (_scoring(opportunity, (profile,)),),
+            evaluated_at=EVALUATED_AT,
+            policy=MatchDecisionPolicy(),
+        ).traces[0]
+
+        self.assertTrue(pre_fix_trace.hard_filter_eligible)
+        self.assertGreaterEqual(
+            pre_fix_trace.combined_relevance_score,
+            pre_fix_trace.minimum_relevance_threshold,
+        )
+        self.assertEqual(pre_fix_trace.red_flag_penalty, Decimal("0.3200"))
+        self.assertLess(
+            pre_fix_trace.final_rank_score,
+            pre_fix_trace.minimum_rank_score_threshold,
+        )
+        self.assertEqual(
+            pre_fix_trace.decision_code,
+            MatchDecisionCode.BELOW_RANK_SCORE_THRESHOLD,
+        )
+
+        self.assertTrue(post_fix_trace.hard_filter_eligible)
+        self.assertGreaterEqual(
+            post_fix_trace.combined_relevance_score,
+            post_fix_trace.minimum_relevance_threshold,
+        )
+        self.assertEqual(post_fix_trace.red_flag_penalty, Decimal("0.1600"))
+        self.assertGreaterEqual(
+            post_fix_trace.final_rank_score,
+            post_fix_trace.minimum_rank_score_threshold,
+        )
+        self.assertEqual(post_fix_trace.decision_code, MatchDecisionCode.ELIGIBLE)
+        self.assertTrue(post_fix_trace.eligible)
+        self.assertEqual(post_fix_trace.minimum_relevance_threshold, Decimal("0.3000"))
+        self.assertEqual(post_fix_trace.minimum_rank_score_threshold, Decimal("0.4000"))
+        self.assertEqual(
+            post_fix_trace.structured_scoring_version,
+            STRUCTURED_SCORING_VERSION,
+        )
+        self.assertEqual(
+            post_fix_trace.structured_policy_version,
+            STRUCTURED_SCORING_POLICY_VERSION,
+        )
+
+    def test_php_codeigniter_mysql_true_negative_stays_below_relevance(self):
+        trace = decide_and_rank_matches(
+            (
+                _scoring(
+                    _opportunity(
+                        role_title="CodeIgniter 4 PHP developer",
+                        skills=("PHP", "CodeIgniter 4", "MySQL"),
+                        category="CMS maintenance",
+                        task_summary=(
+                            "Maintain a PHP MySQL website built on "
+                            "CodeIgniter 4."
+                        ),
+                    ),
+                    (_owner_web_saas_profile(),),
+                ),
+            ),
+            evaluated_at=EVALUATED_AT,
+            policy=MatchDecisionPolicy(),
+        ).traces[0]
+
+        self.assertTrue(trace.hard_filter_eligible)
+        self.assertFalse(trace.eligible)
+        self.assertEqual(
+            trace.decision_code,
+            MatchDecisionCode.BELOW_RELEVANCE_THRESHOLD,
+        )
+
+    def test_generic_web_backend_ai_overlap_cannot_trigger_red_flag_cap(self):
+        trace = decide_and_rank_matches(
+            (
+                _scoring(
+                    _with_red_flags(
+                        _opportunity(
+                            role_title="Web backend AI automation specialist",
+                            skills=(),
+                            category="automation",
+                            task_summary=(
+                                "Need web developer, backend specialist, "
+                                "AI automation."
+                            ),
+                        ),
+                        red_flags=(
+                            "sanitized risk signal one",
+                            "sanitized risk signal two",
+                            "sanitized risk signal three",
+                            "sanitized risk signal four",
+                        ),
+                    ),
+                    (_owner_web_saas_profile(),),
+                ),
+            ),
+            evaluated_at=EVALUATED_AT,
+            policy=MatchDecisionPolicy(),
+        ).traces[0]
+
+        self.assertFalse(trace.eligible)
+        self.assertNotEqual(trace.red_flag_penalty, Decimal("0.1600"))
+
+    def test_red_flag_penalty_remains_effective_without_strong_independent_evidence(self):
+        profile = _owner_web_saas_profile()
+        opportunity = _owner_web_saas_opportunity(
+            role_title="Frontend UI developer",
+            skills=("React",),
+            task_summary="Build a frontend web dashboard.",
+            quality=Decimal("0.1000"),
+            red_flags=(
+                "sanitized risk signal one",
+                "sanitized risk signal two",
+                "sanitized risk signal three",
+                "sanitized risk signal four",
+            ),
+        )
+
+        trace = decide_and_rank_matches(
+            (_scoring(opportunity, (profile,)),),
+            evaluated_at=EVALUATED_AT,
+            policy=MatchDecisionPolicy(),
+        ).traces[0]
+
+        self.assertTrue(trace.hard_filter_eligible)
+        self.assertEqual(trace.red_flag_penalty, Decimal("0.3200"))
+        self.assertFalse(trace.eligible)
+        self.assertEqual(
+            trace.decision_code,
+            MatchDecisionCode.BELOW_RANK_SCORE_THRESHOLD,
+        )
+
+    def test_no_red_flag_strong_match_preserves_existing_decision_semantics(self):
+        profile = _owner_web_saas_profile()
+        opportunity = _owner_web_saas_opportunity(quality=Decimal("0.1000"))
+        default_trace = decide_and_rank_matches(
+            (_scoring(opportunity, (profile,)),),
+            evaluated_at=EVALUATED_AT,
+            policy=MatchDecisionPolicy(),
+        ).traces[0]
+        no_cap_trace = decide_and_rank_matches(
+            (
+                _scoring(
+                    opportunity,
+                    (profile,),
+                    structured_policy=replace(
+                        StructuredScoringPolicy(),
+                        version="structured-matching-policy.v5-compat",
+                        strong_evidence_red_flag_penalty_cap=Decimal("0.3200"),
+                    ),
+                ),
+            ),
+            evaluated_at=EVALUATED_AT,
+            policy=MatchDecisionPolicy(),
+        ).traces[0]
+
+        self.assertEqual(default_trace.red_flag_penalty, Decimal("0.0000"))
+        self.assertEqual(default_trace.decision_code, no_cap_trace.decision_code)
+        self.assertEqual(default_trace.final_rank_score, no_cap_trace.final_rank_score)
+
     def test_default_threshold_stays_0300_for_ru_en_web_canary_repair(self):
         policy = MatchDecisionPolicy()
         opportunity = _opportunity(
@@ -760,12 +947,13 @@ class MatchTracePostgresTest(unittest.IsolatedAsyncioTestCase):
         return opportunity_id, cache_id
 
 
-def _scoring(opportunity, profiles, *, provider=...):
+def _scoring(opportunity, profiles, *, provider=..., structured_policy=None):
     selected_provider = (
         DeterministicHashEmbeddingProvider()
         if provider is ...
         else provider
     )
+    selected_structured_policy = structured_policy or StructuredScoringPolicy()
     return MatchScoringInput(
         opportunity=opportunity,
         profiles=profiles,
@@ -773,7 +961,76 @@ def _scoring(opportunity, profiles, *, provider=...):
             opportunity,
             profiles,
             provider=selected_provider,
+            structured_policy=selected_structured_policy,
         ),
+        structured_policy=selected_structured_policy,
+    )
+
+
+def _owner_web_saas_profile():
+    return _profile(
+        roles=("Full-stack developer",),
+        skills=(
+            "React",
+            "Next.js",
+            "Python",
+            "FastAPI",
+            "PostgreSQL",
+            "OpenAI API integrations",
+        ),
+        categories=("web SaaS",),
+        semantic_text=(
+            "Full-stack web SaaS development with React Next.js Python FastAPI "
+            "PostgreSQL and OpenAI compatible LLM API integrations"
+        ),
+    )
+
+
+def _owner_web_saas_opportunity(
+    *,
+    role_title="Full-stack SaaS developer",
+    skills=(
+        "React",
+        "Next.js",
+        "Python",
+        "FastAPI",
+        "PostgreSQL",
+        "OpenAI API integrations",
+    ),
+    category="web SaaS",
+    task_summary=(
+        "Build a full-stack SaaS product using React, Next.js, Python, "
+        "FastAPI, PostgreSQL, and an OpenAI-compatible LLM API integration."
+    ),
+    quality=Decimal("0.8000"),
+    red_flags=(),
+):
+    opportunity = _opportunity(
+        role_title=role_title,
+        skills=skills,
+        category=category,
+        task_summary=task_summary,
+    )
+    analysis = opportunity.analysis.model_copy(
+        update={
+            "quality": opportunity.analysis.quality.model_copy(
+                update={
+                    "actionability": quality,
+                    "commercial_plausibility": quality,
+                    "specificity": quality,
+                    "credibility": quality,
+                }
+            ),
+            "red_flags": red_flags,
+        }
+    )
+    return replace(opportunity, analysis=analysis)
+
+
+def _with_red_flags(opportunity, *, red_flags):
+    return replace(
+        opportunity,
+        analysis=opportunity.analysis.model_copy(update={"red_flags": red_flags}),
     )
 
 

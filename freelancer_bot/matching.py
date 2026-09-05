@@ -38,8 +38,8 @@ from .search_profiles import (
 
 
 MATCHING_FILTER_VERSION = "matching-hard-filters.v5"
-STRUCTURED_SCORING_VERSION = "structured-matching-score.v5"
-STRUCTURED_SCORING_POLICY_VERSION = "structured-matching-policy.v5"
+STRUCTURED_SCORING_VERSION = "structured-matching-score.v6"
+STRUCTURED_SCORING_POLICY_VERSION = "structured-matching-policy.v6"
 _VERSION_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]{0,99}$")
 _SCORE_QUANTUM = Decimal("0.0001")
 _ROLE_FAMILY_CONCEPTS = frozenset(
@@ -171,6 +171,7 @@ class StructuredScoringPolicy:
     source_quality_weight: Decimal = Decimal("0.10")
     red_flag_penalty: Decimal = Decimal("0.08")
     maximum_red_flag_penalty: Decimal = Decimal("0.32")
+    strong_evidence_red_flag_penalty_cap: Decimal = Decimal("0.16")
 
     def __post_init__(self) -> None:
         if not _VERSION_PATTERN.fullmatch(self.version):
@@ -204,6 +205,16 @@ class StructuredScoringPolicy:
             raise ValueError("red-flag penalty must not be negative")
         if not Decimal("0") <= self.maximum_red_flag_penalty <= Decimal("1"):
             raise ValueError("maximum red-flag penalty must be between 0 and 1")
+        if not Decimal("0") <= self.strong_evidence_red_flag_penalty_cap <= Decimal(
+            "1"
+        ):
+            raise ValueError(
+                "strong-evidence red-flag penalty cap must be between 0 and 1"
+            )
+        if self.strong_evidence_red_flag_penalty_cap > self.maximum_red_flag_penalty:
+            raise ValueError(
+                "strong-evidence red-flag penalty cap must not exceed maximum"
+            )
 
 
 @dataclass(frozen=True)
@@ -477,11 +488,17 @@ def score_candidate_structured(
     source_quality_score = (
         None if source_quality is None else _source_quality_score(source_quality)
     )
-    red_flag_penalty = _quantize(
+    raw_red_flag_penalty = _quantize(
         min(
             selected_policy.maximum_red_flag_penalty,
             selected_policy.red_flag_penalty * len(analysis.red_flags),
         )
+    )
+    red_flag_penalty = _effective_red_flag_penalty(
+        raw_red_flag_penalty,
+        components,
+        relevance_score,
+        selected_policy,
     )
     aggregate = (
         relevance_score * selected_policy.relevance_weight
@@ -504,6 +521,38 @@ def score_candidate_structured(
         ),
         policy_version=selected_policy.version,
     )
+
+
+def _effective_red_flag_penalty(
+    raw_penalty: Decimal,
+    components: tuple[StructuredScoreComponent, ...],
+    relevance_score: Decimal,
+    policy: StructuredScoringPolicy,
+) -> Decimal:
+    if raw_penalty <= policy.strong_evidence_red_flag_penalty_cap:
+        return raw_penalty
+    if not _has_strong_independent_technical_evidence(components, relevance_score):
+        return raw_penalty
+    return _quantize(policy.strong_evidence_red_flag_penalty_cap)
+
+
+def _has_strong_independent_technical_evidence(
+    components: tuple[StructuredScoreComponent, ...],
+    relevance_score: Decimal,
+) -> bool:
+    if relevance_score < Decimal("0.5000"):
+        return False
+    by_name = {component.name: component for component in components}
+    for name in ("capability", "action_or_problem", "platform", "technology"):
+        if by_name.get(name, _score_component(name, None, Decimal("0"))).score != Decimal(
+            "1.0000"
+        ):
+            return False
+    for name in ("role", "skills"):
+        score = by_name.get(name, _score_component(name, None, Decimal("0"))).score
+        if score is None or score < Decimal("0.5000"):
+            return False
+    return True
 
 
 def score_narrowed_candidates(
