@@ -526,7 +526,7 @@ The exact evidence report was independently read from temporary GitHub branch
 | Safe CLI/config | yes | validated |
 | PostgreSQL V2 + migrations | yes | validated |
 | Dedicated collector identity | yes | validated |
-| PostgreSQL source lifecycle/catalog | yes | 15 rows; 13 approved |
+| PostgreSQL source lifecycle/catalog | yes | 20 rows; 13 approved; 7 candidates after bounded WEB_ONLY discovery |
 | Collector membership prerequisite | deployment state | validated; 13/13 joined |
 | Raw Telegram persistence | yes | **live-validated** |
 | Cheap V2 prefilter | yes | **live-validated** |
