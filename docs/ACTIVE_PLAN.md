@@ -93,10 +93,13 @@ OA_OPENROUTER_RELIABILITY_REVIEW=COMPLETE
 OA_OPENROUTER_RELIABILITY_VERDICT=E_MIXED
 OA_CODE_FIX_REQUIRED=YES
 PR17_OPEN=YES
-PR17_REVIEWED_HEAD=18943124732166fb51807cd4d8ff531c6542504b
+PR17_HEAD=85a33864c50cd690e1b2f4fc967b6365ffeba937
 PR17_FIRST_REVIEW=CHANGES_REQUESTED
 PR17_FIRST_REVIEW_FINDING_COUNT=1
 PR17_FIRST_REVIEW_FINDING_SEVERITY=MEDIUM
+PR17_NARROW_REREVIEW=APPROVE
+PR17_PREVIOUS_MEDIUM_RESOLVED=YES
+PR17_READY_FOR_OWNER_MERGE_AUTHORIZATION=YES
 OA_PROVIDER_ROUTE_SWITCH_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 READY_FOR_PERSISTENT_RUNTIME=NO
@@ -105,20 +108,20 @@ READY_FOR_PERSISTENT_RUNTIME=NO
 Current gate:
 
 ```text
-PR17_NARROW_WORKER_RETRY_HINT_FIX
+OWNER_MERGE_AUTHORIZATION_FOR_PR17
 ```
 
 Required execution sequence:
 
 ```text
-1. implement the narrow OA/OpenRouter reliability fix on a feature branch
-2. make exhausted output-validation/grounding failures terminal at the durable layer
-3. keep transient network/429/5xx failures retryable within an explicit OA durable-attempt envelope
-4. add bounded 429 pacing / Retry-After handling and body-free failure telemetry
-5. add the required regression tests, including fail-closed downstream isolation
-6. do not switch provider/model route in this fix
-7. independently review the narrow PR before any merge or production action
-8. repeat bounded Owner Delivery Canary only after reviewed production sync
+1. obtain explicit Owner authorization to merge PR #17 at exact head 85a33864c50cd690e1b2f4fc967b6365ffeba937
+2. merge PR #17 only if exact head/state still match
+3. production runtime remains stopped
+4. sync production checkout to the resulting main merge head
+5. apply Alembic 20260905_0040 and verify current=head
+6. run offline/config/migration verification before any live runtime
+7. separately authorize a new bounded Owner Delivery Canary
+8. keep provider/model route unchanged for that canary
 9. continue bounded WEB_ONLY candidate discovery separately when useful
 10. keep persistent runtime unauthorized
 ```
@@ -446,6 +449,29 @@ no attribute -> preserve existing worker semantics
 
 A generic non-OA worker regression test is required. No OA/provider/matcher/
 migration redesign is requested by this finding.
+
+### PR17 narrow re-review approval
+
+The single MEDIUM from the first PR17 review was fixed on follow-up head
+`85a33864c50cd690e1b2f4fc967b6365ffeba937`.
+
+Independent narrow re-review result:
+
+```text
+PREVIOUS_MEDIUM_RESOLVED=YES
+GENERIC_WORKER_RETRY_HINT_SAFETY=PASS
+WORKER_RETRY_HINT_GENERIC_CAP_SECONDS=3600.0
+OA_BEHAVIOR_CHANGED=NO
+MIGRATION_CHANGED=NO
+FINAL_VERDICT=APPROVE
+```
+
+The follow-up was exactly one commit changing only
+`freelancer_bot/worker.py` and `tests/test_worker.py`, with CI green on the
+exact reviewed head.
+
+PR #17 is therefore code-review complete but remains unmerged. The current gate
+is explicit Owner merge authorization for that exact head.
 
 ## Step 6 — Evaluate accumulated legacy-filter and evidence-shadow data
 
