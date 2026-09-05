@@ -1,15 +1,24 @@
 # LeadRadar — Current State
 
 **Status:** CANONICAL  
-**Snapshot date:** 2026-09-04
-**Implementation baseline:** `359dc17fbf4632e84b0a74f01ac201a426cf4556`
-**Current deployed repository head:** `359dc17fbf4632e84b0a74f01ac201a426cf4556`
+**Snapshot date:** 2026-09-05
+**Implementation baseline:** `a48b125bb486ad2b5f138840c8f8398a66f73088`
+**Current deployed repository head:** `a48b125bb486ad2b5f138840c8f8398a66f73088`
 
 ## Executive status
 
 LeadRadar has completed the pre-AI live ingestion/shadow gate, OpenRouter
-configuration, the bounded one-shot Opportunity Analysis gate, and the PR13
-repeat bounded Owner MVP canary.
+configuration and bounded Opportunity Analysis validation, PR13 matching repair,
+and the PR15 production shadow-instrumentation rollout plus live shadow canary.
+
+PR15 is now merged, production-synced and live-validated. The current product
+gate is useful owner-only delivery from a relevant fresh natural Opportunity.
+A separately bounded Owner Delivery Canary is the active/next gate; its final
+verdict must not be inferred until its runtime and DB evidence are complete.
+
+Bounded WEB_ONLY candidate-source discovery is permitted as a separate
+development-maintenance task. Persistent discovery, Telegram discovery, Source
+Audit, auto-approval and auto-joining remain disabled.
 
 Current gate status:
 
@@ -20,79 +29,74 @@ SOURCE_CATALOG_READY=YES
 COLLECTOR_MEMBERSHIP_READY=YES
 POSTGRES_READY=YES
 SHADOW_LIVE_EVIDENCE=YES
+
 OPENROUTER_IMPLEMENTATION_READY=YES
 OPENROUTER_RUNTIME_CONFIGURED=YES
 OPENROUTER_API_KEY_CONFIGURED=YES
 OPPORTUNITY_ANALYSIS_PROVIDER=openrouter
 OPPORTUNITY_ANALYSIS_MODEL=minimax/minimax-m3:free
 LIVE_AI_ANALYSIS_VALIDATED=YES
-READY_FOR_OPENROUTER_CONFIGURATION=COMPLETE
-READY_FOR_BOUNDED_AI_ANALYSIS=COMPLETE
-PERSISTENT_RUNTIME_AUTHORIZED=NO
-PR14_IMPLEMENTED_IN_SHADOW=YES
-PR14_PRODUCTION_MATCH_POLICY_CHANGED=NO
-PR14_LIVE_VALIDATED=NO
-PR14_EVIDENCE_RUNTIME_INSTRUMENTATION_IMPLEMENTED=YES
-SHADOW_RUNTIME_WIRED=YES
-SHADOW_DURABLE_PERSISTENCE=YES
-SHADOW_LIVE_VALIDATED=NO
-PRODUCTION_MATCH_POLICY_CHANGED=NO
-DELIVERY_POLICY_CHANGED=NO
-PR15_REVIEW_STATUS=CHANGES_REQUESTED_DOCS_ONLY
-PR15_RUNTIME_IMPLEMENTATION_REVIEW=PASS
-PR15_MIGRATION_IMPLEMENTATION_REVIEW=PASS
-PR15_PRODUCTION_ISOLATION_REVIEW=PASS
-PR15_MERGED=NO
-PR15_PRODUCTION_SYNCED=NO
-PR15_MIGRATION_APPLIED_PRODUCTION=NO
-PR15_SHADOW_LIVE_VALIDATED=NO
+
 PR13_REVIEWED=YES
 PR13_MERGED=YES
 PR13_REPEAT_BOUNDED_CANARY=COMPLETED
-RUNTIME_STOPPED=YES
-OUTSTANDING_JOBS=0
-FRESH_NATURAL_LEAD=1
-FRESH_SAMPLE=C++/HFT
-OA_PIPELINE=PASS
 MATCHING_PIPELINE=PASS
-PR13_RU_EN_WEB_REPAIR_RESULT=INCONCLUSIVE_NO_RELEVANT_RU_EN_WEB_SAMPLE
+
+PR15_MERGED=YES
+PR15_PRODUCTION_SYNCED=YES
+PR15_MIGRATION_APPLIED_PRODUCTION=YES
+PR15_SHADOW_LIVE_VALIDATED=YES
+PR15_BOUNDED_RUNTIME_SHADOW_CANARY=PASS
+ALEMBIC_CURRENT=20260904_0039
+ALEMBIC_HEADS=20260904_0039
+PRODUCTION_MATCH_POLICY_CHANGED=NO
+DELIVERY_POLICY_CHANGED=NO
+
+BOUNDED_WEB_ONLY_DISCOVERY_DURING_DEVELOPMENT=ALLOWED_AS_SEPARATE_TASK
+PERSISTENT_SOURCE_DISCOVERY_AUTHORIZED=NO
+TELEGRAM_DISCOVERY_AUTHORIZED=NO
+SOURCE_AUDIT_AUTHORIZED=NO
+AUTO_APPROVE_AUTHORIZED=NO
+AUTO_JOIN_AUTHORIZED=NO
+
+OWNER_DELIVERY_GATE=IN_PROGRESS_OR_NEXT
 USEFUL_DELIVERY_PROVEN=NO
+PERSISTENT_RUNTIME_AUTHORIZED=NO
 READY_FOR_PERSISTENT_RUNTIME=NO
 ```
 
 The exact next execution sequence is:
 
 ```text
-docs-only fix
--> narrow re-review
--> owner merge authorization
--> production code sync
--> alembic upgrade 20260904_0039
--> verify ALEMBIC_CURRENT=ALEMBIC_HEADS=20260904_0039
--> separately authorized BOUNDED_RUNTIME_SHADOW_CANARY
+complete bounded Owner Delivery Canary
+-> prove runtime stopped
+-> inspect body-free fresh live/match/delivery evidence
+-> publish exact report to temporary GitHub evidence branch
+-> ORCHESTRATOR reads actual GitHub report
+-> PASS only on a real fresh owner-only sent delivery
+-> INCONCLUSIVE if no relevant natural lead arrives
+-> persistent runtime remains a separate later gate
 ```
 
-The bounded runtime shadow canary must not run before migration `20260904_0039`
-is applied and verified, because durable shadow persistence depends on the new
-table. Persistent runtime remains a separate later gate.
+Migration `20260904_0039` is applied and PR15 live shadow validation has passed.
+The current production matcher and delivery policy remain unchanged.
 
-OpenRouter implementation and runtime configuration are present, and the first
-bounded Opportunity Analysis path has passed. Discovery, catch-up, legacy
-delivery and persistent runtime remain disabled. A useful owner delivery is not
-yet proven.
+Full-runtime discovery, catch-up, legacy delivery and persistent runtime remain
+disabled. Separately bounded WEB_ONLY candidate discovery is allowed during
+development. A useful real owner delivery is not yet proven at this snapshot.
 
 ## Repository and migration state
 
 Production implementation baseline:
 
 ```text
-359dc17fbf4632e84b0a74f01ac201a426cf4556
+a48b125bb486ad2b5f138840c8f8398a66f73088
 ```
 
 Current server repository head:
 
 ```text
-359dc17fbf4632e84b0a74f01ac201a426cf4556
+a48b125bb486ad2b5f138840c8f8398a66f73088
 ```
 
 Runtime/tooling baseline:
@@ -101,8 +105,8 @@ Runtime/tooling baseline:
 Python=3.14.7
 uv=0.12.2
 PostgreSQL=18.x
-Production Alembic current=20260902_0038
-Repository Alembic head after PR15=20260904_0039
+Production Alembic current=20260904_0039
+Repository Alembic head=20260904_0039
 ```
 
 The current migration set includes:
@@ -179,9 +183,9 @@ DISABLED=2
 PostgreSQL runtime state:
 
 ```text
-ROWS=15
+ROWS=20
 APPROVED=13
-CANDIDATE=2
+CANDIDATE=7
 ```
 
 The 13 approved public sources are now also Telegram memberships of the
@@ -201,6 +205,28 @@ that Telegram will deliver live channel updates to the collector account.
 
 `config/sources.json` remains seed/diagnostic input. PostgreSQL lifecycle/access
 state remains runtime source authority.
+
+### Bounded WEB_ONLY source discovery
+
+A bounded owner-profile WEB_ONLY discovery pass was completed on 2026-09-02:
+
+```text
+RUN_KEY=owner-web-candidate-canary-20260902-v1
+MODE=WEB_ONLY_CANDIDATE_ONLY
+SOURCES_BEFORE=15
+SOURCES_AFTER=20
+CANDIDATES_BEFORE=2
+CANDIDATES_AFTER=7
+NEW_CANDIDATES=5
+```
+
+Five new candidates were persisted from web-search evidence. The run made no
+Telegram discovery calls and did not auto-approve, auto-join, audit, or collect
+from those candidates.
+
+This bounded WEB_ONLY mode may be repeated as a separate development task to
+grow the candidate pool. It does **not** authorize persistent discovery or any
+promotion/join automation.
 
 ### Bot and owner-only access
 
@@ -228,6 +254,7 @@ LEGACY_DELIVERY_ENABLED=false
 SOURCE_DISCOVERY_ENABLED=false
 SOURCE_AUDIT_ENABLED=false
 SOURCE_GRAPH_DISCOVERY_ENABLED=false
+TELEGRAM_GLOBAL_DISCOVERY_ENABLED=false
 TELEGRAM_CHAT_DISCOVERY_ENABLED=false
 
 AI_REPLY_ENABLED=false
@@ -239,6 +266,11 @@ OPENROUTER_API_KEY_CONFIGURED=YES
 ```
 
 There is no persistent LeadRadar app/bot/collector process.
+
+These full-runtime flags intentionally remain false even though separately
+bounded WEB_ONLY candidate discovery runs are allowed during development.
+Those runs are explicit one-shot maintenance tasks, not persistent discovery.
+
 
 ## Current filter/source snapshots
 
@@ -459,6 +491,34 @@ READY_FOR_PERSISTENT_RUNTIME=NO
 The PR13 RU/EN web repair was not invalidated; the canary did not contain a
 relevant fresh RU/EN web sample.
 
+### PR15 bounded runtime shadow canary
+
+PR15 was merged and production-synced to
+`a48b125bb486ad2b5f138840c8f8398a66f73088`; migration
+`20260904_0039` is current and head.
+
+The bounded live shadow canary passed:
+
+```text
+FRESH_NATURAL_TRAFFIC_COUNT=2
+RAW_MESSAGES_DELTA=2
+OPPORTUNITIES_DELTA=1
+MATCH_EVALUATION_RUNS_DELTA=1
+MATCH_TRACES_DELTA=1
+SHADOW_TRACE_DELTA=1
+FRESH_CANARY_SHADOW_TRACE_COUNT=1
+FRESH_CANARY_SHADOW_TIED_TO_LIVE_RAW=YES
+RAW_CONTENT_SHA256_VERIFIED=YES
+RAW_MESSAGE_BODY_DUPLICATED_IN_SHADOW=NO
+CURRENT_DECISION_PRESERVED=YES
+SHADOW_DECISION_RECORDED=YES
+SHADOW_LIVE_VALIDATED=YES
+VERDICT=PASS
+```
+
+The exact evidence report was independently read from temporary GitHub branch
+`evidence/pr15-shadow-canary-20260905`; persistent runtime was not authorized.
+
 ## Implemented vs currently live-validated
 
 | Capability | Implemented | Current deployment/live evidence |
@@ -474,13 +534,13 @@ relevant fresh RU/EN web sample.
 | OpenRouter Opportunity provider | yes | offline tests and server sync passed; runtime configured |
 | OpenRouter runtime configuration | n/a | configured; bounded Opportunity Analysis canary completed |
 | Opportunity AI analysis | yes | bounded live path passed for one fresh natural lead sample |
-| OpportunityAnalysisV2 evidence-aware matching shadow | yes; deterministic explicit-evidence contract and SearchProfile-derived capability/platform surface | wired into fresh matching runtime in shadow mode with separate durable persistence; `PR14_EVIDENCE_RUNTIME_INSTRUMENTATION_IMPLEMENTED=YES`, `SHADOW_RUNTIME_WIRED=YES`, `SHADOW_DURABLE_PERSISTENCE=YES`, `PRODUCTION_MATCH_POLICY_CHANGED=NO`, `DELIVERY_POLICY_CHANGED=NO`, `SHADOW_LIVE_VALIDATED=NO` |
+| OpportunityAnalysisV2 evidence-aware matching shadow | yes; deterministic explicit-evidence contract and SearchProfile-derived capability/platform surface | **live-validated via PR15 bounded runtime canary**; separate durable persistence; `SHADOW_LIVE_VALIDATED=YES`, `PRODUCTION_MATCH_POLICY_CHANGED=NO`, `DELIVERY_POLICY_CHANGED=NO` |
 | Canonical Opportunities/dedup | yes | not live-validated with real AI output |
 | SearchProfiles/onboarding | yes | owner UI exists; AI onboarding not enabled |
 | Matching | yes; includes local high-precision RU/EN technical concept bridge | PR13 reviewed/merged; repeat bounded canary completed with C++/HFT sample; RU/EN web repair result inconclusive because no relevant fresh RU/EN web sample appeared |
 | Personalized delivery | yes | owner-only boundary validated; no live lead delivery yet |
 | Owner-only bot access | yes | owner positive path live-validated |
-| Source discovery/audit | yes | disabled |
+| Source discovery/audit | yes | bounded WEB_ONLY candidate discovery live-used (15→20 sources; candidates 2→7); persistent/Telegram discovery and Source Audit remain disabled |
 | Persistent runtime/service | supporting code exists | **not authorized/deployed** |
 
 ## Credentials and incidents
@@ -491,16 +551,23 @@ continuing. Historical values are invalid and must not be reused.
 
 ## What remains
 
-The ingestion/shadow, OpenRouter one-shot Opportunity Analysis and PR13 repeat
-bounded Owner MVP canary gates are complete. PR15 adds runtime evidence shadow
-instrumentation but does not validate it on live traffic. Remaining ordered
-gates are:
+The ingestion/shadow, bounded OpenRouter Opportunity Analysis, PR13 matching,
+PR15 production shadow instrumentation, and PR15 live shadow validation gates
+are complete.
 
-1. run a bounded runtime shadow canary after independent review, merge and
-   production sync;
-2. prove useful owner delivery from a relevant live Opportunity;
-3. later decision on legacy-filter/evidence tuning from accumulated shadow evidence;
-4. later source discovery/audit rollout if desired;
-5. persistent runtime only after bounded end-to-end validation.
+Remaining ordered work:
+
+1. finish the bounded Owner Delivery Canary and prove a real fresh owner-only
+   sent delivery, or record an honest INCONCLUSIVE result if no relevant natural
+   lead arrives;
+2. continue separate bounded WEB_ONLY candidate discovery during development
+   when useful, without auto-approval, joining, Source Audit or Telegram
+   discovery;
+3. evaluate accumulated matching/shadow evidence before any threshold or policy
+   changes;
+4. separately review candidate promotion/joining and broader discovery/audit
+   rollout;
+5. authorize persistent runtime only after bounded end-to-end Owner MVP
+   validation and operational safeguards are complete.
 
 The authoritative order is in `docs/ACTIVE_PLAN.md`.
