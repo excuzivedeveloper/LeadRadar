@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import signal
 from collections.abc import Awaitable, Callable, Collection
 from dataclasses import dataclass, replace
@@ -17,6 +18,7 @@ from .persistence import Database, DurableJobRepository, JobClaim
 
 
 JobHandler = Callable[[JobClaim], Awaitable[None]]
+WORKER_RETRY_HINT_MAX_SECONDS = 3600.0
 
 
 class WorkerState(str, Enum):
@@ -286,14 +288,13 @@ class DurableWorker:
         *,
         error: Exception | None = None,
         retryable: bool = True,
-        retry_delay_seconds: float | None = None,
+        retry_delay_seconds: object = None,
     ) -> None:
-        retry_delay = self._options.retry_delay
-        if retry_delay_seconds is not None:
-            try:
-                retry_delay = max(0.0, float(retry_delay_seconds))
-            except (TypeError, ValueError):
-                retry_delay = self._options.retry_delay
+        retry_delay = _normalized_retry_delay_seconds(
+            configured_delay=self._options.retry_delay,
+            retryable=retryable,
+            retry_hint=retry_delay_seconds,
+        )
         async with self._database.transaction() as connection:
             state = await self._repository.fail(
                 connection,
@@ -382,6 +383,34 @@ class DurableWorker:
                 continue
             installed.append(sig)
         return installed
+
+
+def _normalized_retry_delay_seconds(
+    *,
+    configured_delay: float,
+    retryable: bool,
+    retry_hint: object,
+) -> float:
+    fallback = _safe_configured_retry_delay(configured_delay)
+    if not retryable or retry_hint is None:
+        return fallback
+    try:
+        hint = float(retry_hint)
+    except (TypeError, ValueError):
+        return fallback
+    if not math.isfinite(hint) or hint <= 0:
+        return fallback
+    return min(hint, WORKER_RETRY_HINT_MAX_SECONDS)
+
+
+def _safe_configured_retry_delay(value: float) -> float:
+    try:
+        delay = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    if not math.isfinite(delay) or delay < 0:
+        return 0.0
+    return delay
 
 
 async def _consume_cancelled(task: asyncio.Task[object]) -> None:

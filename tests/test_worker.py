@@ -1,7 +1,8 @@
 import asyncio
 import io
+import math
 import unittest
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 
 from freelancer_bot.config import RuntimeConfig
@@ -13,8 +14,16 @@ from freelancer_bot.observability import (
 )
 from freelancer_bot.persistence.database import Database
 from freelancer_bot.persistence.jobs import DurableJobRepository
-from freelancer_bot.worker import DurableWorker, WorkerOptions, WorkerState
+from freelancer_bot.worker import (
+    WORKER_RETRY_HINT_MAX_SECONDS,
+    DurableWorker,
+    WorkerOptions,
+    WorkerState,
+)
 from postgres_support import TEST_DATABASE_URL, migrate_to_head, temporary_database
+
+
+_ABSENT = object()
 
 
 class WorkerOptionsTest(unittest.TestCase):
@@ -327,6 +336,54 @@ class DurableWorkerTest(unittest.IsolatedAsyncioTestCase):
             1,
         )
 
+    async def test_retryable_failure_retry_hint_is_defensively_normalized(self):
+        fallback = 11.0
+        cases = (
+            ("valid", 17, 17.0),
+            ("negative", -1, fallback),
+            ("zero", 0, fallback),
+            ("nan", math.nan, fallback),
+            ("positive-inf", math.inf, fallback),
+            ("negative-inf", -math.inf, fallback),
+            ("huge-finite", 1e20, WORKER_RETRY_HINT_MAX_SECONDS),
+            ("over-cap", 7200, WORKER_RETRY_HINT_MAX_SECONDS),
+            ("non-numeric", "later", fallback),
+            ("absent", _ABSENT, fallback),
+        )
+        for name, hint, expected_delay in cases:
+            with self.subTest(name=name):
+                before = datetime.now(timezone.utc)
+                job = await self._run_retry_hint_failure(
+                    name,
+                    retry_hint=hint,
+                    retryable=True,
+                    configured_retry_delay=fallback,
+                )
+                delay = (_aware(job["available_at"]) - before).total_seconds()
+
+                self.assertEqual(job["state"], "queued")
+                self.assertEqual(job["attempt_count"], 1)
+                self.assertEqual(job["failure_code"], "RuntimeError")
+                self.assertGreaterEqual(delay, max(0.0, expected_delay - 5.0))
+                self.assertLessEqual(delay, expected_delay + 5.0)
+
+    async def test_non_retryable_failure_ignores_malformed_retry_hint_and_records_terminal(self):
+        job = await self._run_retry_hint_failure(
+            "non-retryable-inf",
+            retry_hint=math.inf,
+            retryable=False,
+            configured_retry_delay=11,
+        )
+
+        self.assertEqual(job["state"], "failed")
+        self.assertEqual(job["attempt_count"], 1)
+        self.assertEqual(job["failure_code"], "RuntimeError")
+        self.assertIsNotNone(job["failed_at"])
+        self.assertEqual(
+            self.metrics.counter(MetricNames.JOBS_RETRIED, tags={"job_type": "fixture"}),
+            0,
+        )
+
     async def test_non_retryable_handler_failure_is_terminal_on_first_attempt(self):
         job_id = await self._enqueue("non-retryable", max_attempts=3)
         worker = None
@@ -388,6 +445,46 @@ class DurableWorkerTest(unittest.IsolatedAsyncioTestCase):
         worker.request_stop()
         await worker.run(install_signal_handlers=False)
         self.database.close.assert_awaited_once()
+
+    async def _run_retry_hint_failure(
+        self,
+        key: str,
+        *,
+        retry_hint,
+        retryable: bool,
+        configured_retry_delay: float,
+    ):
+        job_id = await self._enqueue(f"retry-hint-{key}", max_attempts=3)
+
+        async def handler(_claim):
+            error = RuntimeError("fixture failure")
+            error.retryable = retryable
+            if retry_hint is not _ABSENT:
+                error.retry_after_seconds = retry_hint
+            raise error
+
+        worker = self._worker(
+            handler,
+            options=WorkerOptions(
+                poll_interval=0.01,
+                lease_duration=0.5,
+                heartbeat_interval=0.05,
+                retry_delay=configured_retry_delay,
+                shutdown_timeout=0.1,
+            ),
+            job_ids=(job_id,),
+        )
+        processed = await asyncio.wait_for(worker.run_one(), timeout=1)
+
+        self.assertTrue(processed)
+        async with self.database.connect() as connection:
+            return await self.repository.get(connection, job_id)
+
+
+def _aware(value: datetime) -> datetime:
+    if value.tzinfo is None or value.utcoffset() is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
 if __name__ == "__main__":
