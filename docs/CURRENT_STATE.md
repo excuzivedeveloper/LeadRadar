@@ -2,8 +2,8 @@
 
 **Status:** CANONICAL  
 **Snapshot date:** 2026-09-05
-**Implementation baseline:** `a48b125bb486ad2b5f138840c8f8398a66f73088`
-**Current deployed repository head:** `a48b125bb486ad2b5f138840c8f8398a66f73088`
+**Implementation baseline:** `e3d2628bc3511a3b61c65378e633d752107d4cd4`
+**Current deployed repository head:** `e3d2628bc3511a3b61c65378e633d752107d4cd4`
 
 ## Executive status
 
@@ -68,14 +68,15 @@ OA_OPENROUTER_RELIABILITY_FINDING=YES
 OA_OPENROUTER_RELIABILITY_REVIEW=COMPLETE
 OA_OPENROUTER_RELIABILITY_VERDICT=E_MIXED
 OA_CODE_FIX_REQUIRED=YES
-PR17_OPEN=YES
-PR17_HEAD=85a33864c50cd690e1b2f4fc967b6365ffeba937
-PR17_FIRST_REVIEW=CHANGES_REQUESTED
-PR17_FIRST_REVIEW_FINDING_COUNT=1
-PR17_FIRST_REVIEW_FINDING_SEVERITY=MEDIUM
-PR17_NARROW_REREVIEW=APPROVE
-PR17_PREVIOUS_MEDIUM_RESOLVED=YES
-PR17_READY_FOR_OWNER_MERGE_AUTHORIZATION=YES
+PR17_MERGED=YES
+PR17_MERGE_COMMIT=e3d2628bc3511a3b61c65378e633d752107d4cd4
+PR17_REVIEWED_HEAD=85a33864c50cd690e1b2f4fc967b6365ffeba937
+PR17_PRODUCTION_SYNCED=YES
+PR17_ALEMBIC_APPLIED=YES
+PR17_ALEMBIC=20260905_0040
+PR17_PRODUCTION_SYNC_VERIFIED=YES
+PR17_PRODUCTION_SYNC_EVIDENCE_SHA256=0f868835279da07a9b45624facc7a0c24163828481dda7a875b5f57594548b5c
+PR17_RUNTIME_STOPPED=YES
 OA_PROVIDER_ROUTE_SWITCH_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 READY_FOR_PERSISTENT_RUNTIME=NO
@@ -84,14 +85,16 @@ READY_FOR_PERSISTENT_RUNTIME=NO
 The exact next execution sequence is:
 
 ```text
-obtain Owner merge authorization for PR #17 exact head 85a33864c50cd690e1b2f4fc967b6365ffeba937
--> merge only if exact PR head/state still match
--> keep production runtime stopped
--> sync production checkout to resulting main merge head
--> apply Alembic 20260905_0040
--> verify Alembic current=head and production worktree clean
--> then separately authorize a new bounded Owner Delivery Canary
--> persistent runtime remains a separate later gate
+obtain separate Owner authorization for a repeat bounded Owner Delivery Canary
+-> reverify production head e3d2628bc3511a3b61c65378e633d752107d4cd4
+-> reverify Alembic current=head=20260905_0040
+-> keep discovery/catch-up/AI reply/fallback disabled
+-> keep provider/model route unchanged for the first post-PR17 canary
+-> run only the separately authorized bounded owner-only canary
+-> prove runtime stopped
+-> inspect body-free OA/matching/delivery/retry evidence
+-> publish exact evidence separately
+-> persistent runtime remains unauthorized
 ```
 
 Migration `20260904_0039` is applied and PR15 live shadow validation has passed.
@@ -106,13 +109,13 @@ development. A useful real owner delivery is not yet proven at this snapshot.
 Production implementation baseline:
 
 ```text
-a48b125bb486ad2b5f138840c8f8398a66f73088
+e3d2628bc3511a3b61c65378e633d752107d4cd4
 ```
 
 Current server repository head:
 
 ```text
-a48b125bb486ad2b5f138840c8f8398a66f73088
+e3d2628bc3511a3b61c65378e633d752107d4cd4
 ```
 
 Runtime/tooling baseline:
@@ -121,8 +124,8 @@ Runtime/tooling baseline:
 Python=3.14.7
 uv=0.12.2
 PostgreSQL=18.x
-Production Alembic current=20260904_0039
-Repository Alembic head=20260904_0039
+Production Alembic current=20260905_0040
+Repository Alembic head=20260905_0040
 ```
 
 The current migration set includes:
@@ -657,9 +660,40 @@ FINAL_VERDICT=APPROVE
 ```
 
 The follow-up consists of one commit and only two files:
-`freelancer_bot/worker.py` and `tests/test_worker.py`. CI is green on the
-exact approved head. PR #17 is review-complete and awaiting explicit Owner merge
-authorization.
+`freelancer_bot/worker.py` and `tests/test_worker.py`. CI is green on the exact approved head. PR #17 was subsequently merged,
+production-synced and migrated to `20260905_0040` with offline verification PASS.
+
+### PR #17 production sync + migration
+
+PR #17 is merged and production-synced:
+
+```text
+PRODUCTION_HEAD=e3d2628bc3511a3b61c65378e633d752107d4cd4
+ORIGIN_MAIN=e3d2628bc3511a3b61c65378e633d752107d4cd4
+ALEMBIC_CURRENT=20260905_0040
+ALEMBIC_HEADS=20260905_0040
+FINAL_VERDICT=PASS
+FINAL_VERIFICATION=PASS
+RUNTIME_STOPPED=YES
+```
+
+The new AI telemetry durable context schema is present and the offline
+configuration/head checks passed. No live provider call, Telegram call,
+discovery run or runtime start occurred during the sync gate.
+
+Independent evidence:
+
+```text
+BRANCH=evidence/pr17-production-sync-20260905
+EVIDENCE_COMMIT=14dc4171085c498fd193bcde41d1ffb202c5fccf
+REPORT_SHA256=0f868835279da07a9b45624facc7a0c24163828481dda7a875b5f57594548b5c
+BYTE_FOR_BYTE_MATCH=YES
+MAIN_UNCHANGED=YES
+EVIDENCE_BRANCH_MERGED=NO
+```
+
+The next live runtime step is not implicitly authorized. A repeat bounded Owner
+Delivery Canary requires separate Owner authorization.
 
 ## Implemented vs currently live-validated
 
@@ -699,20 +733,20 @@ are complete.
 
 Remaining ordered work:
 
-1. implement the narrow OA/OpenRouter reliability remediation offline;
-2. independently review the resulting PR before any merge or production action;
-3. after reviewed production sync, repeat the bounded Owner Delivery Canary to
-   prove a real fresh owner-only sent delivery;
-4. continue separate bounded WEB_ONLY candidate discovery during development
+1. obtain separate Owner authorization for a repeat bounded Owner Delivery
+   Canary on production head `e3d2628bc3511a3b61c65378e633d752107d4cd4`
+   and Alembic `20260905_0040`;
+2. use that canary to validate the corrected OA retry/telemetry behavior and
+   prove a real fresh owner-only sent delivery if a relevant natural lead arrives;
+3. continue separate bounded WEB_ONLY candidate discovery during development
    when useful, without auto-approval, joining, Source Audit or Telegram
    discovery;
-5. evaluate accumulated matching/shadow evidence before any threshold or policy
+4. evaluate accumulated matching/shadow evidence before any threshold or policy
    changes;
-6. evaluate provider/model strict-schema capability later as a separate gate,
-   not as part of the immediate fix;
-7. separately review candidate promotion/joining and broader discovery/audit
+5. evaluate provider/model strict-schema capability later as a separate gate;
+6. separately review candidate promotion/joining and broader discovery/audit
    rollout;
-8. authorize persistent runtime only after bounded end-to-end Owner MVP
+7. authorize persistent runtime only after bounded end-to-end Owner MVP
    validation and operational safeguards are complete.
 
 The authoritative order is in `docs/ACTIVE_PLAN.md`.
