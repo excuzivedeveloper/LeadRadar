@@ -83,8 +83,12 @@ SOURCE_AUDIT_AUTHORIZED=NO
 AUTO_APPROVE_AUTHORIZED=NO
 AUTO_JOIN_AUTHORIZED=NO
 
+OWNER_DELIVERY_CANARY=COMPLETED
+OWNER_DELIVERY_CANARY_VERDICT=INCONCLUSIVE_NO_FRESH_RELEVANT_OWNER_DELIVERY
+OWNER_ONLY_DELIVERY_SAFETY=PASS
+REAL_OWNER_DELIVERY_PROVEN=NO
 USEFUL_DELIVERY_PROVEN=NO
-OWNER_DELIVERY_GATE=IN_PROGRESS_OR_NEXT
+OA_OPENROUTER_RELIABILITY_FINDING=YES
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 READY_FOR_PERSISTENT_RUNTIME=NO
 ```
@@ -92,18 +96,18 @@ READY_FOR_PERSISTENT_RUNTIME=NO
 Current gate:
 
 ```text
-BOUNDED_OWNER_DELIVERY_CANARY
+OA_OPENROUTER_OUTPUT_RELIABILITY_DIAGNOSIS
 ```
 
 Required execution sequence:
 
 ```text
-1. complete the separately authorized bounded Owner Delivery Canary
-2. prove runtime stopped and inspect body-free DB/delivery evidence
-3. publish the exact final evidence report to a temporary GitHub evidence branch
-4. ORCHESTRATOR reads the actual GitHub evidence before final verdict
-5. if no relevant natural lead arrives, keep result INCONCLUSIVE; do not lower thresholds
-6. run bounded WEB_ONLY candidate discovery separately as development maintenance when useful
+1. diagnose the observed Opportunity Analysis/OpenRouter reliability failures read-only/offline first
+2. classify provider/rate-limit, invalid-output/grounding and durable retry behavior separately
+3. do not change matcher policy or thresholds in response to the inconclusive delivery canary
+4. if a code/config change is justified, implement the narrowest fix and independently review it
+5. repeat bounded Owner Delivery Canary only after OA reliability is acceptably bounded
+6. continue bounded WEB_ONLY candidate discovery separately as development maintenance when useful
 7. keep Telegram discovery, Source Audit, auto-approve, auto-join and persistent discovery disabled
 8. keep persistent runtime as a separate later gate
 ```
@@ -312,6 +316,52 @@ delivery-eligible, so this PR15 gate did not itself prove useful owner delivery.
 
 The evidence report was independently read from temporary GitHub evidence branch
 `evidence/pr15-shadow-canary-20260905`. Persistent runtime remains unauthorized.
+
+## Step 5a — Bounded Owner Delivery Canary
+
+**Status: COMPLETE / INCONCLUSIVE.**
+
+The separately authorized 3600-second Owner Delivery Canary completed at
+production head `a48b125bb486ad2b5f138840c8f8398a66f73088` and Alembic
+`20260904_0039`.
+
+Independent GitHub evidence established:
+
+```text
+FRESH_LIVE_RAW_COUNT=4
+FRESH_LIVE_OPPORTUNITY_COUNT=2
+FRESH_LIVE_MATCH_TRACE_COUNT=2
+FRESH_LIVE_ELIGIBLE_MATCH_COUNT=0
+
+NEW_PERSONALIZED_DELIVERY_COUNT=0
+NEW_NON_OWNER_DELIVERY_COUNT=0
+FRESH_OWNER_SENT_DELIVERY_COUNT=0
+
+OWNER_ONLY_DELIVERY_SAFETY=PASS
+REAL_OWNER_DELIVERY_PROVEN=NO
+
+RUNNING_DURABLE_JOB_COUNT_AFTER_CANARY=0
+QUEUED_DURABLE_JOB_COUNT_AFTER_CANARY=0
+
+VERDICT=INCONCLUSIVE_NO_FRESH_RELEVANT_OWNER_DELIVERY
+```
+
+This is not a delivery-system failure: fresh natural traffic and two canonical
+Opportunities reached matching, but neither produced an eligible match. No
+non-owner delivery occurred, no synthetic traffic was used, and matcher policy
+and thresholds were unchanged.
+
+The exact report was independently read from temporary GitHub evidence branch
+`evidence/owner-delivery-canary-20260905`, commit
+`273ec1fb83b3726b8c086f6bd80fc8487ebcb530`, with report SHA-256
+`3997b167b7a96f1718343f623406f7332a3af47e7642a81e42838b7e64caa7c8`.
+
+A separate technical finding was observed during the same bounded runtime:
+server evidence reported two completed `opportunity.analysis.v1` jobs and two
+failed jobs with `OpportunityAnalysisOutputError`. The observed failure path
+included invalid/ungrounded model output and a provider HTTP 429 during retry
+processing. This does not change the formal delivery-canary verdict, but it is
+the next engineering diagnosis gate before another Owner Delivery Canary.
 
 ## Step 6 — Evaluate accumulated legacy-filter and evidence-shadow data
 
