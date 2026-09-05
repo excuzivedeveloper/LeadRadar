@@ -92,6 +92,11 @@ OA_OPENROUTER_RELIABILITY_FINDING=YES
 OA_OPENROUTER_RELIABILITY_REVIEW=COMPLETE
 OA_OPENROUTER_RELIABILITY_VERDICT=E_MIXED
 OA_CODE_FIX_REQUIRED=YES
+PR17_OPEN=YES
+PR17_REVIEWED_HEAD=18943124732166fb51807cd4d8ff531c6542504b
+PR17_FIRST_REVIEW=CHANGES_REQUESTED
+PR17_FIRST_REVIEW_FINDING_COUNT=1
+PR17_FIRST_REVIEW_FINDING_SEVERITY=MEDIUM
 OA_PROVIDER_ROUTE_SWITCH_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 READY_FOR_PERSISTENT_RUNTIME=NO
@@ -100,7 +105,7 @@ READY_FOR_PERSISTENT_RUNTIME=NO
 Current gate:
 
 ```text
-OA_OPENROUTER_RELIABILITY_NARROW_FIX
+PR17_NARROW_WORKER_RETRY_HINT_FIX
 ```
 
 Required execution sequence:
@@ -418,6 +423,29 @@ PRODUCTION_CHANGE_AUTHORIZED=NO
 The next gate is a narrow offline implementation + independent review. The fix
 must not change matching thresholds, matching policy, grounding strictness,
 fallback state, discovery, delivery policy or persistent-runtime authorization.
+
+### PR17 first narrow review
+
+PR #17 first independent narrow review on head
+`18943124732166fb51807cd4d8ff531c6542504b` returned
+`CHANGES_REQUESTED` with exactly one MEDIUM finding.
+
+The OA/OpenRouter-specific remediation itself passed review. The remaining issue
+is at the shared `DurableWorker` boundary: arbitrary exception
+`retry_after_seconds` values were accepted without generic finite/negative/upper-bound
+validation before `timedelta` construction.
+
+Required narrow correction:
+
+```text
+invalid/negative/non-finite retry hint -> existing worker retry_delay fallback
+valid hint -> bounded by explicit generic worker cap
+non-retryable failure -> hint cannot affect/abort terminal failure recording
+no attribute -> preserve existing worker semantics
+```
+
+A generic non-OA worker regression test is required. No OA/provider/matcher/
+migration redesign is requested by this finding.
 
 ## Step 6 — Evaluate accumulated legacy-filter and evidence-shadow data
 
