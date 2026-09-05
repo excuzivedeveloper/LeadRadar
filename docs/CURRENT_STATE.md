@@ -68,6 +68,11 @@ OA_OPENROUTER_RELIABILITY_FINDING=YES
 OA_OPENROUTER_RELIABILITY_REVIEW=COMPLETE
 OA_OPENROUTER_RELIABILITY_VERDICT=E_MIXED
 OA_CODE_FIX_REQUIRED=YES
+PR17_OPEN=YES
+PR17_REVIEWED_HEAD=18943124732166fb51807cd4d8ff531c6542504b
+PR17_FIRST_REVIEW=CHANGES_REQUESTED
+PR17_FIRST_REVIEW_FINDING_COUNT=1
+PR17_FIRST_REVIEW_FINDING_SEVERITY=MEDIUM
 OA_PROVIDER_ROUTE_SWITCH_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 READY_FOR_PERSISTENT_RUNTIME=NO
@@ -76,15 +81,14 @@ READY_FOR_PERSISTENT_RUNTIME=NO
 The exact next execution sequence is:
 
 ```text
-implement narrow OA/OpenRouter reliability fix offline
--> make exhausted output/grounding failures terminal at durable layer
--> keep transient network/429/5xx durable-retryable under explicit OA envelope
--> add bounded 429 pacing / Retry-After support
--> add body-free failure-reason telemetry and durable-attempt correlation
--> add regression tests
--> independent review
--> no provider/model switch in this fix
--> repeat bounded Owner Delivery Canary only after reviewed production sync
+fix the single PR17 MEDIUM in generic DurableWorker retry-hint normalization
+-> add generic non-OA worker regression coverage
+-> keep OA/OpenRouter behavior otherwise unchanged
+-> narrow re-review only this finding
+-> if approved, request Owner merge authorization
+-> after merge/sync keep runtime stopped
+-> apply Alembic 20260905_0040 and verify current=head
+-> only then authorize a new bounded Owner Delivery Canary
 -> persistent runtime remains a separate later gate
 ```
 
@@ -608,6 +612,28 @@ or model switch is authorized from this evidence alone.
 
 The next engineering gate is a narrow offline code/retry-policy fix followed by
 independent review. No production change is authorized by the diagnosis itself.
+
+### PR #17 first review result
+
+PR #17 first narrow review on
+`18943124732166fb51807cd4d8ff531c6542504b` returned:
+
+```text
+FINAL_VERDICT=CHANGES_REQUESTED
+FINDING_COUNT=1
+FINDING_SEVERITY=MEDIUM
+GENERIC_WORKER_RETRY_HINT_SAFETY=FINDING
+```
+
+The OA-specific retry envelope, terminal output-failure behavior, 429 handling,
+telemetry taxonomy, durable-attempt correlation, ContextVar isolation and
+migration `20260905_0040` all passed review.
+
+The only required correction is defensive normalization of generic
+`retry_after_seconds` at `DurableWorker`: invalid/negative/non-finite values
+must fall back safely, valid hints must be capped, and malformed hints must not
+break terminal/non-retryable failure recording. A generic non-OA regression test
+is required.
 
 ## Implemented vs currently live-validated
 
