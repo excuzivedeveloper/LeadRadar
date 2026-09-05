@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import asyncio
+import email.utils
 import json
 import math
 import re
 import urllib.error
 import urllib.request
 from collections.abc import Mapping
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, replace
+from datetime import datetime, timezone
 from decimal import Decimal
 from enum import Enum
 from hashlib import sha256
@@ -43,6 +47,8 @@ OPPORTUNITY_ANALYZER_VERSION = "opportunity-analyzer.v1"
 OPPORTUNITY_ANALYSIS_PROMPT_VERSION = "opportunity-analysis-prompt.v2"
 DEFAULT_OPPORTUNITY_ANALYSIS_MODEL = "gpt-5-nano"
 OPPORTUNITY_ROUTING_VERSION = "opportunity-routing.v1"
+OPPORTUNITY_ANALYSIS_RATE_LIMIT_FALLBACK_RETRY_SECONDS = 60
+OPPORTUNITY_ANALYSIS_RATE_LIMIT_RETRY_CAP_SECONDS = 300
 OPENAI_CHAT_COMPLETIONS_URL = "https://api.openai.com/v1/chat/completions"
 DEEPSEEK_CHAT_COMPLETIONS_URL = "https://api.deepseek.com/chat/completions"
 TOKENROUTER_CHAT_COMPLETIONS_URL = "https://api.tokenrouter.com/v1/chat/completions"
@@ -53,6 +59,34 @@ SUPPORTED_OPPORTUNITY_AI_PROVIDERS = frozenset(
 _SAFE_VERSION = re.compile(r"^[a-z0-9][a-z0-9._-]{0,99}$")
 
 
+@dataclass(frozen=True)
+class OpportunityAnalysisTelemetryContext:
+    durable_job_id: Any
+    durable_attempt: int
+
+
+_TELEMETRY_CONTEXT: ContextVar[OpportunityAnalysisTelemetryContext | None] = (
+    ContextVar("opportunity_analysis_telemetry_context", default=None)
+)
+
+
+@contextmanager
+def opportunity_analysis_telemetry_context(
+    *,
+    durable_job_id: Any,
+    durable_attempt: int,
+):
+    context = OpportunityAnalysisTelemetryContext(
+        durable_job_id=durable_job_id,
+        durable_attempt=max(1, min(int(durable_attempt), 100)),
+    )
+    token = _TELEMETRY_CONTEXT.set(context)
+    try:
+        yield
+    finally:
+        _TELEMETRY_CONTEXT.reset(token)
+
+
 class OpportunityAnalysisError(RuntimeError):
     def __init__(
         self,
@@ -61,15 +95,27 @@ class OpportunityAnalysisError(RuntimeError):
         retryable: bool = True,
         error_code: str = "provider_request_failed",
         http_status: int | None = None,
+        retry_after_seconds: float | None = None,
     ) -> None:
         super().__init__(message)
         self.retryable = retryable
         self.error_code = error_code
         self.http_status = http_status
+        self.retry_after_seconds = retry_after_seconds
 
 
 class OpportunityAnalysisOutputError(OpportunityAnalysisError):
-    pass
+    def __init__(
+        self,
+        message: str,
+        *,
+        error_code: str = "analysis_response_shape_invalid",
+    ) -> None:
+        super().__init__(
+            message,
+            retryable=False,
+            error_code=error_code,
+        )
 
 
 class OpportunityAnalysisProviderConfigurationError(OpportunityAnalysisError):
@@ -434,6 +480,7 @@ class OpenAICompatibleOpportunityAnalyzer:
         for attempt in range(1, self._max_output_attempts + 1):
             telemetry_id = None
             started = perf_counter()
+            telemetry_context = _TELEMETRY_CONTEXT.get()
             if self._recorder is not None:
                 telemetry_id = await self._recorder.begin(
                     AICallStart(
@@ -448,6 +495,16 @@ class OpenAICompatibleOpportunityAnalyzer:
                         route_reason=self._route_reason,
                         provider_attempt=attempt,
                         price=self._price,
+                        durable_job_id=(
+                            None
+                            if telemetry_context is None
+                            else telemetry_context.durable_job_id
+                        ),
+                        durable_attempt=(
+                            None
+                            if telemetry_context is None
+                            else telemetry_context.durable_attempt
+                        ),
                     )
                 )
             try:
@@ -469,7 +526,7 @@ class OpenAICompatibleOpportunityAnalyzer:
                     attempt_count=attempt,
                     candidate=candidate,
                 )
-            except OpportunityAnalysisOutputError:
+            except OpportunityAnalysisOutputError as exc:
                 if telemetry_id is not None:
                     response_model, usage = _safe_response_metadata(raw)
                     await self._recorder.finish(
@@ -481,13 +538,14 @@ class OpenAICompatibleOpportunityAnalyzer:
                             input_tokens=None if usage is None else usage.input_tokens,
                             output_tokens=None if usage is None else usage.output_tokens,
                             total_tokens=None if usage is None else usage.total_tokens,
-                            error_code="invalid_structured_output",
+                            error_code=exc.error_code,
                         ),
                     )
                 if attempt == self._max_output_attempts:
                     raise OpportunityAnalysisOutputError(
                         f"{self.provider} returned invalid opportunity-analysis output "
-                        f"after {attempt} attempts"
+                        f"after {attempt} attempts",
+                        error_code=exc.error_code,
                     ) from None
             else:
                 if telemetry_id is not None:
@@ -599,20 +657,37 @@ class OpenAICompatibleOpportunityAnalyzer:
     ) -> OpportunityAnalysisCall:
         try:
             response = json.loads(raw)
+        except (TypeError, ValueError):
+            raise OpportunityAnalysisOutputError(
+                f"{self.provider} returned invalid opportunity-analysis response JSON",
+                error_code="analysis_json_invalid",
+            ) from None
+        try:
             content = response["choices"][0]["message"]["content"]
+            if not isinstance(content, str):
+                raise TypeError("message content must be text")
             response_model = _bounded_text(response["model"], "response_model", 128)
             usage = _usage(response["usage"])
-            analysis = OpportunityAnalysis.model_validate_json(content, strict=True)
-            validate_opportunity_analysis_grounding(analysis, candidate)
-        except (
-            IndexError,
-            KeyError,
-            TypeError,
-            ValueError,
-            ValidationError,
-        ):
+        except (IndexError, KeyError, TypeError, ValueError, ValidationError):
             raise OpportunityAnalysisOutputError(
-                f"{self.provider} returned invalid opportunity-analysis output"
+                f"{self.provider} returned invalid opportunity-analysis response shape",
+                error_code="analysis_response_shape_invalid",
+            ) from None
+        try:
+            analysis = OpportunityAnalysis.model_validate_json(content, strict=True)
+        except (TypeError, ValueError, ValidationError):
+            raise OpportunityAnalysisOutputError(
+                f"{self.provider} returned schema-invalid opportunity-analysis content",
+                error_code="analysis_schema_invalid",
+            ) from None
+        try:
+            validate_opportunity_analysis_grounding(analysis, candidate)
+        except OpportunityAnalysisOutputError:
+            raise
+        except (TypeError, ValueError):
+            raise OpportunityAnalysisOutputError(
+                f"{self.provider} returned ungrounded opportunity-analysis content",
+                error_code="analysis_grounding_invalid",
             ) from None
         return OpportunityAnalysisCall(
             analysis=analysis,
@@ -648,22 +723,33 @@ class OpenAICompatibleOpportunityAnalyzer:
         except urllib.error.HTTPError as exc:
             status = int(exc.code)
             retryable = status == 429 or status >= 500
+            retry_after = (
+                _bounded_retry_after_seconds(exc.headers)
+                if status == 429
+                else None
+            )
             exc.close()
             raise OpportunityAnalysisError(
                 f"{self.provider} opportunity-analysis request failed",
                 retryable=retryable,
                 error_code=(
+                    "provider_rate_limited"
+                    if status == 429
+                    else "provider_server_error"
+                    if status >= 500
+                    else
                     "provider_invalid_request"
                     if not retryable
-                    else "provider_request_failed"
+                    else "provider_transport_error"
                 ),
                 http_status=status,
+                retry_after_seconds=retry_after,
             ) from None
         except urllib.error.URLError:
             raise OpportunityAnalysisError(
                 f"{self.provider} opportunity-analysis request failed",
                 retryable=True,
-                error_code="provider_request_failed",
+                error_code="provider_transport_error",
             ) from None
 
 
@@ -934,6 +1020,32 @@ def _safe_response_metadata(
         return None, None
 
 
+def _bounded_retry_after_seconds(headers: object) -> float:
+    fallback = float(OPPORTUNITY_ANALYSIS_RATE_LIMIT_FALLBACK_RETRY_SECONDS)
+    cap = float(OPPORTUNITY_ANALYSIS_RATE_LIMIT_RETRY_CAP_SECONDS)
+    value = headers.get("Retry-After") if hasattr(headers, "get") else None
+    if value is None:
+        return fallback
+    text = str(value).strip()
+    delay: float | None = None
+    try:
+        delay = float(text)
+    except ValueError:
+        try:
+            parsed = email.utils.parsedate_to_datetime(text)
+        except (TypeError, ValueError):
+            parsed = None
+        if parsed is not None:
+            if parsed.tzinfo is None or parsed.utcoffset() is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            delay = (
+                parsed.astimezone(timezone.utc) - datetime.now(timezone.utc)
+            ).total_seconds()
+    if delay is None or not math.isfinite(delay) or delay <= 0:
+        return fallback
+    return min(delay, cap)
+
+
 def _latency_ms(started: float) -> int:
     return max(0, round((perf_counter() - started) * 1000))
 
@@ -968,7 +1080,8 @@ def validate_opportunity_analysis_grounding(
             identity = _url_identity(value)
         if identity is None or identity not in identities:
             raise OpportunityAnalysisOutputError(
-                f"Extracted {field_name} contact is not grounded in supplied context"
+                f"Extracted {field_name} contact is not grounded in supplied context",
+                error_code="analysis_grounding_invalid",
             )
 
 

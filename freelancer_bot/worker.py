@@ -261,6 +261,7 @@ class DurableWorker:
                 type(exc).__name__,
                 error=exc,
                 retryable=bool(getattr(exc, "retryable", True)),
+                retry_delay_seconds=getattr(exc, "retry_after_seconds", None),
             )
             return
 
@@ -285,13 +286,20 @@ class DurableWorker:
         *,
         error: Exception | None = None,
         retryable: bool = True,
+        retry_delay_seconds: float | None = None,
     ) -> None:
+        retry_delay = self._options.retry_delay
+        if retry_delay_seconds is not None:
+            try:
+                retry_delay = max(0.0, float(retry_delay_seconds))
+            except (TypeError, ValueError):
+                retry_delay = self._options.retry_delay
         async with self._database.transaction() as connection:
             state = await self._repository.fail(
                 connection,
                 claim,
                 failure_code=failure_code,
-                retry_delay=timedelta(seconds=self._options.retry_delay),
+                retry_delay=timedelta(seconds=retry_delay),
                 retryable=retryable,
             )
         log_event(
@@ -305,6 +313,7 @@ class DurableWorker:
             state_transition=f"running->{state or 'unchanged'}",
             failure_code=failure_code,
             retryable=retryable,
+            retry_delay_seconds=retry_delay,
             error=error,
         )
 

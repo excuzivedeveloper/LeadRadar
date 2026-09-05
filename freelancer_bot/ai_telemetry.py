@@ -60,6 +60,8 @@ class AICallStart:
     route_reason: str
     provider_attempt: int
     price: AIModelPrice
+    durable_job_id: UUID | None = None
+    durable_attempt: int | None = None
 
 
 @dataclass(frozen=True)

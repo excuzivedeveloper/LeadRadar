@@ -367,6 +367,45 @@ class PostgresMigrationTest(unittest.TestCase):
             finally:
                 engine.dispose()
 
+    def test_ai_telemetry_durable_context_migration_is_additive(self):
+        with temporary_database() as database_url:
+            config = alembic_config(database_url)
+            command.upgrade(config, "20260905_0040")
+            engine = sa.create_engine(database_url)
+            try:
+                inspector = sa.inspect(engine)
+                columns = {
+                    item["name"]: item
+                    for item in inspector.get_columns("ai_call_telemetry")
+                }
+                self.assertIn("durable_job_id", columns)
+                self.assertIn("durable_attempt", columns)
+                self.assertTrue(columns["durable_job_id"]["nullable"])
+                self.assertTrue(columns["durable_attempt"]["nullable"])
+                foreign_keys = {
+                    item["name"]
+                    for item in inspector.get_foreign_keys("ai_call_telemetry")
+                }
+                self.assertIn(
+                    "fk_ai_call_telemetry_durable_job_id_durable_jobs",
+                    foreign_keys,
+                )
+                checks = {
+                    item["name"]
+                    for item in inspector.get_check_constraints("ai_call_telemetry")
+                }
+                self.assertIn("ck_ai_call_telemetry_durable_attempt_bounded", checks)
+                command.downgrade(config, "20260904_0039")
+                inspector = sa.inspect(engine)
+                columns = {
+                    item["name"]
+                    for item in inspector.get_columns("ai_call_telemetry")
+                }
+                self.assertNotIn("durable_job_id", columns)
+                self.assertNotIn("durable_attempt", columns)
+            finally:
+                engine.dispose()
+
 
 EXPECTED_TABLES = {
     "ai_call_telemetry",

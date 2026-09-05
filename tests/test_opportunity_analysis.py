@@ -431,8 +431,13 @@ class OpenAIOpportunityAnalyzerTest(unittest.IsolatedAsyncioTestCase):
                     ):
                         await analyzer.analyze(_candidate())
 
-    async def test_http_400_is_non_retryable_and_429_remains_retryable(self):
-        for status, retryable in ((400, False), (429, True), (503, True)):
+    async def test_http_failures_are_classified_with_body_free_reason_codes(self):
+        cases = (
+            (400, False, "provider_invalid_request"),
+            (429, True, "provider_rate_limited"),
+            (503, True, "provider_server_error"),
+        )
+        for status, retryable, error_code in cases:
             with self.subTest(status=status):
                 analyzer = OpenAIOpportunityAnalyzer(
                     api_key="test-secret",
@@ -453,12 +458,7 @@ class OpenAIOpportunityAnalyzerTest(unittest.IsolatedAsyncioTestCase):
                     with self.assertRaises(OpportunityAnalysisError) as raised:
                         await analyzer.analyze(_candidate())
                 self.assertEqual(raised.exception.retryable, retryable)
-                self.assertEqual(
-                    raised.exception.error_code,
-                    "provider_request_failed"
-                    if retryable
-                    else "provider_invalid_request",
-                )
+                self.assertEqual(raised.exception.error_code, error_code)
 
     async def test_configured_model_strict_schema_retry_and_telemetry(self):
         candidate = _candidate(with_parent=True)
