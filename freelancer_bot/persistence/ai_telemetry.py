@@ -80,6 +80,8 @@ class PostgreSQLAICallRecorder:
                 ai_call_telemetry.insert().values(
                     id=call_id,
                     raw_message_id=call.raw_message_id,
+                    durable_job_id=call.durable_job_id,
+                    durable_attempt=call.durable_attempt,
                     stage=call.stage,
                     provider=call.provider,
                     requested_model=call.requested_model,

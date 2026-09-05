@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import signal
 from collections.abc import Awaitable, Callable, Collection
 from dataclasses import dataclass, replace
@@ -17,6 +18,7 @@ from .persistence import Database, DurableJobRepository, JobClaim
 
 
 JobHandler = Callable[[JobClaim], Awaitable[None]]
+WORKER_RETRY_HINT_MAX_SECONDS = 3600.0
 
 
 class WorkerState(str, Enum):
@@ -261,6 +263,7 @@ class DurableWorker:
                 type(exc).__name__,
                 error=exc,
                 retryable=bool(getattr(exc, "retryable", True)),
+                retry_delay_seconds=getattr(exc, "retry_after_seconds", None),
             )
             return
 
@@ -285,13 +288,19 @@ class DurableWorker:
         *,
         error: Exception | None = None,
         retryable: bool = True,
+        retry_delay_seconds: object = None,
     ) -> None:
+        retry_delay = _normalized_retry_delay_seconds(
+            configured_delay=self._options.retry_delay,
+            retryable=retryable,
+            retry_hint=retry_delay_seconds,
+        )
         async with self._database.transaction() as connection:
             state = await self._repository.fail(
                 connection,
                 claim,
                 failure_code=failure_code,
-                retry_delay=timedelta(seconds=self._options.retry_delay),
+                retry_delay=timedelta(seconds=retry_delay),
                 retryable=retryable,
             )
         log_event(
@@ -305,6 +314,7 @@ class DurableWorker:
             state_transition=f"running->{state or 'unchanged'}",
             failure_code=failure_code,
             retryable=retryable,
+            retry_delay_seconds=retry_delay,
             error=error,
         )
 
@@ -373,6 +383,34 @@ class DurableWorker:
                 continue
             installed.append(sig)
         return installed
+
+
+def _normalized_retry_delay_seconds(
+    *,
+    configured_delay: float,
+    retryable: bool,
+    retry_hint: object,
+) -> float:
+    fallback = _safe_configured_retry_delay(configured_delay)
+    if not retryable or retry_hint is None:
+        return fallback
+    try:
+        hint = float(retry_hint)
+    except (TypeError, ValueError):
+        return fallback
+    if not math.isfinite(hint) or hint <= 0:
+        return fallback
+    return min(hint, WORKER_RETRY_HINT_MAX_SECONDS)
+
+
+def _safe_configured_retry_delay(value: float) -> float:
+    try:
+        delay = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    if not math.isfinite(delay) or delay < 0:
+        return 0.0
+    return delay
 
 
 async def _consume_cancelled(task: asyncio.Task[object]) -> None:

@@ -13,11 +13,15 @@ import sqlalchemy as sa
 from freelancer_bot.config import RuntimeConfig
 from freelancer_bot.ingestion_runtime import _configured_analyzer
 from freelancer_bot.message_prefilter import (
+    OPPORTUNITY_ANALYSIS_DURABLE_MAX_ATTEMPTS,
     OPPORTUNITY_ANALYSIS_JOB_TYPE,
     RawMessagePrefilterProcessor,
 )
+from freelancer_bot.matching_delivery import MATCHING_DELIVERY_JOB_TYPE
 from freelancer_bot.opportunity_analysis import (
     OPPORTUNITY_ANALYSIS_SCHEMA_VERSION,
+    OPPORTUNITY_ANALYSIS_RATE_LIMIT_FALLBACK_RETRY_SECONDS,
+    OPPORTUNITY_ANALYSIS_RATE_LIMIT_RETRY_CAP_SECONDS,
     opportunity_analysis_cache_version,
 )
 from freelancer_bot.opportunity_one_shot import (
@@ -43,6 +47,7 @@ from freelancer_bot.persistence.schema import (
     durable_jobs,
     opportunities,
     opportunity_analysis_cache,
+    personalized_deliveries,
 )
 from freelancer_bot.persistence.source_repository import SourceRepository, SourceStatus
 from postgres_support import TEST_DATABASE_URL, migrate_to_head, temporary_database
@@ -64,6 +69,20 @@ class _FakeResponse:
 
     def read(self) -> bytes:
         return json.dumps(self._payload).encode("utf-8")
+
+
+class _RawResponse:
+    def __init__(self, payload: str) -> None:
+        self._payload = payload
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return None
+
+    def read(self) -> bytes:
+        return self._payload.encode("utf-8")
 
 
 @unittest.skipUnless(TEST_DATABASE_URL, "TEST_DATABASE_URL is not configured")
@@ -228,7 +247,18 @@ class OpportunityAnalysisOneShotTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(opportunity_count, 1)
         self.assertIn("opportunity.analysis.one_shot_completed", _events(records))
 
-    async def test_invalid_output_uses_one_request_and_retry_semantics(self):
+    async def test_oa_enqueue_uses_explicit_max_attempts_and_duplicate_reuses_job(self):
+        first = await self._analysis_job("explicit-envelope-duplicate", 250)
+        duplicate = await self._analysis_job("explicit-envelope-duplicate", 251)
+
+        async with self.database.connect() as connection:
+            row = await self.jobs.get(connection, first)
+
+        self.assertEqual(first, duplicate)
+        self.assertEqual(row["max_attempts"], OPPORTUNITY_ANALYSIS_DURABLE_MAX_ATTEMPTS)
+        self.assertEqual(row["max_attempts"], 3)
+
+    async def test_invalid_output_uses_one_request_and_is_terminal(self):
         selected = await self._analysis_job("invalid-output", 300)
         untouched = await self._analysis_job("invalid-untouched", 301)
         requests = []
@@ -254,16 +284,24 @@ class OpportunityAnalysisOneShotTest(unittest.IsolatedAsyncioTestCase):
             telemetry = (
                 await connection.execute(sa.select(ai_call_telemetry))
             ).mappings().one()
-        self.assertEqual(selected_row["state"], "queued")
+            cache_count, opportunity_count, matching_jobs, delivery_count = (
+                await self._terminal_side_effect_counts(connection)
+            )
+        self.assertEqual(selected_row["state"], "failed")
         self.assertEqual(selected_row["attempt_count"], 1)
         self.assertEqual(selected_row["failure_code"], "OpportunityAnalysisOutputError")
-        self.assertEqual(raised.exception.status, "retry_queued")
-        self.assertEqual(raised.exception.job_state, "queued")
+        self.assertEqual(raised.exception.status, "failed")
+        self.assertEqual(raised.exception.job_state, "failed")
         self.assertEqual(raised.exception.failure_code, "OpportunityAnalysisOutputError")
         self.assertEqual(untouched_row["state"], "queued")
         self.assertEqual(untouched_row["attempt_count"], 0)
         self.assertEqual(telemetry["status"], "invalid_output")
-        self.assertIn("opportunity.analysis.one_shot_retry_scheduled", _events(records))
+        self.assertEqual(telemetry["error_code"], "analysis_response_shape_invalid")
+        self.assertEqual(cache_count, 0)
+        self.assertEqual(opportunity_count, 0)
+        self.assertEqual(matching_jobs, 0)
+        self.assertEqual(delivery_count, 0)
+        self.assertIn("opportunity.analysis.one_shot_failed", _events(records))
         self.assertNotIn("opportunity.analysis.one_shot_completed", _events(records))
 
     async def test_transport_failure_uses_one_request_and_retry_semantics(self):
@@ -302,8 +340,234 @@ class OpportunityAnalysisOneShotTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(untouched_row["state"], "queued")
         self.assertEqual(untouched_row["attempt_count"], 0)
         self.assertEqual(telemetry["status"], "request_failed")
+        self.assertEqual(telemetry["error_code"], "provider_transport_error")
         self.assertIn("opportunity.analysis.one_shot_retry_scheduled", _events(records))
         self.assertNotIn("opportunity.analysis.one_shot_completed", _events(records))
+
+    async def test_grounding_failure_is_terminal_and_body_free(self):
+        selected = await self._analysis_job("grounding-terminal", 450)
+        requests = []
+        logger, records = _capture_logger()
+        payload = _analysis_payload()
+        payload["contact"] = {
+            "telegram": None,
+            "email": None,
+            "url": "https://example.com/not-in-message",
+        }
+
+        with self._patched_urlopen(requests, _openrouter_response(payload)):
+            with self.assertRaises(OpportunityAnalysisOneShotError) as raised:
+                await run_opportunity_analysis_job_once(
+                    self.config,
+                    selected,
+                    database=self.database,
+                    repository=self.jobs,
+                    logger=logger,
+                )
+
+        self.assertEqual(len(requests), 1)
+        async with self.database.connect() as connection:
+            selected_row = await self.jobs.get(connection, selected)
+            telemetry = (
+                await connection.execute(sa.select(ai_call_telemetry))
+            ).mappings().one()
+            cache_count, opportunity_count, matching_jobs, delivery_count = (
+                await self._terminal_side_effect_counts(connection)
+            )
+        self.assertEqual(selected_row["state"], "failed")
+        self.assertEqual(selected_row["attempt_count"], 1)
+        self.assertEqual(raised.exception.status, "failed")
+        self.assertEqual(telemetry["status"], "invalid_output")
+        self.assertEqual(telemetry["error_code"], "analysis_grounding_invalid")
+        self.assertEqual(cache_count, 0)
+        self.assertEqual(opportunity_count, 0)
+        self.assertEqual(matching_jobs, 0)
+        self.assertEqual(delivery_count, 0)
+        self.assertNotIn("https://example.com/not-in-message", "\n".join(record.getMessage() for record in records))
+
+    async def test_transient_5xx_retries_once_then_succeeds_with_durable_correlation(self):
+        selected = await self._analysis_job("5xx-then-success", 460)
+        requests = []
+
+        def fail_then_succeed(request, timeout):
+            requests.append((request, timeout))
+            if len(requests) == 1:
+                raise _http_error(500)
+            return _FakeResponse(_openrouter_response(_analysis_payload()))
+
+        with self._patch_urlopen(fail_then_succeed):
+            with self.assertRaises(OpportunityAnalysisOneShotError) as raised:
+                await run_opportunity_analysis_job_once(
+                    self.config,
+                    selected,
+                    database=self.database,
+                    repository=self.jobs,
+                )
+            self.assertEqual(raised.exception.status, "retry_queued")
+            result = await run_opportunity_analysis_job_once(
+                self.config,
+                selected,
+                database=self.database,
+                repository=self.jobs,
+            )
+
+        self.assertTrue(result.processed)
+        self.assertEqual(len(requests), 2)
+        async with self.database.connect() as connection:
+            row = await self.jobs.get(connection, selected)
+            telemetry = (
+                await connection.execute(
+                    sa.select(ai_call_telemetry).order_by(ai_call_telemetry.c.started_at)
+                )
+            ).mappings().all()
+            cache_count = await connection.scalar(
+                sa.select(sa.func.count()).select_from(opportunity_analysis_cache)
+            )
+            opportunity_count = await connection.scalar(
+                sa.select(sa.func.count()).select_from(opportunities)
+            )
+            matching_jobs = await connection.scalar(
+                sa.select(sa.func.count())
+                .select_from(durable_jobs)
+                .where(durable_jobs.c.job_type == MATCHING_DELIVERY_JOB_TYPE)
+            )
+        self.assertEqual(row["state"], "completed")
+        self.assertEqual(row["attempt_count"], 2)
+        self.assertEqual(cache_count, 1)
+        self.assertEqual(opportunity_count, 1)
+        self.assertEqual(matching_jobs, 1)
+        self.assertEqual([item["provider_attempt"] for item in telemetry], [1, 1])
+        self.assertEqual([item["durable_attempt"] for item in telemetry], [1, 2])
+        self.assertEqual({item["durable_job_id"] for item in telemetry}, {selected})
+        self.assertEqual(telemetry[0]["error_code"], "provider_server_error")
+        self.assertEqual(telemetry[1]["status"], "succeeded")
+
+    async def test_429_retry_after_reschedules_with_bounded_delay(self):
+        selected = await self._analysis_job("rate-limit-retry-after", 470)
+        requests = []
+        before = datetime.now(timezone.utc)
+
+        def rate_limited(request, timeout):
+            requests.append((request, timeout))
+            raise _http_error(429, retry_after="17")
+
+        with self._patch_urlopen(rate_limited):
+            with self.assertRaises(OpportunityAnalysisOneShotError) as raised:
+                await run_opportunity_analysis_job_once(
+                    self.config,
+                    selected,
+                    database=self.database,
+                    repository=self.jobs,
+                )
+
+        self.assertEqual(raised.exception.status, "retry_queued")
+        self.assertEqual(len(requests), 1)
+        async with self.database.connect() as connection:
+            row = await self.jobs.get(connection, selected)
+            telemetry = (
+                await connection.execute(sa.select(ai_call_telemetry))
+            ).mappings().one()
+        delay = (_aware(row["available_at"]) - before).total_seconds()
+        self.assertEqual(row["state"], "queued")
+        self.assertGreaterEqual(delay, 10)
+        self.assertLessEqual(delay, OPPORTUNITY_ANALYSIS_RATE_LIMIT_RETRY_CAP_SECONDS)
+        self.assertEqual(telemetry["error_code"], "provider_rate_limited")
+
+    async def test_429_missing_malformed_or_excessive_retry_after_uses_fallback_or_cap(self):
+        cases = (
+            (None, OPPORTUNITY_ANALYSIS_RATE_LIMIT_FALLBACK_RETRY_SECONDS),
+            ("not-a-delay", OPPORTUNITY_ANALYSIS_RATE_LIMIT_FALLBACK_RETRY_SECONDS),
+            ("999999", OPPORTUNITY_ANALYSIS_RATE_LIMIT_RETRY_CAP_SECONDS),
+        )
+        for index, (retry_after, expected) in enumerate(cases, start=1):
+            with self.subTest(retry_after=retry_after):
+                selected = await self._analysis_job(f"rate-limit-fallback-{index}", 480 + index)
+                before = datetime.now(timezone.utc)
+
+                def rate_limited(request, timeout):
+                    raise _http_error(429, retry_after=retry_after)
+
+                with self._patch_urlopen(rate_limited):
+                    with self.assertRaises(OpportunityAnalysisOneShotError):
+                        await run_opportunity_analysis_job_once(
+                            self.config,
+                            selected,
+                            database=self.database,
+                            repository=self.jobs,
+                        )
+
+                async with self.database.connect() as connection:
+                    row = await self.jobs.get(connection, selected)
+                delay = (_aware(row["available_at"]) - before).total_seconds()
+                self.assertGreaterEqual(delay, max(0, expected - 5))
+                self.assertLessEqual(delay, expected + 5)
+
+    async def test_telemetry_reason_codes_distinguish_output_failures(self):
+        cases = (
+            ("invalid-json", _RawResponse("not json"), "analysis_json_invalid"),
+            (
+                "schema-invalid",
+                _FakeResponse(_openrouter_response({**_analysis_payload(), "confidence": 2})),
+                "analysis_schema_invalid",
+            ),
+            (
+                "shape-invalid",
+                _FakeResponse({"model": "minimax/minimax-m3:free", "choices": [], "usage": _usage()}),
+                "analysis_response_shape_invalid",
+            ),
+        )
+        for index, (name, response, code) in enumerate(cases, start=1):
+            with self.subTest(name=name):
+                selected = await self._analysis_job(f"taxonomy-{name}", 500 + index)
+
+                with self._patch_urlopen(lambda *_args, **_kwargs: response):
+                    with self.assertRaises(OpportunityAnalysisOneShotError):
+                        await run_opportunity_analysis_job_once(
+                            self.config,
+                            selected,
+                            database=self.database,
+                            repository=self.jobs,
+                        )
+
+                async with self.database.connect() as connection:
+                    telemetry = (
+                        await connection.execute(
+                            sa.select(ai_call_telemetry)
+                            .where(ai_call_telemetry.c.durable_job_id == selected)
+                        )
+                    ).mappings().one()
+                self.assertEqual(telemetry["status"], "invalid_output")
+                self.assertEqual(telemetry["error_code"], code)
+
+    async def test_fallback_disabled_transport_envelope_caps_primary_calls_at_three(self):
+        selected = await self._analysis_job("transport-envelope", 520)
+        requests = []
+
+        def fail_5xx(request, timeout):
+            requests.append((request, timeout))
+            raise _http_error(500)
+
+        with self._patch_urlopen(fail_5xx):
+            for expected_status in ("retry_queued", "retry_queued", "failed"):
+                with self.assertRaises(OpportunityAnalysisOneShotError) as raised:
+                    await run_opportunity_analysis_job_once(
+                        self.config,
+                        selected,
+                        database=self.database,
+                        repository=self.jobs,
+                    )
+                self.assertEqual(raised.exception.status, expected_status)
+
+        async with self.database.connect() as connection:
+            row = await self.jobs.get(connection, selected)
+            telemetry = (
+                await connection.execute(sa.select(ai_call_telemetry))
+            ).mappings().all()
+        self.assertEqual(row["state"], "failed")
+        self.assertEqual(row["attempt_count"], OPPORTUNITY_ANALYSIS_DURABLE_MAX_ATTEMPTS)
+        self.assertEqual(len(requests), OPPORTUNITY_ANALYSIS_DURABLE_MAX_ATTEMPTS)
+        self.assertEqual({item["stage"] for item in telemetry}, {"opportunity_analysis.primary"})
+        self.assertEqual([item["durable_attempt"] for item in telemetry], [1, 2, 3])
 
     async def test_terminal_failure_exits_non_success_without_completed_event(self):
         selected = await self._analysis_job("terminal-failure", 500)
@@ -367,6 +631,33 @@ class OpportunityAnalysisOneShotTest(unittest.IsolatedAsyncioTestCase):
             await self.jobs.complete(connection, raw_claim)
         self.assertIsNotNone(prefilter.analysis_job_id)
         return prefilter.analysis_job_id
+
+    async def _terminal_side_effect_counts(self, connection):
+        cache_count = await connection.scalar(
+            sa.select(sa.func.count()).select_from(opportunity_analysis_cache)
+        )
+        opportunity_count = await connection.scalar(
+            sa.select(sa.func.count()).select_from(opportunities)
+        )
+        matching_jobs = await connection.scalar(
+            sa.select(sa.func.count())
+            .select_from(durable_jobs)
+            .where(durable_jobs.c.job_type == MATCHING_DELIVERY_JOB_TYPE)
+        )
+        delivery_count = await connection.scalar(
+            sa.select(sa.func.count()).select_from(personalized_deliveries)
+        )
+        return cache_count, opportunity_count, matching_jobs, delivery_count
+
+    async def _all_ai_telemetry(self, connection):
+        return (
+            await connection.execute(
+                sa.select(ai_call_telemetry).order_by(
+                    ai_call_telemetry.c.started_at,
+                    ai_call_telemetry.c.id,
+                )
+            )
+        ).mappings().all()
 
     async def _claim(self, job_id: UUID, job_type: str) -> JobClaim:
         async with self.database.transaction() as connection:
@@ -492,6 +783,25 @@ def _analysis_payload() -> dict[str, object]:
 
 def _usage() -> dict[str, int]:
     return {"prompt_tokens": 41, "completion_tokens": 23, "total_tokens": 64}
+
+
+def _http_error(status: int, *, retry_after: str | None = None) -> urllib.error.HTTPError:
+    headers = {}
+    if retry_after is not None:
+        headers["Retry-After"] = retry_after
+    return urllib.error.HTTPError(
+        url="https://openrouter.test/chat/completions",
+        code=status,
+        msg="fixture",
+        hdrs=headers,
+        fp=None,
+    )
+
+
+def _aware(value: datetime) -> datetime:
+    if value.tzinfo is None or value.utcoffset() is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
 class _ListHandler(logging.Handler):

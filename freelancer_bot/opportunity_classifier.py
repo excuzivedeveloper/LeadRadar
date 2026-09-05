@@ -22,6 +22,7 @@ from .opportunity_analysis import (
     opportunity_analysis_cache_envelope,
     opportunity_analysis_cache_version,
     opportunity_analysis_call_is_compatible,
+    opportunity_analysis_telemetry_context,
     validate_opportunity_analysis_grounding,
 )
 from .persistence.database import Database
@@ -93,7 +94,11 @@ class OpportunityAnalysisJobProcessor:
         self._require_compatible_job(prefilter)
 
         candidate = await self._inputs.load(claim.id)
-        call = await self._analyzer.analyze(candidate)
+        with opportunity_analysis_telemetry_context(
+            durable_job_id=claim.id,
+            durable_attempt=claim.attempt_count,
+        ):
+            call = await self._analyzer.analyze(candidate)
         self._require_compatible_call(call)
         validate_opportunity_analysis_grounding(call.analysis, candidate)
         envelope = opportunity_analysis_cache_envelope(

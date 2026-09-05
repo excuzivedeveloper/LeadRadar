@@ -35,6 +35,7 @@ from .persistence.raw_messages import (
 PREFILTER_SCHEMA_VERSION = "message-prefilter.v1"
 SHADOW_PREFILTER_SCHEMA_VERSION = "legacy-filter-shadow.v1"
 OPPORTUNITY_ANALYSIS_JOB_TYPE = "opportunity.analysis.v1"
+OPPORTUNITY_ANALYSIS_DURABLE_MAX_ATTEMPTS = 3
 LOGGER = logging.getLogger("freelancer_bot")
 
 
@@ -391,6 +392,7 @@ class RawMessagePrefilterProcessor:
             connection,
             job_type=OPPORTUNITY_ANALYSIS_JOB_TYPE,
             idempotency_key=f"{PREFILTER_SCHEMA_VERSION}:{raw.id}",
+            max_attempts=OPPORTUNITY_ANALYSIS_DURABLE_MAX_ATTEMPTS,
             correlation_id=correlation_id,
         )
         return ExactDedupRoute(

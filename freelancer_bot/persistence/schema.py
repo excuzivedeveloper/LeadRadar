@@ -1984,6 +1984,12 @@ ai_call_telemetry = sa.Table(
         sa.ForeignKey("raw_messages.id", ondelete="RESTRICT"),
         nullable=False,
     ),
+    sa.Column(
+        "durable_job_id",
+        UUID(as_uuid=True),
+        sa.ForeignKey("durable_jobs.id", ondelete="SET NULL"),
+    ),
+    sa.Column("durable_attempt", sa.Integer()),
     sa.Column("stage", sa.String(64), nullable=False),
     sa.Column("provider", sa.String(64), nullable=False),
     sa.Column("requested_model", sa.String(128), nullable=False),
@@ -2022,6 +2028,10 @@ ai_call_telemetry = sa.Table(
     sa.CheckConstraint(
         "provider_attempt BETWEEN 1 AND 5",
         name="provider_attempt_bounded",
+    ),
+    sa.CheckConstraint(
+        "durable_attempt IS NULL OR durable_attempt BETWEEN 1 AND 100",
+        name="durable_attempt_bounded",
     ),
     sa.CheckConstraint(
         "status IN ('started', 'succeeded', 'invalid_output', 'request_failed')",

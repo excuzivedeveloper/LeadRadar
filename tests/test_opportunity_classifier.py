@@ -653,8 +653,8 @@ class OpportunityClassifierPipelineTest(unittest.IsolatedAsyncioTestCase):
                 sa.select(sa.func.count()).select_from(opportunities)
             )
 
-        self.assertEqual(len(analyzer.calls), 3)
-        self.assertEqual(job["attempt_count"], 3)
+        self.assertEqual(len(analyzer.calls), 1)
+        self.assertEqual(job["attempt_count"], 1)
         self.assertEqual(job["failure_code"], "OpportunityAnalysisOutputError")
         self.assertEqual(cache_count, 0)
         self.assertEqual(opportunity_count, 0)
