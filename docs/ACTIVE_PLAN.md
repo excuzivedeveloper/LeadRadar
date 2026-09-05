@@ -89,6 +89,10 @@ OWNER_ONLY_DELIVERY_SAFETY=PASS
 REAL_OWNER_DELIVERY_PROVEN=NO
 USEFUL_DELIVERY_PROVEN=NO
 OA_OPENROUTER_RELIABILITY_FINDING=YES
+OA_OPENROUTER_RELIABILITY_REVIEW=COMPLETE
+OA_OPENROUTER_RELIABILITY_VERDICT=E_MIXED
+OA_CODE_FIX_REQUIRED=YES
+OA_PROVIDER_ROUTE_SWITCH_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 READY_FOR_PERSISTENT_RUNTIME=NO
 ```
@@ -96,20 +100,22 @@ READY_FOR_PERSISTENT_RUNTIME=NO
 Current gate:
 
 ```text
-OA_OPENROUTER_OUTPUT_RELIABILITY_DIAGNOSIS
+OA_OPENROUTER_RELIABILITY_NARROW_FIX
 ```
 
 Required execution sequence:
 
 ```text
-1. diagnose the observed Opportunity Analysis/OpenRouter reliability failures read-only/offline first
-2. classify provider/rate-limit, invalid-output/grounding and durable retry behavior separately
-3. do not change matcher policy or thresholds in response to the inconclusive delivery canary
-4. if a code/config change is justified, implement the narrowest fix and independently review it
-5. repeat bounded Owner Delivery Canary only after OA reliability is acceptably bounded
-6. continue bounded WEB_ONLY candidate discovery separately as development maintenance when useful
-7. keep Telegram discovery, Source Audit, auto-approve, auto-join and persistent discovery disabled
-8. keep persistent runtime as a separate later gate
+1. implement the narrow OA/OpenRouter reliability fix on a feature branch
+2. make exhausted output-validation/grounding failures terminal at the durable layer
+3. keep transient network/429/5xx failures retryable within an explicit OA durable-attempt envelope
+4. add bounded 429 pacing / Retry-After handling and body-free failure telemetry
+5. add the required regression tests, including fail-closed downstream isolation
+6. do not switch provider/model route in this fix
+7. independently review the narrow PR before any merge or production action
+8. repeat bounded Owner Delivery Canary only after reviewed production sync
+9. continue bounded WEB_ONLY candidate discovery separately when useful
+10. keep persistent runtime unauthorized
 ```
 
 ## Step 0 — Pre-AI ingestion/shadow validation
@@ -362,6 +368,56 @@ failed jobs with `OpportunityAnalysisOutputError`. The observed failure path
 included invalid/ungrounded model output and a provider HTTP 429 during retry
 processing. This does not change the formal delivery-canary verdict, but it is
 the next engineering diagnosis gate before another Owner Delivery Canary.
+
+## Step 5b — OA / OpenRouter reliability diagnosis
+
+**Status: COMPLETE / E — MIXED.**
+
+The narrow read-only/offline review after the Owner Delivery Canary found a
+real reliability issue that warrants a narrow code/retry-policy remediation.
+
+Confirmed current envelope:
+
+```text
+OA durable max_attempts=3
+OPPORTUNITY_ANALYSIS_MAX_OUTPUT_ATTEMPTS=1
+fallback routes=0
+CURRENT_MAX_PROVIDER_CALLS_PER_OA_JOB=3
+```
+
+The key confirmed design issue is that
+`OpportunityAnalysisOutputError` inherits `retryable=True`. Therefore an
+exhausted invalid-output or grounding failure can be replayed by the generic
+durable worker even after the configured output-attempt budget is exhausted.
+
+The review also confirmed:
+
+```text
+HTTP_429_RETRYABLE=YES
+GENERIC_WORKER_RETRY_PACING=FLAT
+RETRY_AFTER_USED=NO
+OPENROUTER_OUTPUT_CONTRACT=json_object_plus_schema_in_prompt
+STRICT_NATIVE_JSON_SCHEMA=NO_FOR_CURRENT_OPENROUTER_PATH
+FAIL_CLOSED_DOWNSTREAM=YES
+GROUNDING_SHOULD_BE_WEAKENED=NO
+IMMEDIATE_PROVIDER_MODEL_SWITCH_JUSTIFIED=NO
+```
+
+Decision:
+
+```text
+VERDICT=E_MIXED
+SEVERITY=MEDIUM
+A_CODE_FIX_REQUIRED=YES
+B_RETRY_POLICY_CHANGE_REQUIRED=YES
+C_PROVIDER_MODEL_ROUTE_SHOULD_BE_EVALUATED_LATER=YES
+IMMEDIATE_PROVIDER_MODEL_SWITCH_JUSTIFIED=NO
+PRODUCTION_CHANGE_AUTHORIZED=NO
+```
+
+The next gate is a narrow offline implementation + independent review. The fix
+must not change matching thresholds, matching policy, grounding strictness,
+fallback state, discovery, delivery policy or persistent-runtime authorization.
 
 ## Step 6 — Evaluate accumulated legacy-filter and evidence-shadow data
 
