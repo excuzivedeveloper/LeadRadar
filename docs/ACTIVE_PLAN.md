@@ -1,8 +1,8 @@
 # LeadRadar — Active Plan
 
 **Status:** CANONICAL / ACTIVE  
-**Last verified:** 2026-09-04
-**Implementation baseline:** `359dc17fbf4632e84b0a74f01ac201a426cf4556`
+**Last verified:** 2026-09-05
+**Implementation baseline:** `a48b125bb486ad2b5f138840c8f8398a66f73088`
 
 This file defines execution order. A later capability being implemented in code
 does not mean it may be enabled before earlier gates pass.
@@ -24,6 +24,10 @@ OPENROUTER_MINIMAX_CONFIGURATION_ONLY
 BOUNDED_ONE_SHOT_OPENROUTER_OPPORTUNITY_ANALYSIS
 PR13_RU_EN_OWNER_CANARY_REPAIR
 PR13_REPEAT_BOUNDED_OWNER_MVP_CANARY
+BOUNDED_WEB_ONLY_OWNER_PROFILE_SOURCE_DISCOVERY
+PR15_REVIEW_MERGE_AND_PRODUCTION_SYNC
+PR15_ALEMBIC_20260904_0039
+PR15_BOUNDED_RUNTIME_SHADOW_CANARY
 ```
 
 The collector membership hypothesis is now experimentally confirmed:
@@ -49,53 +53,59 @@ OPPORTUNITY_ANALYSIS_MODEL=minimax/minimax-m3:free
 LIVE_AI_ANALYSIS_VALIDATED=YES
 READY_FOR_OPENROUTER_CONFIGURATION=COMPLETE
 READY_FOR_BOUNDED_AI_ANALYSIS=COMPLETE
-PERSISTENT_RUNTIME_AUTHORIZED=NO
+
 PR13_REVIEWED=YES
 PR13_MERGED=YES
 PR13_REPEAT_BOUNDED_CANARY=COMPLETED
-RUNTIME_STOPPED=YES
-OUTSTANDING_JOBS=0
-FRESH_NATURAL_LEAD=1
-FRESH_SAMPLE=C++/HFT
-OA_PIPELINE=PASS
 MATCHING_PIPELINE=PASS
 PR13_RU_EN_WEB_REPAIR_RESULT=INCONCLUSIVE_NO_RELEVANT_RU_EN_WEB_SAMPLE
-USEFUL_DELIVERY_PROVEN=NO
-READY_FOR_PERSISTENT_RUNTIME=NO
+
 PR14_IMPLEMENTED_IN_SHADOW=YES
-PR14_PRODUCTION_MATCH_POLICY_CHANGED=NO
-PR14_LIVE_VALIDATED=NO
 PR14_EVIDENCE_RUNTIME_INSTRUMENTATION_IMPLEMENTED=YES
+PR14_PRODUCTION_MATCH_POLICY_CHANGED=NO
+
+PR15_MERGED=YES
+PR15_PRODUCTION_SYNCED=YES
+PR15_MIGRATION_APPLIED_PRODUCTION=YES
+ALEMBIC_CURRENT=20260904_0039
+ALEMBIC_HEADS=20260904_0039
 SHADOW_RUNTIME_WIRED=YES
 SHADOW_DURABLE_PERSISTENCE=YES
-SHADOW_LIVE_VALIDATED=NO
+SHADOW_LIVE_VALIDATED=YES
+PR15_BOUNDED_RUNTIME_SHADOW_CANARY=PASS
 PRODUCTION_MATCH_POLICY_CHANGED=NO
 DELIVERY_POLICY_CHANGED=NO
-PR15_REVIEW_STATUS=CHANGES_REQUESTED_DOCS_ONLY
-PR15_MERGED=NO
-PR15_PRODUCTION_SYNCED=NO
-PR15_MIGRATION_APPLIED_PRODUCTION=NO
+
+BOUNDED_WEB_ONLY_DISCOVERY_DURING_DEVELOPMENT=ALLOWED_AS_SEPARATE_TASK
+PERSISTENT_SOURCE_DISCOVERY_AUTHORIZED=NO
+TELEGRAM_DISCOVERY_AUTHORIZED=NO
+SOURCE_AUDIT_AUTHORIZED=NO
+AUTO_APPROVE_AUTHORIZED=NO
+AUTO_JOIN_AUTHORIZED=NO
+
+USEFUL_DELIVERY_PROVEN=NO
+OWNER_DELIVERY_GATE=IN_PROGRESS_OR_NEXT
+PERSISTENT_RUNTIME_AUTHORIZED=NO
+READY_FOR_PERSISTENT_RUNTIME=NO
 ```
 
 Current gate:
 
 ```text
-PR15_DOCS_ONLY_FIX_AND_NARROW_RE_REVIEW
+BOUNDED_OWNER_DELIVERY_CANARY
 ```
 
 Required execution sequence:
 
 ```text
-1. close the docs-only MEDIUM finding
-2. narrow re-review
-3. owner merge authorization
-4. production code sync
-5. alembic upgrade 20260904_0039
-6. verify ALEMBIC_CURRENT=ALEMBIC_HEADS=20260904_0039
-7. separately authorize BOUNDED_RUNTIME_SHADOW_CANARY
-8. collect fresh shadow traces
-9. assess quality
-10. keep persistent runtime as a separate later gate
+1. complete the separately authorized bounded Owner Delivery Canary
+2. prove runtime stopped and inspect body-free DB/delivery evidence
+3. publish the exact final evidence report to a temporary GitHub evidence branch
+4. ORCHESTRATOR reads the actual GitHub evidence before final verdict
+5. if no relevant natural lead arrives, keep result INCONCLUSIVE; do not lower thresholds
+6. run bounded WEB_ONLY candidate discovery separately as development maintenance when useful
+7. keep Telegram discovery, Source Audit, auto-approve, auto-join and persistent discovery disabled
+8. keep persistent runtime as a separate later gate
 ```
 
 ## Step 0 — Pre-AI ingestion/shadow validation
@@ -266,39 +276,42 @@ to end before persistent runtime is considered.
 
 ## Step 5 — Bounded runtime evidence-shadow canary
 
-**Next runtime gate only after docs re-review, owner merge authorization,
-production code sync, Alembic upgrade to `20260904_0039`, and verification that
-`ALEMBIC_CURRENT=ALEMBIC_HEADS=20260904_0039`.**
+**Status: COMPLETE / PASS.**
 
-PR15 wires the PR14 OpportunityAnalysisV2 evidence-aware matching shadow into
-the normal fresh matching/delivery runtime path as one-way instrumentation. It
-adds separate durable persistence for `opportunity_evidence_shadow_traces`.
-
-Required invariants:
+PR15 is merged and production-synced at:
 
 ```text
-CURRENT_MATCHER_RUNS_FIRST=YES
-CURRENT_DELIVERY_POLICY_REMAINS_AUTHORITY=YES
-SHADOW_FAILURE_FAIL_OPEN=YES
-PRODUCTION_MATCH_POLICY_CHANGED=NO
-DELIVERY_POLICY_CHANGED=NO
-THRESHOLDS_CHANGED=NO
-SEMANTIC_WEIGHTS_CHANGED=NO
-HARD_FILTERS_CHANGED=NO
-SHADOW_EXTRA_OA_CALLS=0
-SHADOW_EXTRA_PROVIDER_CALLS=0
+PRODUCTION_HEAD=a48b125bb486ad2b5f138840c8f8398a66f73088
+ALEMBIC_CURRENT=20260904_0039
+ALEMBIC_HEADS=20260904_0039
 ```
 
-The canary must prove, for bounded fresh traffic only:
+The separately authorized bounded runtime shadow canary passed on fresh natural
+traffic. Independent GitHub evidence established:
 
-- current match trace exists;
-- current delivery decision is unchanged;
-- shadow trace exists in the separate table;
-- raw source is identified by `raw_message_id` plus raw content hash;
-- evidence concept IDs, versions, shadow decision, score and generic guard are
-  recorded without printing raw message text.
+```text
+FRESH_NATURAL_TRAFFIC_COUNT=2
+RAW_MESSAGES_DELTA=2
+OPPORTUNITIES_DELTA=1
+MATCH_EVALUATION_RUNS_DELTA=1
+MATCH_TRACES_DELTA=1
+SHADOW_TRACE_DELTA=1
+FRESH_CANARY_SHADOW_TRACE_COUNT=1
+FRESH_CANARY_SHADOW_TIED_TO_LIVE_RAW=YES
+FRESH_CANARY_SHADOW_INGESTION_ORIGIN=live
+RAW_CONTENT_SHA256_VERIFIED=YES
+RAW_MESSAGE_BODY_DUPLICATED_IN_SHADOW=NO
+CURRENT_DECISION_PRESERVED=YES
+SHADOW_DECISION_RECORDED=YES
+SHADOW_LIVE_VALIDATED=YES
+VERDICT=PASS
+```
 
-This gate does not authorize persistent runtime or policy changes.
+The current matcher remained authoritative; the validated sample was not
+delivery-eligible, so this PR15 gate did not itself prove useful owner delivery.
+
+The evidence report was independently read from temporary GitHub evidence branch
+`evidence/pr15-shadow-canary-20260905`. Persistent runtime remains unauthorized.
 
 ## Step 6 — Evaluate accumulated legacy-filter and evidence-shadow data
 
@@ -321,17 +334,51 @@ Known candidate issue: substring stop-word matching can reject legitimate text.
 Any change must be narrow, evidence-backed and independently reviewed. Do not
 weaken the filter merely to manufacture output.
 
-## Step 7 — Source discovery/audit rollout
+## Step 7 — Source discovery during development
 
-**Later stage.**
+**Status: BOUNDED WEB_ONLY CANDIDATE DISCOVERY ALLOWED; persistent discovery disabled.**
 
-Source discovery, Telegram graph/global/chat discovery and Source Audit exist in
-code but remain disabled in deployment.
+A separate bounded owner-profile discovery pass was already run on
+2026-09-02 using local SearXNG in WEB_ONLY mode:
 
-Enable them only as separate bounded tasks after core ingestion/AI/delivery
-behavior is proven.
+```text
+RUN_KEY=owner-web-candidate-canary-20260902-v1
+MODE=WEB_ONLY_CANDIDATE_ONLY
+SOURCES_BEFORE=15
+SOURCES_AFTER=20
+CANDIDATES_BEFORE=2
+CANDIDATES_AFTER=7
+NEW_CANDIDATES=5
+```
 
-Do not combine discovery rollout with first AI setup or first delivery canary.
+That run persisted candidate sources only. It did not approve or join them and
+made no Telegram discovery calls.
+
+During development, further **separately bounded WEB_ONLY** discovery tasks may
+be used to grow the candidate pool without waiting for the entire Owner MVP to
+finish. They must remain isolated from live delivery canaries.
+
+Required development-mode boundaries:
+
+```text
+WEB_ONLY=YES
+CANDIDATE_PERSISTENCE=YES
+AUTO_APPROVE=NO
+AUTO_JOIN=NO
+COLLECTION_FROM_NEW_CANDIDATES=NO
+SOURCE_AUDIT=NO
+SOURCE_GRAPH_DISCOVERY=NO
+TELEGRAM_GLOBAL_DISCOVERY=NO
+TELEGRAM_CHAT_DISCOVERY=NO
+PERSISTENT_SOURCE_DISCOVERY=NO
+```
+
+Full-runtime discovery flags remain disabled. Promotion of candidates to approved
+sources, Telegram membership/joining, Source Audit, Telegram graph/global/chat
+discovery, and persistent discovery each remain separate reviewed/authorized
+gates.
+
+Do not combine a bounded discovery pass with a delivery, AI, or matching canary.
 
 ## Step 8 — Persistent runtime deployment
 
