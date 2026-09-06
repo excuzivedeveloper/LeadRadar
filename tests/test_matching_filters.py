@@ -25,7 +25,15 @@ from freelancer_bot.persistence.opportunities import (
     OpportunityLifecycleStatus,
     OpportunitySourceObservationRecord,
 )
-from freelancer_bot.persistence.schema import opportunities
+from freelancer_bot.persistence.schema import (
+    collector_accounts,
+    durable_jobs,
+    opportunities,
+    opportunity_source_messages,
+    raw_messages,
+    sources,
+)
+from freelancer_bot.opportunity_dedup import PREFERRED_SOURCE_POLICY_VERSION
 from freelancer_bot.persistence.search_profiles import (
     SearchProfileConfirmationStatus,
     SearchProfileRecord,
@@ -407,6 +415,10 @@ class CandidateMatchingPostgresTest(unittest.IsolatedAsyncioTestCase):
         )
         opportunity_id = uuid4()
         async with self.database.transaction() as connection:
+            raw_message_id = await _insert_known_source_message(
+                connection,
+                opportunity_id=opportunity_id,
+            )
             await connection.execute(
                 opportunities.insert().values(
                     id=opportunity_id,
@@ -439,6 +451,14 @@ class CandidateMatchingPostgresTest(unittest.IsolatedAsyncioTestCase):
                     last_seen_at=NOW,
                     lifecycle_status="active",
                     lifecycle_changed_at=NOW,
+                    preferred_raw_message_id=raw_message_id,
+                    preferred_source_policy_version=PREFERRED_SOURCE_POLICY_VERSION,
+                )
+            )
+            await connection.execute(
+                opportunity_source_messages.insert().values(
+                    raw_message_id=raw_message_id,
+                    opportunity_id=opportunity_id,
                 )
             )
 
@@ -597,6 +617,65 @@ def _preferences(**overrides):
     }
     values.update(overrides)
     return parse_search_profile_preferences(**values)
+
+
+async def _insert_known_source_message(connection, *, opportunity_id):
+    raw_message_id = uuid4()
+    raw_job_id = uuid4()
+    correlation_id = uuid4()
+    source_key = opportunity_id.hex
+    collector_account_id = await connection.scalar(
+        collector_accounts.insert()
+        .values(
+            platform="telegram",
+            external_account_id=f"matching-filters:{source_key}",
+            display_name="Matching filters fixture collector",
+        )
+        .returning(collector_accounts.c.id)
+    )
+    source_id = await connection.scalar(
+        sources.insert()
+        .values(
+            platform="telegram",
+            external_id=f"username:matching_filters_{source_key}",
+            access_type="public",
+            lifecycle_status="approved",
+            display_name="Matching filters fixture source",
+            handle=f"@matching_filters_{source_key[:15]}",
+            canonical_url=f"https://t.me/matching_filters_{source_key}",
+            language="en",
+            language_origin="seed",
+        )
+        .returning(sources.c.id)
+    )
+    await connection.execute(
+        durable_jobs.insert().values(
+            id=raw_job_id,
+            job_type="telegram.raw_message.v1",
+            idempotency_key=f"matching-filters-fixture:{source_key}",
+            correlation_id=correlation_id,
+        )
+    )
+    await connection.execute(
+        raw_messages.insert().values(
+            id=raw_message_id,
+            source_id=source_id,
+            collector_account_id=collector_account_id,
+            processing_job_id=raw_job_id,
+            schema_version="telegram.raw_message.v1",
+            platform="telegram",
+            external_source_id=f"username:matching_filters_{source_key}",
+            external_message_id=42,
+            message_date=NOW,
+            observed_at=NOW,
+            message_url=f"https://t.me/matching_filters_{source_key}/42",
+            content="Build a Telegram bot",
+            transport_metadata={},
+            ingestion_origin="live",
+            correlation_id=correlation_id,
+        )
+    )
+    return raw_message_id
 
 
 def _opportunity(
