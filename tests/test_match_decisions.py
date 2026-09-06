@@ -26,6 +26,7 @@ from freelancer_bot.matching import (
     STRUCTURED_SCORING_POLICY_VERSION,
     STRUCTURED_SCORING_VERSION,
     StructuredScoringPolicy,
+    _penalized_red_flag_count,
 )
 from freelancer_bot.matching_service import CandidateMatchingService
 from freelancer_bot.metrics import InMemoryMetrics, MetricNames
@@ -68,70 +69,48 @@ EVALUATED_AT = datetime(2026, 8, 14, 18, 37, tzinfo=timezone.utc)
 
 
 class MatchDecisionTest(unittest.TestCase):
-    def test_strong_multidimensional_technical_evidence_survives_untyped_red_flag_cap(self):
+    def test_quality_duplicate_flags_do_not_double_penalize_case2_shape(self):
         profile = _owner_web_saas_profile()
+        red_flags = (
+            "low budget relative to a large multi-platform SaaS AI scope",
+            "no verifiable client identity or contact channel",
+            "broad scope likely requires a materially higher budget",
+            "suspicious payment wording creates a legitimacy concern",
+        )
         opportunity = _owner_web_saas_opportunity(
             quality=Decimal("0.1000"),
-            red_flags=(
-                "sanitized risk signal one",
-                "sanitized risk signal two",
-                "sanitized risk signal three",
-                "sanitized risk signal four",
-            ),
+            red_flags=red_flags,
         )
         opportunity = _seen_at(opportunity, EVALUATED_AT - timedelta(days=6))
-        old_policy = replace(
-            StructuredScoringPolicy(),
-            version="structured-matching-policy.v5-compat",
-            strong_evidence_red_flag_penalty_cap=Decimal("0.3200"),
-        )
 
-        pre_fix_trace = decide_and_rank_matches(
-            (_scoring(opportunity, (profile,), structured_policy=old_policy),),
-            evaluated_at=EVALUATED_AT,
-            policy=MatchDecisionPolicy(),
-        ).traces[0]
-        post_fix_trace = decide_and_rank_matches(
+        trace = decide_and_rank_matches(
             (_scoring(opportunity, (profile,)),),
             evaluated_at=EVALUATED_AT,
             policy=MatchDecisionPolicy(),
         ).traces[0]
 
-        self.assertTrue(pre_fix_trace.hard_filter_eligible)
+        self.assertEqual(len(red_flags), 4)
+        self.assertEqual(_penalized_red_flag_count(red_flags), 2)
+        self.assertTrue(trace.hard_filter_eligible)
         self.assertGreaterEqual(
-            pre_fix_trace.combined_relevance_score,
-            pre_fix_trace.minimum_relevance_threshold,
+            trace.combined_relevance_score,
+            trace.minimum_relevance_threshold,
         )
-        self.assertEqual(pre_fix_trace.red_flag_penalty, Decimal("0.3200"))
-        self.assertLess(
-            pre_fix_trace.final_rank_score,
-            pre_fix_trace.minimum_rank_score_threshold,
+        self.assertEqual(trace.red_flag_penalty, Decimal("0.1600"))
+        self.assertGreaterEqual(
+            trace.final_rank_score,
+            trace.minimum_rank_score_threshold,
         )
+        self.assertEqual(trace.decision_code, MatchDecisionCode.ELIGIBLE)
+        self.assertTrue(trace.eligible)
+        self.assertEqual(trace.minimum_relevance_threshold, Decimal("0.3000"))
+        self.assertEqual(trace.minimum_rank_score_threshold, Decimal("0.4000"))
         self.assertEqual(
-            pre_fix_trace.decision_code,
-            MatchDecisionCode.BELOW_RANK_SCORE_THRESHOLD,
-        )
-
-        self.assertTrue(post_fix_trace.hard_filter_eligible)
-        self.assertGreaterEqual(
-            post_fix_trace.combined_relevance_score,
-            post_fix_trace.minimum_relevance_threshold,
-        )
-        self.assertEqual(post_fix_trace.red_flag_penalty, Decimal("0.1600"))
-        self.assertGreaterEqual(
-            post_fix_trace.final_rank_score,
-            post_fix_trace.minimum_rank_score_threshold,
-        )
-        self.assertEqual(post_fix_trace.decision_code, MatchDecisionCode.ELIGIBLE)
-        self.assertTrue(post_fix_trace.eligible)
-        self.assertEqual(post_fix_trace.minimum_relevance_threshold, Decimal("0.3000"))
-        self.assertEqual(post_fix_trace.minimum_rank_score_threshold, Decimal("0.4000"))
-        self.assertEqual(
-            post_fix_trace.structured_scoring_version,
+            trace.structured_scoring_version,
             STRUCTURED_SCORING_VERSION,
         )
         self.assertEqual(
-            post_fix_trace.structured_policy_version,
+            trace.structured_policy_version,
             STRUCTURED_SCORING_POLICY_VERSION,
         )
 
@@ -162,26 +141,19 @@ class MatchDecisionTest(unittest.TestCase):
             MatchDecisionCode.BELOW_RELEVANCE_THRESHOLD,
         )
 
-    def test_generic_web_backend_ai_overlap_cannot_trigger_red_flag_cap(self):
+    def test_generic_one_skill_overlap_keeps_full_risk_penalty(self):
+        red_flags = _serious_risk_flags()
         trace = decide_and_rank_matches(
             (
                 _scoring(
                     _with_red_flags(
                         _opportunity(
-                            role_title="Web backend AI automation specialist",
-                            skills=(),
-                            category="automation",
-                            task_summary=(
-                                "Need web developer, backend specialist, "
-                                "AI automation."
-                            ),
+                            role_title="Web developer",
+                            skills=("React",),
+                            category="web",
+                            task_summary="Integrate a React dashboard.",
                         ),
-                        red_flags=(
-                            "sanitized risk signal one",
-                            "sanitized risk signal two",
-                            "sanitized risk signal three",
-                            "sanitized risk signal four",
-                        ),
+                        red_flags=red_flags,
                     ),
                     (_owner_web_saas_profile(),),
                 ),
@@ -190,23 +162,16 @@ class MatchDecisionTest(unittest.TestCase):
             policy=MatchDecisionPolicy(),
         ).traces[0]
 
-        self.assertFalse(trace.eligible)
-        self.assertNotEqual(trace.red_flag_penalty, Decimal("0.1600"))
+        self.assertEqual(_penalized_red_flag_count(red_flags), 4)
+        self.assertEqual(trace.red_flag_penalty, Decimal("0.3200"))
 
-    def test_red_flag_penalty_remains_effective_without_strong_independent_evidence(self):
+    def test_strong_technical_fit_keeps_full_serious_risk_penalty(self):
         profile = _owner_web_saas_profile()
         opportunity = _owner_web_saas_opportunity(
-            role_title="Frontend UI developer",
-            skills=("React",),
-            task_summary="Build a frontend web dashboard.",
             quality=Decimal("0.1000"),
-            red_flags=(
-                "sanitized risk signal one",
-                "sanitized risk signal two",
-                "sanitized risk signal three",
-                "sanitized risk signal four",
-            ),
+            red_flags=_serious_risk_flags(),
         )
+        opportunity = _seen_at(opportunity, EVALUATED_AT - timedelta(days=6))
 
         trace = decide_and_rank_matches(
             (_scoring(opportunity, (profile,)),),
@@ -222,6 +187,66 @@ class MatchDecisionTest(unittest.TestCase):
             MatchDecisionCode.BELOW_RANK_SCORE_THRESHOLD,
         )
 
+    def test_mixed_risk_and_quality_flag_keeps_risk_penalty(self):
+        red_flags = ("low budget and suspicious fraud concern",)
+        trace = decide_and_rank_matches(
+            (
+                _scoring(
+                    _owner_web_saas_opportunity(red_flags=red_flags),
+                    (_owner_web_saas_profile(),),
+                ),
+            ),
+            evaluated_at=EVALUATED_AT,
+            policy=MatchDecisionPolicy(),
+        ).traces[0]
+
+        self.assertEqual(_penalized_red_flag_count(red_flags), 1)
+        self.assertEqual(trace.red_flag_penalty, Decimal("0.0800"))
+
+    def test_unknown_red_flag_text_keeps_risk_penalty(self):
+        red_flags = ("unusual condition that requires manual review",)
+        trace = decide_and_rank_matches(
+            (
+                _scoring(
+                    _owner_web_saas_opportunity(red_flags=red_flags),
+                    (_owner_web_saas_profile(),),
+                ),
+            ),
+            evaluated_at=EVALUATED_AT,
+            policy=MatchDecisionPolicy(),
+        ).traces[0]
+
+        self.assertEqual(_penalized_red_flag_count(red_flags), 1)
+        self.assertEqual(trace.red_flag_penalty, Decimal("0.0800"))
+
+    def test_unresolved_gis_mapping_shape_does_not_reduce_risk_penalty(self):
+        red_flags = _serious_risk_flags()
+        trace = decide_and_rank_matches(
+            (
+                _scoring(
+                    _with_red_flags(
+                        _opportunity(
+                            role_title="GIS mapping JavaScript developer",
+                            skills=("MapLibre", "Leaflet", "QGIS", "JavaScript"),
+                            category="GIS mapping",
+                            task_summary=(
+                                "Build a MapLibre and Leaflet mapping interface "
+                                "with QGIS data."
+                            ),
+                        ),
+                        red_flags=red_flags,
+                    ),
+                    (_owner_web_saas_profile(),),
+                ),
+            ),
+            evaluated_at=EVALUATED_AT,
+            policy=MatchDecisionPolicy(),
+        ).traces[0]
+
+        self.assertEqual(_penalized_red_flag_count(red_flags), 4)
+        self.assertEqual(trace.red_flag_penalty, Decimal("0.3200"))
+        self.assertNotEqual(trace.red_flag_penalty, Decimal("0.1600"))
+
     def test_no_red_flag_strong_match_preserves_existing_decision_semantics(self):
         profile = _owner_web_saas_profile()
         opportunity = _owner_web_saas_opportunity(quality=Decimal("0.1000"))
@@ -230,25 +255,10 @@ class MatchDecisionTest(unittest.TestCase):
             evaluated_at=EVALUATED_AT,
             policy=MatchDecisionPolicy(),
         ).traces[0]
-        no_cap_trace = decide_and_rank_matches(
-            (
-                _scoring(
-                    opportunity,
-                    (profile,),
-                    structured_policy=replace(
-                        StructuredScoringPolicy(),
-                        version="structured-matching-policy.v5-compat",
-                        strong_evidence_red_flag_penalty_cap=Decimal("0.3200"),
-                    ),
-                ),
-            ),
-            evaluated_at=EVALUATED_AT,
-            policy=MatchDecisionPolicy(),
-        ).traces[0]
 
         self.assertEqual(default_trace.red_flag_penalty, Decimal("0.0000"))
-        self.assertEqual(default_trace.decision_code, no_cap_trace.decision_code)
-        self.assertEqual(default_trace.final_rank_score, no_cap_trace.final_rank_score)
+        self.assertEqual(default_trace.decision_code, MatchDecisionCode.ELIGIBLE)
+        self.assertTrue(default_trace.eligible)
 
     def test_default_threshold_stays_0300_for_ru_en_web_canary_repair(self):
         policy = MatchDecisionPolicy()
@@ -1031,6 +1041,15 @@ def _with_red_flags(opportunity, *, red_flags):
     return replace(
         opportunity,
         analysis=opportunity.analysis.model_copy(update={"red_flags": red_flags}),
+    )
+
+
+def _serious_risk_flags():
+    return (
+        "scam concern",
+        "identity impersonation concern",
+        "suspicious payment fraud concern",
+        "spam legitimacy concern",
     )
 
 

@@ -171,7 +171,6 @@ class StructuredScoringPolicy:
     source_quality_weight: Decimal = Decimal("0.10")
     red_flag_penalty: Decimal = Decimal("0.08")
     maximum_red_flag_penalty: Decimal = Decimal("0.32")
-    strong_evidence_red_flag_penalty_cap: Decimal = Decimal("0.16")
 
     def __post_init__(self) -> None:
         if not _VERSION_PATTERN.fullmatch(self.version):
@@ -205,16 +204,6 @@ class StructuredScoringPolicy:
             raise ValueError("red-flag penalty must not be negative")
         if not Decimal("0") <= self.maximum_red_flag_penalty <= Decimal("1"):
             raise ValueError("maximum red-flag penalty must be between 0 and 1")
-        if not Decimal("0") <= self.strong_evidence_red_flag_penalty_cap <= Decimal(
-            "1"
-        ):
-            raise ValueError(
-                "strong-evidence red-flag penalty cap must be between 0 and 1"
-            )
-        if self.strong_evidence_red_flag_penalty_cap > self.maximum_red_flag_penalty:
-            raise ValueError(
-                "strong-evidence red-flag penalty cap must not exceed maximum"
-            )
 
 
 @dataclass(frozen=True)
@@ -491,14 +480,9 @@ def score_candidate_structured(
     raw_red_flag_penalty = _quantize(
         min(
             selected_policy.maximum_red_flag_penalty,
-            selected_policy.red_flag_penalty * len(analysis.red_flags),
+            selected_policy.red_flag_penalty
+            * _penalized_red_flag_count(analysis.red_flags),
         )
-    )
-    red_flag_penalty = _effective_red_flag_penalty(
-        raw_red_flag_penalty,
-        components,
-        relevance_score,
-        selected_policy,
     )
     aggregate = (
         relevance_score * selected_policy.relevance_weight
@@ -506,7 +490,7 @@ def score_candidate_structured(
     )
     if source_quality_score is not None:
         aggregate += source_quality_score * selected_policy.source_quality_weight
-    structured_score = _quantize(max(Decimal("0"), aggregate - red_flag_penalty))
+    structured_score = _quantize(max(Decimal("0"), aggregate - raw_red_flag_penalty))
     return StructuredCandidateScore(
         opportunity_id=opportunity.id,
         profile_id=profile.id,
@@ -514,7 +498,7 @@ def score_candidate_structured(
         user_relevance_score=relevance_score,
         opportunity_quality_score=opportunity_quality_score,
         source_quality_score=source_quality_score,
-        red_flag_penalty=red_flag_penalty,
+        red_flag_penalty=raw_red_flag_penalty,
         structured_score=structured_score,
         source_quality_snapshot_id=(
             None if source_quality is None else source_quality.id
@@ -523,36 +507,125 @@ def score_candidate_structured(
     )
 
 
-def _effective_red_flag_penalty(
-    raw_penalty: Decimal,
-    components: tuple[StructuredScoreComponent, ...],
-    relevance_score: Decimal,
-    policy: StructuredScoringPolicy,
-) -> Decimal:
-    if raw_penalty <= policy.strong_evidence_red_flag_penalty_cap:
-        return raw_penalty
-    if not _has_strong_independent_technical_evidence(components, relevance_score):
-        return raw_penalty
-    return _quantize(policy.strong_evidence_red_flag_penalty_cap)
+def _penalized_red_flag_count(red_flags: tuple[str, ...]) -> int:
+    return sum(0 if _is_quality_duplicate_red_flag(flag) else 1 for flag in red_flags)
 
 
-def _has_strong_independent_technical_evidence(
-    components: tuple[StructuredScoreComponent, ...],
-    relevance_score: Decimal,
-) -> bool:
-    if relevance_score < Decimal("0.5000"):
+def _is_quality_duplicate_red_flag(value: str) -> bool:
+    text = _normalize_match_text(value)
+    if not text:
         return False
-    by_name = {component.name: component for component in components}
-    for name in ("capability", "action_or_problem", "platform", "technology"):
-        if by_name.get(name, _score_component(name, None, Decimal("0"))).score != Decimal(
-            "1.0000"
-        ):
-            return False
-    for name in ("role", "skills"):
-        score = by_name.get(name, _score_component(name, None, Decimal("0"))).score
-        if score is None or score < Decimal("0.5000"):
-            return False
-    return True
+    if _has_risk_red_flag_signal(text):
+        return False
+    return _has_quality_duplicate_red_flag_signal(text)
+
+
+def _has_risk_red_flag_signal(text: str) -> bool:
+    risk_terms = (
+        "scam",
+        "spam",
+        "fraud",
+        "fraudulent",
+        "identity",
+        "identit",
+        "impersonation",
+        "impersonat",
+        "client identity",
+        "verifiable client",
+        "unverifiable client",
+        "contact channel",
+        "no contact",
+        "payment",
+        "pay ",
+        "paid",
+        "card",
+        "legitimacy",
+        "legitimate",
+        "suspicious",
+        "credibility",
+        "credential",
+        "security",
+        "malicious",
+        "скам",
+        "спам",
+        "мошен",
+        "фрод",
+        "личност",
+        "личн",
+        "самозван",
+        "контакт",
+        "оплат",
+        "платеж",
+        "карт",
+        "легитим",
+        "подозр",
+        "довер",
+        "безопас",
+        "вредонос",
+    )
+    return any(term in text for term in risk_terms)
+
+
+def _has_quality_duplicate_red_flag_signal(text: str) -> bool:
+    quality_terms = (
+        "low budget",
+        "budget too low",
+        "too low budget",
+        "insufficient budget",
+        "unrealistic budget",
+        "small budget",
+        "limited budget",
+        "scope too broad",
+        "broad scope",
+        "large scope",
+        "wide scope",
+        "scope/budget mismatch",
+        "scope budget mismatch",
+        "budget/scope mismatch",
+        "budget scope mismatch",
+        "scope for budget",
+        "budget relative to scope",
+        "budget relative to a large",
+        "higher budget",
+        "materially higher budget",
+        "unclear requirements",
+        "vague requirements",
+        "undefined scope",
+        "unspecified scope",
+        "missing deliverables",
+        "missing timeline",
+        "missing deadline",
+        "no timeline",
+        "no deadline",
+        "unclear deliverables",
+        "unclear process",
+        "низкий бюджет",
+        "маленький бюджет",
+        "недостаточный бюджет",
+        "нереалистичный бюджет",
+        "бюджет слишком низ",
+        "широкий скоуп",
+        "широкий объем",
+        "слишком широкий",
+        "объем работ",
+        "несоответствие бюджета",
+        "бюджет не соответствует",
+        "неясные требования",
+        "размытые требования",
+        "неопределенный скоуп",
+        "неопределённый скоуп",
+        "не указан срок",
+        "нет сроков",
+        "нет дедлайна",
+        "не указаны результаты",
+    )
+    return any(term in text for term in quality_terms)
+
+
+def _normalize_match_text(value: str) -> str:
+    return " ".join(
+        unicodedata.normalize("NFKC", value).casefold().replace("/", " ").split()
+    )
 
 
 def score_narrowed_candidates(

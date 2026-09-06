@@ -516,9 +516,6 @@ def _scoring_policy_config(
             "maximum_red_flag_penalty": str(
                 structured.maximum_red_flag_penalty
             ),
-            "strong_evidence_red_flag_penalty_cap": str(
-                structured.strong_evidence_red_flag_penalty_cap
-            ),
         },
         "semantic": {
             "version": semantic.version,
