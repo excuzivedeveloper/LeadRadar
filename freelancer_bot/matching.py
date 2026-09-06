@@ -1021,8 +1021,9 @@ def _candidate_exclusion(
     source_language = _preferred_source_language(opportunity)
     if profile.preferences.source_languages is not None:
         if source_language is None:
-            return CandidateExclusionCode.SOURCE_LANGUAGE_UNRESOLVED
-        if source_language not in profile.preferences.source_languages:
+            if _requires_known_source_language(profile.preferences.source_languages):
+                return CandidateExclusionCode.SOURCE_LANGUAGE_UNRESOLVED
+        elif source_language not in profile.preferences.source_languages:
             return CandidateExclusionCode.SOURCE_LANGUAGE_MISMATCH
 
     profile_type = _profile_opportunity_type(analysis.opportunity_type)
@@ -1118,13 +1119,14 @@ def _evaluate_source_language_constraint(
         return
     source_language = _preferred_source_language(opportunity)
     if source_language is None:
-        failures.append(
-            _failure(
-                HardFilterCode.SOURCE_LANGUAGE_UNRESOLVED,
-                None,
-                selected,
+        if _requires_known_source_language(selected):
+            failures.append(
+                _failure(
+                    HardFilterCode.SOURCE_LANGUAGE_UNRESOLVED,
+                    None,
+                    selected,
+                )
             )
-        )
     elif source_language not in selected:
         failures.append(
             _failure(
@@ -1140,6 +1142,10 @@ def _preferred_source_language(opportunity: CanonicalOpportunityRecord) -> str |
         return None
     value = opportunity.preferred_source.source_language
     return value if value in {"ru", "en"} else None
+
+
+def _requires_known_source_language(selected: tuple[str, ...]) -> bool:
+    return frozenset(selected) != frozenset({"ru", "en"})
 
 
 def _known_term_mismatch(

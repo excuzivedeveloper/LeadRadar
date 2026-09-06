@@ -100,6 +100,25 @@ class MatchDecisionTest(unittest.TestCase):
         self.assertIsNone(diagnostics[0]["source_language"])
         self.assertEqual(diagnostics[0]["selected_source_languages"], ("ru",))
 
+    def test_unresolved_source_language_does_not_block_default_all_language_selection(self):
+        profile = _profile()
+        profile = replace(
+            profile,
+            preferences=replace(profile.preferences, source_languages=("ru", "en")),
+        )
+
+        trace = decide_and_rank_matches(
+            (_scoring(_opportunity(), (profile,)),),
+            evaluated_at=EVALUATED_AT,
+            policy=_permissive_policy(),
+        ).traces[0]
+
+        self.assertTrue(trace.hard_filter_eligible)
+        self.assertNotIn(
+            "source_language_unresolved",
+            {reason["code"] for reason in trace.hard_filter_reasons},
+        )
+
     def test_quality_duplicate_flags_do_not_double_penalize_case2_shape(self):
         profile = _owner_web_saas_profile()
         red_flags = (
