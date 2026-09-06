@@ -1284,6 +1284,8 @@ class PersonalizedDeliveryPostgresTest(unittest.IsolatedAsyncioTestCase):
                     display_name="Delivery fixture source",
                     handle=f"@delivery_{source_key}",
                     canonical_url=f"https://t.me/delivery_{source_key}",
+                    language="en",
+                    language_origin="seed",
                 )
                 .returning(sources.c.id)
             )
