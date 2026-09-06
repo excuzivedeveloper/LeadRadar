@@ -175,17 +175,20 @@ class MatchingHardFilterTest(unittest.TestCase):
             {HardFilterCode.SOURCE_LANGUAGE_MISMATCH},
         )
 
-    def test_unresolved_source_language_fails_closed_only_for_explicit_profiles(self):
-        explicit = _profile(preferences=_preferences(source_languages=("ru", "en")))
+    def test_unresolved_source_language_fails_closed_only_for_narrowed_profiles(self):
+        all_languages = _profile(preferences=_preferences(source_languages=("ru", "en")))
+        narrowed = _profile(preferences=_preferences(source_languages=("ru",)))
         legacy = _profile(preferences=_preferences(source_languages=None))
         opportunity = _opportunity(source_language=None)
 
-        explicit_decision = evaluate_hard_filters(opportunity, explicit)
+        all_languages_decision = evaluate_hard_filters(opportunity, all_languages)
+        narrowed_decision = evaluate_hard_filters(opportunity, narrowed)
         legacy_decision = evaluate_hard_filters(opportunity, legacy)
 
-        self.assertFalse(explicit_decision.eligible)
+        self.assertTrue(all_languages_decision.eligible)
+        self.assertFalse(narrowed_decision.eligible)
         self.assertEqual(
-            _failure_codes(explicit_decision),
+            _failure_codes(narrowed_decision),
             {HardFilterCode.SOURCE_LANGUAGE_UNRESOLVED},
         )
         self.assertTrue(legacy_decision.eligible)
