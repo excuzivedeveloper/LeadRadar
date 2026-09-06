@@ -38,8 +38,8 @@ from .search_profiles import (
 
 
 MATCHING_FILTER_VERSION = "matching-hard-filters.v5"
-STRUCTURED_SCORING_VERSION = "structured-matching-score.v5"
-STRUCTURED_SCORING_POLICY_VERSION = "structured-matching-policy.v5"
+STRUCTURED_SCORING_VERSION = "structured-matching-score.v6"
+STRUCTURED_SCORING_POLICY_VERSION = "structured-matching-policy.v6"
 _VERSION_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]{0,99}$")
 _SCORE_QUANTUM = Decimal("0.0001")
 _ROLE_FAMILY_CONCEPTS = frozenset(
@@ -477,10 +477,11 @@ def score_candidate_structured(
     source_quality_score = (
         None if source_quality is None else _source_quality_score(source_quality)
     )
-    red_flag_penalty = _quantize(
+    raw_red_flag_penalty = _quantize(
         min(
             selected_policy.maximum_red_flag_penalty,
-            selected_policy.red_flag_penalty * len(analysis.red_flags),
+            selected_policy.red_flag_penalty
+            * _penalized_red_flag_count(analysis.red_flags),
         )
     )
     aggregate = (
@@ -489,7 +490,7 @@ def score_candidate_structured(
     )
     if source_quality_score is not None:
         aggregate += source_quality_score * selected_policy.source_quality_weight
-    structured_score = _quantize(max(Decimal("0"), aggregate - red_flag_penalty))
+    structured_score = _quantize(max(Decimal("0"), aggregate - raw_red_flag_penalty))
     return StructuredCandidateScore(
         opportunity_id=opportunity.id,
         profile_id=profile.id,
@@ -497,12 +498,176 @@ def score_candidate_structured(
         user_relevance_score=relevance_score,
         opportunity_quality_score=opportunity_quality_score,
         source_quality_score=source_quality_score,
-        red_flag_penalty=red_flag_penalty,
+        red_flag_penalty=raw_red_flag_penalty,
         structured_score=structured_score,
         source_quality_snapshot_id=(
             None if source_quality is None else source_quality.id
         ),
         policy_version=selected_policy.version,
+    )
+
+
+def _penalized_red_flag_count(red_flags: tuple[str, ...]) -> int:
+    return sum(0 if _is_quality_duplicate_red_flag(flag) else 1 for flag in red_flags)
+
+
+def _is_quality_duplicate_red_flag(value: str) -> bool:
+    text = _normalize_match_text(value)
+    if not text:
+        return False
+    if _has_risk_red_flag_signal(text):
+        return False
+    return _matches_complete_quality_duplicate_red_flag(text)
+
+
+def _has_risk_red_flag_signal(text: str) -> bool:
+    risk_terms = (
+        "scam",
+        "spam",
+        "fraud",
+        "fraudulent",
+        "identity",
+        "identit",
+        "impersonation",
+        "impersonat",
+        "client identity",
+        "verifiable client",
+        "unverifiable client",
+        "contact channel",
+        "no contact",
+        "payment",
+        "pay ",
+        "paid",
+        "card",
+        "legitimacy",
+        "legitimate",
+        "suspicious",
+        "credibility",
+        "credential",
+        "security",
+        "malicious",
+        "скам",
+        "спам",
+        "мошен",
+        "фрод",
+        "личност",
+        "личн",
+        "самозван",
+        "контакт",
+        "оплат",
+        "платеж",
+        "карт",
+        "легитим",
+        "подозр",
+        "довер",
+        "безопас",
+        "вредонос",
+    )
+    return any(term in text for term in risk_terms)
+
+
+def _matches_complete_quality_duplicate_red_flag(text: str) -> bool:
+    tokens = tuple(text.split())
+    return (
+        tokens in _QUALITY_DUPLICATE_TOKEN_FORMS
+        or _matches_scope_budget_quality_form(tokens)
+    )
+
+
+_QUALITY_DUPLICATE_TOKEN_FORMS = frozenset(
+    tuple(form.split())
+    for form in (
+        "low budget",
+        "budget too low",
+        "too low budget",
+        "insufficient budget",
+        "unrealistic budget",
+        "small budget",
+        "limited budget",
+        "scope too broad for budget",
+        "scope too broad for the budget",
+        "scope too broad for stated budget",
+        "scope too broad for the stated budget",
+        "broad scope for budget",
+        "broad scope for the budget",
+        "broad scope for stated budget",
+        "broad scope for the stated budget",
+        "scope budget mismatch",
+        "budget scope mismatch",
+        "broad scope likely requires a higher budget",
+        "broad scope likely requires a materially higher budget",
+        "unclear requirements",
+        "vague requirements",
+        "undefined scope",
+        "unspecified scope",
+        "missing deliverables",
+        "unclear deliverables",
+        "missing timeline",
+        "missing deadline",
+        "no timeline",
+        "no deadline",
+        "unclear process",
+        "низкий бюджет",
+        "маленький бюджет",
+        "недостаточный бюджет",
+        "нереалистичный бюджет",
+        "бюджет слишком низ",
+        "слишком низкий бюджет",
+        "широкий скоуп",
+        "широкий объем работ",
+        "слишком широкий скоуп",
+        "слишком широкий объем работ",
+        "несоответствие бюджета и скоупа",
+        "бюджет не соответствует скоупу",
+        "неясные требования",
+        "размытые требования",
+        "неопределенный скоуп",
+        "неопределённый скоуп",
+        "не указаны результаты",
+        "не указан срок",
+        "нет сроков",
+        "нет дедлайна",
+    )
+)
+
+_SAFE_SCOPE_DESCRIPTOR_TOKENS = frozenset(
+    {
+        "ai",
+        "app",
+        "application",
+        "large",
+        "multi",
+        "multi-platform",
+        "multiplatform",
+        "platform",
+        "product",
+        "saas",
+        "software",
+        "web",
+        "wide",
+    }
+)
+
+
+def _matches_scope_budget_quality_form(tokens: tuple[str, ...]) -> bool:
+    if len(tokens) < 7:
+        return False
+    if tokens[:4] != ("low", "budget", "relative", "to"):
+        return False
+    remainder = tokens[4:]
+    if remainder[0] in {"a", "an", "the"}:
+        remainder = remainder[1:]
+    if len(remainder) < 2 or remainder[-1] != "scope":
+        return False
+    if remainder[0] not in {"large", "broad", "wide"}:
+        return False
+    descriptors = remainder[:-1]
+    return all(token in _SAFE_SCOPE_DESCRIPTOR_TOKENS for token in descriptors)
+
+
+def _normalize_match_text(value: str) -> str:
+    return " ".join(
+        unicodedata.normalize("NFKC", value).casefold().replace("/", " ").split()
     )
 
 

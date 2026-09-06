@@ -22,6 +22,13 @@ from freelancer_bot.match_decisions import (
     decide_and_rank_matches,
     match_decision_policy_from_config,
 )
+from freelancer_bot.matching import (
+    STRUCTURED_SCORING_POLICY_VERSION,
+    STRUCTURED_SCORING_VERSION,
+    StructuredScoringPolicy,
+    _is_quality_duplicate_red_flag,
+    _penalized_red_flag_count,
+)
 from freelancer_bot.matching_service import CandidateMatchingService
 from freelancer_bot.metrics import InMemoryMetrics, MetricNames
 from freelancer_bot.opportunity_analysis import (
@@ -63,6 +70,244 @@ EVALUATED_AT = datetime(2026, 8, 14, 18, 37, tzinfo=timezone.utc)
 
 
 class MatchDecisionTest(unittest.TestCase):
+    def test_quality_duplicate_flags_do_not_double_penalize_case2_shape(self):
+        profile = _owner_web_saas_profile()
+        red_flags = (
+            "low budget relative to a large multi-platform SaaS AI scope",
+            "no verifiable client identity or contact channel",
+            "broad scope likely requires a materially higher budget",
+            "suspicious payment wording creates a legitimacy concern",
+        )
+        opportunity = _owner_web_saas_opportunity(
+            quality=Decimal("0.1000"),
+            red_flags=red_flags,
+        )
+        opportunity = _seen_at(opportunity, EVALUATED_AT - timedelta(days=6))
+
+        trace = decide_and_rank_matches(
+            (_scoring(opportunity, (profile,)),),
+            evaluated_at=EVALUATED_AT,
+            policy=MatchDecisionPolicy(),
+        ).traces[0]
+
+        self.assertEqual(len(red_flags), 4)
+        self.assertEqual(_penalized_red_flag_count(red_flags), 2)
+        self.assertTrue(trace.hard_filter_eligible)
+        self.assertGreaterEqual(
+            trace.combined_relevance_score,
+            trace.minimum_relevance_threshold,
+        )
+        self.assertEqual(trace.red_flag_penalty, Decimal("0.1600"))
+        self.assertGreaterEqual(
+            trace.final_rank_score,
+            trace.minimum_rank_score_threshold,
+        )
+        self.assertEqual(trace.decision_code, MatchDecisionCode.ELIGIBLE)
+        self.assertTrue(trace.eligible)
+        self.assertEqual(trace.minimum_relevance_threshold, Decimal("0.3000"))
+        self.assertEqual(trace.minimum_rank_score_threshold, Decimal("0.4000"))
+        self.assertEqual(
+            trace.structured_scoring_version,
+            STRUCTURED_SCORING_VERSION,
+        )
+        self.assertEqual(
+            trace.structured_policy_version,
+            STRUCTURED_SCORING_POLICY_VERSION,
+        )
+
+    def test_php_codeigniter_mysql_true_negative_stays_below_relevance(self):
+        trace = decide_and_rank_matches(
+            (
+                _scoring(
+                    _opportunity(
+                        role_title="CodeIgniter 4 PHP developer",
+                        skills=("PHP", "CodeIgniter 4", "MySQL"),
+                        category="CMS maintenance",
+                        task_summary=(
+                            "Maintain a PHP MySQL website built on "
+                            "CodeIgniter 4."
+                        ),
+                    ),
+                    (_owner_web_saas_profile(),),
+                ),
+            ),
+            evaluated_at=EVALUATED_AT,
+            policy=MatchDecisionPolicy(),
+        ).traces[0]
+
+        self.assertTrue(trace.hard_filter_eligible)
+        self.assertFalse(trace.eligible)
+        self.assertEqual(
+            trace.decision_code,
+            MatchDecisionCode.BELOW_RELEVANCE_THRESHOLD,
+        )
+
+    def test_generic_one_skill_overlap_keeps_full_risk_penalty(self):
+        red_flags = _serious_risk_flags()
+        trace = decide_and_rank_matches(
+            (
+                _scoring(
+                    _with_red_flags(
+                        _opportunity(
+                            role_title="Web developer",
+                            skills=("React",),
+                            category="web",
+                            task_summary="Integrate a React dashboard.",
+                        ),
+                        red_flags=red_flags,
+                    ),
+                    (_owner_web_saas_profile(),),
+                ),
+            ),
+            evaluated_at=EVALUATED_AT,
+            policy=MatchDecisionPolicy(),
+        ).traces[0]
+
+        self.assertEqual(_penalized_red_flag_count(red_flags), 4)
+        self.assertEqual(trace.red_flag_penalty, Decimal("0.3200"))
+
+    def test_strong_technical_fit_keeps_full_serious_risk_penalty(self):
+        profile = _owner_web_saas_profile()
+        opportunity = _owner_web_saas_opportunity(
+            quality=Decimal("0.1000"),
+            red_flags=_serious_risk_flags(),
+        )
+        opportunity = _seen_at(opportunity, EVALUATED_AT - timedelta(days=6))
+
+        trace = decide_and_rank_matches(
+            (_scoring(opportunity, (profile,)),),
+            evaluated_at=EVALUATED_AT,
+            policy=MatchDecisionPolicy(),
+        ).traces[0]
+
+        self.assertTrue(trace.hard_filter_eligible)
+        self.assertEqual(trace.red_flag_penalty, Decimal("0.3200"))
+        self.assertFalse(trace.eligible)
+        self.assertEqual(
+            trace.decision_code,
+            MatchDecisionCode.BELOW_RANK_SCORE_THRESHOLD,
+        )
+
+    def test_mixed_risk_and_quality_flag_keeps_risk_penalty(self):
+        red_flags = ("low budget and suspicious fraud concern",)
+        trace = decide_and_rank_matches(
+            (
+                _scoring(
+                    _owner_web_saas_opportunity(red_flags=red_flags),
+                    (_owner_web_saas_profile(),),
+                ),
+            ),
+            evaluated_at=EVALUATED_AT,
+            policy=MatchDecisionPolicy(),
+        ).traces[0]
+
+        self.assertEqual(_penalized_red_flag_count(red_flags), 1)
+        self.assertEqual(trace.red_flag_penalty, Decimal("0.0800"))
+
+    def test_quality_substring_with_dubious_requester_stays_counted(self):
+        self._assert_single_red_flag_counted(
+            "low budget and requester seems dubious",
+        )
+
+    def test_scope_quality_with_deceptive_behavior_stays_counted(self):
+        self._assert_single_red_flag_counted(
+            "broad scope but client behavior feels deceptive",
+        )
+
+    def test_requirements_quality_with_fake_counterparty_stays_counted(self):
+        self._assert_single_red_flag_counted(
+            "unclear requirements and counterparty seems fake",
+        )
+
+    def test_budget_quality_with_questionable_payer_stays_counted(self):
+        self._assert_single_red_flag_counted(
+            "small budget with questionable payer behavior",
+        )
+
+    def test_quality_prefix_with_unknown_trust_suffix_stays_counted(self):
+        self._assert_single_red_flag_counted(
+            "low budget; manual trust review required",
+        )
+
+    def test_quality_suffix_with_unknown_trust_prefix_stays_counted(self):
+        self._assert_single_red_flag_counted(
+            "manual trust review required; low budget",
+        )
+
+    def test_unknown_red_flag_text_keeps_risk_penalty(self):
+        red_flags = ("unusual condition that requires manual review",)
+        trace = decide_and_rank_matches(
+            (
+                _scoring(
+                    _owner_web_saas_opportunity(red_flags=red_flags),
+                    (_owner_web_saas_profile(),),
+                ),
+            ),
+            evaluated_at=EVALUATED_AT,
+            policy=MatchDecisionPolicy(),
+        ).traces[0]
+
+        self.assertEqual(_penalized_red_flag_count(red_flags), 1)
+        self.assertEqual(trace.red_flag_penalty, Decimal("0.0800"))
+
+    def test_unresolved_gis_mapping_shape_does_not_reduce_risk_penalty(self):
+        red_flags = _serious_risk_flags()
+        trace = decide_and_rank_matches(
+            (
+                _scoring(
+                    _with_red_flags(
+                        _opportunity(
+                            role_title="GIS mapping JavaScript developer",
+                            skills=("MapLibre", "Leaflet", "QGIS", "JavaScript"),
+                            category="GIS mapping",
+                            task_summary=(
+                                "Build a MapLibre and Leaflet mapping interface "
+                                "with QGIS data."
+                            ),
+                        ),
+                        red_flags=red_flags,
+                    ),
+                    (_owner_web_saas_profile(),),
+                ),
+            ),
+            evaluated_at=EVALUATED_AT,
+            policy=MatchDecisionPolicy(),
+        ).traces[0]
+
+        self.assertEqual(_penalized_red_flag_count(red_flags), 4)
+        self.assertEqual(trace.red_flag_penalty, Decimal("0.3200"))
+        self.assertNotEqual(trace.red_flag_penalty, Decimal("0.1600"))
+
+    def test_no_red_flag_strong_match_preserves_existing_decision_semantics(self):
+        profile = _owner_web_saas_profile()
+        opportunity = _owner_web_saas_opportunity(quality=Decimal("0.1000"))
+        default_trace = decide_and_rank_matches(
+            (_scoring(opportunity, (profile,)),),
+            evaluated_at=EVALUATED_AT,
+            policy=MatchDecisionPolicy(),
+        ).traces[0]
+
+        self.assertEqual(default_trace.red_flag_penalty, Decimal("0.0000"))
+        self.assertEqual(default_trace.decision_code, MatchDecisionCode.ELIGIBLE)
+        self.assertTrue(default_trace.eligible)
+
+    def _assert_single_red_flag_counted(self, red_flag: str) -> None:
+        red_flags = (red_flag,)
+        trace = decide_and_rank_matches(
+            (
+                _scoring(
+                    _owner_web_saas_opportunity(red_flags=red_flags),
+                    (_owner_web_saas_profile(),),
+                ),
+            ),
+            evaluated_at=EVALUATED_AT,
+            policy=MatchDecisionPolicy(),
+        ).traces[0]
+
+        self.assertFalse(_is_quality_duplicate_red_flag(red_flag))
+        self.assertEqual(_penalized_red_flag_count(red_flags), 1)
+        self.assertEqual(trace.red_flag_penalty, Decimal("0.0800"))
+
     def test_default_threshold_stays_0300_for_ru_en_web_canary_repair(self):
         policy = MatchDecisionPolicy()
         opportunity = _opportunity(
@@ -760,12 +1005,13 @@ class MatchTracePostgresTest(unittest.IsolatedAsyncioTestCase):
         return opportunity_id, cache_id
 
 
-def _scoring(opportunity, profiles, *, provider=...):
+def _scoring(opportunity, profiles, *, provider=..., structured_policy=None):
     selected_provider = (
         DeterministicHashEmbeddingProvider()
         if provider is ...
         else provider
     )
+    selected_structured_policy = structured_policy or StructuredScoringPolicy()
     return MatchScoringInput(
         opportunity=opportunity,
         profiles=profiles,
@@ -773,7 +1019,85 @@ def _scoring(opportunity, profiles, *, provider=...):
             opportunity,
             profiles,
             provider=selected_provider,
+            structured_policy=selected_structured_policy,
         ),
+        structured_policy=selected_structured_policy,
+    )
+
+
+def _owner_web_saas_profile():
+    return _profile(
+        roles=("Full-stack developer",),
+        skills=(
+            "React",
+            "Next.js",
+            "Python",
+            "FastAPI",
+            "PostgreSQL",
+            "OpenAI API integrations",
+        ),
+        categories=("web SaaS",),
+        semantic_text=(
+            "Full-stack web SaaS development with React Next.js Python FastAPI "
+            "PostgreSQL and OpenAI compatible LLM API integrations"
+        ),
+    )
+
+
+def _owner_web_saas_opportunity(
+    *,
+    role_title="Full-stack SaaS developer",
+    skills=(
+        "React",
+        "Next.js",
+        "Python",
+        "FastAPI",
+        "PostgreSQL",
+        "OpenAI API integrations",
+    ),
+    category="web SaaS",
+    task_summary=(
+        "Build a full-stack SaaS product using React, Next.js, Python, "
+        "FastAPI, PostgreSQL, and an OpenAI-compatible LLM API integration."
+    ),
+    quality=Decimal("0.8000"),
+    red_flags=(),
+):
+    opportunity = _opportunity(
+        role_title=role_title,
+        skills=skills,
+        category=category,
+        task_summary=task_summary,
+    )
+    analysis = opportunity.analysis.model_copy(
+        update={
+            "quality": opportunity.analysis.quality.model_copy(
+                update={
+                    "actionability": quality,
+                    "commercial_plausibility": quality,
+                    "specificity": quality,
+                    "credibility": quality,
+                }
+            ),
+            "red_flags": red_flags,
+        }
+    )
+    return replace(opportunity, analysis=analysis)
+
+
+def _with_red_flags(opportunity, *, red_flags):
+    return replace(
+        opportunity,
+        analysis=opportunity.analysis.model_copy(update={"red_flags": red_flags}),
+    )
+
+
+def _serious_risk_flags():
+    return (
+        "scam concern",
+        "identity impersonation concern",
+        "suspicious payment fraud concern",
+        "spam legitimacy concern",
     )
 
 
