@@ -259,6 +259,8 @@ Goals:
 - draft profile creation;
 - confirmation/activation;
 - ownership isolation;
+- dedicated Telegram controls distinguish `Языки заявок` from
+  `Языки источников`;
 - active profile state suitable for matching.
 
 Do not add additional users.
@@ -285,6 +287,8 @@ With valid live Opportunities and an active owner SearchProfile:
 
 - run deterministic matching;
 - inspect decision/trace evidence;
+- validate per-profile `source_languages` routing separately from
+  `OpportunityAnalysis.language` content-language routing;
 - confirm entitlement behavior;
 - allow personalized delivery only to the single owner allowlist entry;
 - verify delivery action callbacks;

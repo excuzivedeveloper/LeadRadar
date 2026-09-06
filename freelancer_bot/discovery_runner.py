@@ -24,6 +24,7 @@ from .persistence.discovery import (
 )
 from .persistence.source_repository import (
     SourceIdentityConflict,
+    SourceLanguageOrigin,
     SourceRepository,
 )
 from .persistence.discovery_campaigns import DiscoveryCampaignRepository
@@ -156,6 +157,7 @@ class DiscoveryRunner:
                                 alias_match = True
                     created = existing is None
                     if existing is None:
+                        candidate_language = _candidate_source_language(candidate)
                         try:
                             source = await self._sources.create_candidate(
                                 connection,
@@ -167,6 +169,12 @@ class DiscoveryRunner:
                                 lineage_key=candidate.result_key,
                                 handle=candidate.handle,
                                 canonical_url=candidate.canonical_url,
+                                language=candidate_language,
+                                language_origin=(
+                                    SourceLanguageOrigin.DISCOVERY_QUERY
+                                    if candidate_language is not None
+                                    else None
+                                ),
                                 provider_run_id=str(started.run.id),
                                 discovery_run_id=started.run.id,
                                 seed_source_id=candidate.seed_source_id,
@@ -198,6 +206,14 @@ class DiscoveryRunner:
                             discovered_at=candidate.discovered_at,
                             context=candidate.context,
                         )
+                        candidate_language = _candidate_source_language(candidate)
+                        if candidate_language is not None:
+                            source = await self._sources.apply_language_evidence(
+                                connection,
+                                source.id,
+                                language=candidate_language,
+                                language_origin=SourceLanguageOrigin.DISCOVERY_QUERY,
+                            )
 
                     if candidate.platform == "telegram":
                         if created:
@@ -495,6 +511,16 @@ def _candidate_reference_hash(candidate: DiscoveredSourceCandidate) -> str | Non
     except InvalidTelegramReference:
         value = str(raw).strip().casefold()
     return hashlib.sha256(value.encode("utf-8")).hexdigest() if value else None
+
+
+def _candidate_source_language(candidate: DiscoveredSourceCandidate) -> str | None:
+    for key in ("source_language", "query_language", "language"):
+        value = candidate.context.get(key)
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"ru", "en"}:
+                return normalized
+    return None
 
 
 def _safe_observability_value(value: Any, *, depth: int = 0) -> Any:

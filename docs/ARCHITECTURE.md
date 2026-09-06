@@ -140,6 +140,23 @@ These are separate conditions and must not be conflated.
 `config/sources.json` is seed/diagnostic input. Runtime collector source authority
 comes from PostgreSQL lifecycle/access state.
 
+Repository head also stores an optional source language on each source row:
+
+```text
+sources.language        = ru | en | NULL
+sources.language_origin = seed | discovery_query | audit | operator | NULL
+```
+
+`language` and `language_origin` are set or cleared together. Existing
+production rows are not guessed during migration; unresolved rows remain
+`NULL/NULL`. Seed-backed language is accepted only from the explicit
+`config/sources.json` `language` field. Discovery query language may provide
+`discovery_query` evidence for supported `ru`/`en` candidates, while Source
+Audit may provide `audit` evidence only from an exact supported
+`primary_language`. Discovery evidence must not overwrite stronger audit or
+operator evidence, and conflicting discovery evidence is resolved
+deterministically by clearing the language back to unresolved.
+
 Current deployment:
 
 ```text
@@ -343,6 +360,18 @@ confirms/activates.
 The legacy `freelancer_profile.json` is a separate reply-generation profile/style
 surface and must not be confused with the V2 matching SearchProfile.
 
+SearchProfile preferences distinguish two language concepts:
+
+- `preferences.languages` constrains the opportunity/content language from
+  `OpportunityAnalysis.language`;
+- `preferences.source_languages` constrains the global source/channel pool by
+  `sources.language`.
+
+For migrated existing profiles, `source_languages = NULL` means legacy
+unconfigured behavior and does not add source-language routing. New profiles
+default to `["ru", "en"]`. Explicit saved selections are only `["ru"]`,
+`["en"]` or `["ru", "en"]` in canonical `ru,en` order.
+
 ## Matching and delivery
 
 Canonical Opportunities enter deterministic/structured matching. Matching now
@@ -354,6 +383,16 @@ multilingual embedding model and does not add broad conversational-intent
 inference.
 
 Zero matches is a valid result.
+
+Per-profile source-language routing is a hard filter only when
+`source_languages` is explicitly configured. A profile selecting only Russian
+sources does not receive opportunities whose preferred source has
+`source.language = en`; a profile selecting only English sources does not
+receive Russian-source opportunities. If a configured profile sees a preferred
+source with unresolved `source.language`, the matcher fails closed for that
+profile with `source_language_unresolved`. Legacy `NULL` profile configuration
+preserves pre-feature routing. Source collection remains global: approved,
+active and accessible sources are still collected regardless of language.
 
 An additional OpportunityAnalysisV2 evidence-aware matching slice is wired into
 the normal fresh matching/delivery path as observational runtime shadow

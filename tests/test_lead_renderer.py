@@ -371,6 +371,8 @@ def _opportunity(
             source_display_name="Freelance Fixture",
             source_handle="@freelance_fixture",
             source_canonical_url="https://t.me/freelance_fixture",
+            source_language=None,
+            source_language_origin=None,
             message_url=source_url,
             message_date=last_seen_at,
             observed_at=last_seen_at,

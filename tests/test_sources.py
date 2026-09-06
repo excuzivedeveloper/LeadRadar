@@ -18,6 +18,7 @@ class SourcesConfigTest(unittest.TestCase):
                             "title": "Example",
                             "reason": "test source",
                             "enabled": True,
+                            "language": "RU",
                             "tags": ["test", "development"],
                         },
                         {
@@ -34,8 +35,29 @@ class SourcesConfigTest(unittest.TestCase):
             sources = load_sources(path)
 
             self.assertEqual(sources[0].handle, "@example_source")
+            self.assertEqual(sources[0].language, "ru")
             self.assertEqual(sources[0].tags, ("test", "development"))
             self.assertEqual([source.handle for source in enabled_sources(path)], ["@example_source"])
+
+    def test_rejects_unsupported_source_language(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "sources.json"
+            path.write_text(
+                json.dumps(
+                    [
+                        {
+                            "handle": "example_source",
+                            "title": "Example",
+                            "reason": "test",
+                            "language": "de",
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "'language' must be ru or en"):
+                load_sources(path)
 
     def test_rejects_duplicate_handles(self):
         with tempfile.TemporaryDirectory() as tmp:

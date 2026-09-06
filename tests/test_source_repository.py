@@ -15,6 +15,7 @@ from freelancer_bot.persistence.schema import (
 from freelancer_bot.persistence.source_repository import (
     InvalidSourceTransition,
     PostgresSourceCatalog,
+    SourceLanguageOrigin,
     SourceIdentityConflict,
     SourceRepository,
     SourceStatus,
@@ -250,6 +251,68 @@ class SourceRepositoryTest(unittest.IsolatedAsyncioTestCase):
                 ),
                 1,
             )
+
+    async def test_source_language_evidence_preserves_origin_precedence(self):
+        source = await self._create_candidate("language", "@language_source")
+        async with self.database.transaction() as connection:
+            source = await self.repository.apply_language_evidence(
+                connection,
+                source.id,
+                language="en",
+                language_origin=SourceLanguageOrigin.DISCOVERY_QUERY,
+            )
+            self.assertEqual(source.language, "en")
+            self.assertEqual(
+                source.language_origin,
+                SourceLanguageOrigin.DISCOVERY_QUERY,
+            )
+
+            source = await self.repository.apply_language_evidence(
+                connection,
+                source.id,
+                language="ru",
+                language_origin=SourceLanguageOrigin.DISCOVERY_QUERY,
+            )
+            self.assertIsNone(source.language)
+            self.assertIsNone(source.language_origin)
+
+            source = await self.repository.apply_language_evidence(
+                connection,
+                source.id,
+                language="ru",
+                language_origin=SourceLanguageOrigin.AUDIT,
+            )
+            self.assertEqual(source.language, "ru")
+            self.assertEqual(source.language_origin, SourceLanguageOrigin.AUDIT)
+
+            source = await self.repository.apply_language_evidence(
+                connection,
+                source.id,
+                language="en",
+                language_origin=SourceLanguageOrigin.DISCOVERY_QUERY,
+            )
+            self.assertEqual(source.language, "ru")
+            self.assertEqual(source.language_origin, SourceLanguageOrigin.AUDIT)
+
+    async def test_metadata_updates_do_not_clear_source_language(self):
+        source = await self._create_candidate("metadata-language", "@metadata_lang")
+        async with self.database.transaction() as connection:
+            source = await self.repository.update_language(
+                connection,
+                source.id,
+                language="ru",
+                language_origin=SourceLanguageOrigin.SEED,
+            )
+            source = await self.repository.update_metadata(
+                connection,
+                source.id,
+                display_name="Metadata Language",
+                access_type="public",
+                handle="@metadata_lang",
+                canonical_url="https://t.me/metadata_lang",
+            )
+            self.assertEqual(source.language, "ru")
+            self.assertEqual(source.language_origin, SourceLanguageOrigin.SEED)
 
     async def _create_candidate(self, external_id: str, handle: str):
         async with self.database.transaction() as connection:

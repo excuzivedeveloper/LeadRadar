@@ -414,7 +414,7 @@ class ProductMetricsPostgresTest(unittest.IsolatedAsyncioTestCase):
                     semantic_text_original=role,
                     semantic_text_normalized=role,
                     preferences={
-                        "schema_version": "search_profile_preferences.v1",
+                        "schema_version": "search_profile_preferences.v2",
                         "work_types": None,
                         "minimum_budget": None,
                         "currency": None,
@@ -423,6 +423,7 @@ class ProductMetricsPostgresTest(unittest.IsolatedAsyncioTestCase):
                         "geographies": None,
                         "work_modes": None,
                         "excluded_categories": None,
+                        "source_languages": ["ru", "en"],
                     },
                 )
             )
@@ -558,7 +559,7 @@ class ProductMetricsPostgresTest(unittest.IsolatedAsyncioTestCase):
             "search_profile_id": profile_id,
             "profile_revision": 1,
             "profile_schema_version": "search_profile.v1",
-            "preferences_schema_version": "search_profile_preferences.v1",
+            "preferences_schema_version": "search_profile_preferences.v2",
             "input_sha256": ("c" if suffix == "1" else "d") * 64,
             "opportunity_lifecycle_status": "active",
             "opportunity_last_seen_at": now,

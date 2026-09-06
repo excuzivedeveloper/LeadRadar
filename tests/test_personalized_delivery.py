@@ -1209,6 +1209,7 @@ class PersonalizedDeliveryPostgresTest(unittest.IsolatedAsyncioTestCase):
             "geographies": None,
             "work_modes": ["remote"],
             "excluded_categories": None,
+            "source_languages": ["ru", "en"],
         }
         async with self.database.transaction() as connection:
             await connection.execute(

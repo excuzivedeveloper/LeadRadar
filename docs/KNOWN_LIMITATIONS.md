@@ -101,6 +101,8 @@ Opportunity evidence, not ingestion or first-provider configuration.
     reply drafting or source discovery.
 13. **P2 — Discovery/audit code is not deployment evidence.** Web,
     global/graph/chat discovery and Source Audit exist but remain disabled.
+    Source-language provenance in repository head is therefore a persisted
+    contract, not proof that all production sources have been audited or resolved.
 14. **P2 — Billing/payment code is not configured production payment behavior.**
     Provider-neutral state/adapters exist, but current private single-owner
     deployment has not activated production billing.

@@ -218,7 +218,7 @@ class CollectorHandlerAndLifecycleTest(unittest.IsolatedAsyncioTestCase):
         bot._register_callback_handlers()
         active = await bot._register_source_handlers()
 
-        self.assertEqual(len(bot_client.handlers), 36)
+        self.assertEqual(len(bot_client.handlers), 39)
         self.assertEqual(len(user_client.handlers), 1)
         self.assertEqual(active, [(SOURCE_A, "entity-a")])
 

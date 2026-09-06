@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from types import SimpleNamespace
 import unittest
 from unittest.mock import AsyncMock, Mock
@@ -33,6 +34,7 @@ class _RecordingProfileOnboarding:
         self.response = response
         self.begin_calls = []
         self.create_manual = AsyncMock()
+        self.set_source_languages = AsyncMock(return_value=response)
 
     async def begin(self, *, external_user_id: str, description: str):
         self.begin_calls.append((external_user_id, description))
@@ -382,6 +384,45 @@ class TelegramNavigationHandlerTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("4242", bot._pending_navigation_inputs)
         self.assertIn("Попробуйте", event.respond.await_args.args[0])
 
+    async def test_source_language_save_callback_persists_once_with_revision(self):
+        profile_id = UUID("11111111-2222-3333-4444-555555555555")
+        bot = LeadBot.__new__(LeadBot)
+        bot.bot_client = _HandlerClient()
+        bot.config = SimpleNamespace(telegram_allowed_user_ids=(4242,))
+        bot._pending_navigation_inputs = {"4242": SimpleNamespace(kind="setting")}
+        bot.profile_onboarding = _RecordingProfileOnboarding(
+            SimpleNamespace(text="saved", buttons=(), retryable=False)
+        )
+        bot.navigation = SimpleNamespace(
+            settings_for_profile=AsyncMock(
+                return_value=SimpleNamespace(text="settings", buttons=())
+            )
+        )
+        bot._register_callback_handlers()
+        save = next(
+            handler
+            for _, handler in bot.bot_client.handlers
+            if handler.__name__ == "navigation_save_source_languages"
+        )
+        data = f"nav:sls:{profile_id}:7:re".encode("ascii")
+        event = _TelegramEvent(sender_id=4242)
+        event.data = data
+        event.pattern_match = re.match(
+            rb"^nav:sls:([0-9a-f-]{36}):(\d+):(re|r|e)$",
+            data,
+        )
+
+        await save(event)
+
+        bot.profile_onboarding.set_source_languages.assert_awaited_once_with(
+            external_user_id="4242",
+            profile_id=profile_id,
+            source_languages=("ru", "en"),
+            expected_revision=7,
+        )
+        event.answer.assert_awaited_once_with("Настройка сохранена")
+        self.assertNotIn("4242", bot._pending_navigation_inputs)
+
     async def test_real_onboarding_adapter_marks_provider_error_retryable(self):
         confirmation = SimpleNamespace(show=AsyncMock())
         onboarding = TelegramProfileOnboarding(confirmation, _UnavailableAI())
@@ -456,6 +497,28 @@ class TelegramNavigationIntegrationTest(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(any(second_id in data for data in first_controls))
         self.assertTrue(any(second_id in data for data in second_controls))
         self.assertTrue(all(len(data) <= 64 for data in first_controls + second_controls))
+
+        source_languages = await self.navigation.source_language_settings(
+            external_user_id="navigation-owner",
+            profile_id=first.profile.id,
+        )
+        self.assertIn("Языки источников", source_languages.text)
+        self.assertIn("Языки заявок", source_languages.text)
+        self.assertTrue(
+            all(
+                len(button.data) <= 64
+                for row in source_languages.buttons
+                for button in row
+            )
+        )
+        self.assertIn(
+            "[x] Русский",
+            [button.label for row in source_languages.buttons for button in row],
+        )
+        self.assertIn(
+            "[x] English",
+            [button.label for row in source_languages.buttons for button in row],
+        )
 
         subscription = await self.navigation.subscription(
             external_user_id="navigation-owner",

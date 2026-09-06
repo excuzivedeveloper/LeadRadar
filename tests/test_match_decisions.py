@@ -70,6 +70,36 @@ EVALUATED_AT = datetime(2026, 8, 14, 18, 37, tzinfo=timezone.utc)
 
 
 class MatchDecisionTest(unittest.TestCase):
+    def test_source_language_unresolved_diagnostic_preserves_profile_and_source_context(self):
+        profile = _profile()
+        profile = replace(
+            profile,
+            preferences=replace(profile.preferences, source_languages=("ru",)),
+        )
+
+        trace = decide_and_rank_matches(
+            (_scoring(_opportunity(), (profile,)),),
+            evaluated_at=EVALUATED_AT,
+            policy=_permissive_policy(),
+        ).traces[0]
+
+        self.assertFalse(trace.hard_filter_eligible)
+        self.assertEqual(
+            {reason["code"] for reason in trace.hard_filter_reasons},
+            {"source_language_unresolved"},
+        )
+        diagnostics = tuple(
+            reason
+            for reason in trace.narrowing_diagnostics
+            if reason["code"] == "routing.source_language_unresolved"
+        )
+        self.assertEqual(len(diagnostics), 1)
+        self.assertEqual(diagnostics[0]["profile_id"], str(profile.id))
+        self.assertEqual(diagnostics[0]["profile_revision"], profile.revision)
+        self.assertIsNone(diagnostics[0]["source_id"])
+        self.assertIsNone(diagnostics[0]["source_language"])
+        self.assertEqual(diagnostics[0]["selected_source_languages"], ("ru",))
+
     def test_quality_duplicate_flags_do_not_double_penalize_case2_shape(self):
         profile = _owner_web_saas_profile()
         red_flags = (
@@ -900,6 +930,7 @@ class MatchTracePostgresTest(unittest.IsolatedAsyncioTestCase):
             "geographies": None,
             "work_modes": ["remote"],
             "excluded_categories": None,
+            "source_languages": ["ru", "en"],
         }
         async with self.database.transaction() as connection:
             await connection.execute(

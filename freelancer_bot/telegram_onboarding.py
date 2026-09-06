@@ -196,6 +196,23 @@ class TelegramProfileOnboarding:
         )
         return _profile_response(view)
 
+    async def set_source_languages(
+        self,
+        *,
+        external_user_id: str,
+        profile_id: UUID,
+        source_languages: tuple[str, ...],
+        expected_revision: int,
+    ) -> TelegramOnboardingResponse:
+        view = await self._confirmation.set_source_languages(
+            platform="telegram",
+            external_user_id=external_user_id,
+            profile_id=profile_id,
+            source_languages=source_languages,
+            expected_revision=expected_revision,
+        )
+        return _profile_response(view)
+
     async def edit_setting(
         self,
         *,

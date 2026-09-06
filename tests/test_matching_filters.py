@@ -23,6 +23,7 @@ from freelancer_bot.persistence.opportunities import (
     CANONICAL_OPPORTUNITY_SCHEMA_VERSION,
     CanonicalOpportunityRecord,
     OpportunityLifecycleStatus,
+    OpportunitySourceObservationRecord,
 )
 from freelancer_bot.persistence.schema import opportunities
 from freelancer_bot.persistence.search_profiles import (
@@ -154,6 +155,41 @@ class MatchingHardFilterTest(unittest.TestCase):
             all(failure.opportunity_value is not None for failure in decision.failures)
         )
 
+    def test_source_languages_are_separate_profile_routing_constraint(self):
+        ru_source_profile = _profile(
+            preferences=_preferences(
+                languages=("English",),
+                source_languages=("ru",),
+            )
+        )
+        opportunity = _opportunity(
+            analysis=_analysis(language="English"),
+            source_language="en",
+        )
+
+        decision = evaluate_hard_filters(opportunity, ru_source_profile)
+
+        self.assertFalse(decision.eligible)
+        self.assertEqual(
+            _failure_codes(decision),
+            {HardFilterCode.SOURCE_LANGUAGE_MISMATCH},
+        )
+
+    def test_unresolved_source_language_fails_closed_only_for_explicit_profiles(self):
+        explicit = _profile(preferences=_preferences(source_languages=("ru", "en")))
+        legacy = _profile(preferences=_preferences(source_languages=None))
+        opportunity = _opportunity(source_language=None)
+
+        explicit_decision = evaluate_hard_filters(opportunity, explicit)
+        legacy_decision = evaluate_hard_filters(opportunity, legacy)
+
+        self.assertFalse(explicit_decision.eligible)
+        self.assertEqual(
+            _failure_codes(explicit_decision),
+            {HardFilterCode.SOURCE_LANGUAGE_UNRESOLVED},
+        )
+        self.assertTrue(legacy_decision.eligible)
+
     def test_unknown_opportunity_fields_are_nonblocking_and_never_fabricated(self):
         profile = _profile(
             preferences=_preferences(
@@ -261,7 +297,13 @@ class MatchingHardFilterTest(unittest.TestCase):
         self.assertEqual(len(result.eligible_profiles), 8)
         self.assertEqual(
             set(result.trace.narrowing_dimensions),
-            {"category_role_skills", "work_type", "language", "geography"},
+            {
+                "category_role_skills",
+                "work_type",
+                "language",
+                "source_language",
+                "geography",
+            },
         )
         self.assertEqual(
             {exclusion.code for exclusion in result.trace.exclusions},
@@ -537,13 +579,20 @@ def _preferences(**overrides):
         "geographies": None,
         "work_modes": None,
         "excluded_categories": None,
+        "source_languages": None,
     }
     values.update(overrides)
     return parse_search_profile_preferences(**values)
 
 
-def _opportunity(*, analysis=None, budget=None) -> CanonicalOpportunityRecord:
+def _opportunity(
+    *,
+    analysis=None,
+    budget=None,
+    source_language="en",
+) -> CanonicalOpportunityRecord:
     selected_analysis = analysis or _analysis(budget=budget)
+    preferred_source = _source_observation(language=source_language)
     return CanonicalOpportunityRecord(
         id=uuid4(),
         schema_version=CANONICAL_OPPORTUNITY_SCHEMA_VERSION,
@@ -558,11 +607,30 @@ def _opportunity(*, analysis=None, budget=None) -> CanonicalOpportunityRecord:
         analysis_cache_ids=(),
         analysis_links=(),
         preferred_source_policy_version=None,
-        preferred_source=None,
-        source_observations=(),
+        preferred_source=preferred_source,
+        source_observations=(preferred_source,),
         lifecycle_events=(),
         created_at=NOW,
         updated_at=NOW,
+    )
+
+
+def _source_observation(*, language="en") -> OpportunitySourceObservationRecord:
+    return OpportunitySourceObservationRecord(
+        raw_message_id=uuid4(),
+        source_id=42,
+        platform="telegram",
+        external_source_id="username:source_fixture",
+        source_display_name="Source fixture",
+        source_handle="@source_fixture",
+        source_canonical_url="https://t.me/source_fixture",
+        source_language=language,
+        source_language_origin=None if language is None else "seed",
+        message_url="https://t.me/source_fixture/1",
+        message_date=NOW,
+        observed_at=NOW,
+        linked_at=NOW,
+        is_preferred=True,
     )
 
 

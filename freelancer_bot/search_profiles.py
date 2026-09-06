@@ -11,7 +11,8 @@ import unicodedata
 
 SEARCH_PROFILE_SCHEMA_VERSION = "search_profile.v1"
 SEARCH_PROFILE_PARSER_VERSION = "search-profile-parser.v1"
-SEARCH_PROFILE_PREFERENCES_SCHEMA_VERSION = "search_profile_preferences.v1"
+SEARCH_PROFILE_PREFERENCES_SCHEMA_VERSION = "search_profile_preferences.v2"
+SUPPORTED_SOURCE_LANGUAGES = ("ru", "en")
 PROFILE_TERM_LIMIT = 64
 PROFILE_TERM_LENGTH_LIMIT = 200
 SEMANTIC_TEXT_LENGTH_LIMIT = 10_000
@@ -89,6 +90,7 @@ class SearchProfilePreferences:
     currency: str | None
     budget_policy: BudgetPolicy | None
     languages: tuple[SearchProfileTerm, ...] | None
+    source_languages: tuple[str, ...] | None
     geographies: tuple[SearchProfileTerm, ...] | None
     work_modes: tuple[WorkMode, ...] | None
     excluded_categories: tuple[SearchProfileTerm, ...] | None
@@ -130,6 +132,13 @@ class SearchProfilePreferences:
             identities = [term.normalized_value for term in terms]
             if len(identities) != len(set(identities)):
                 raise ValueError(f"{field} must contain unique terms")
+        if self.source_languages is not None:
+            if not isinstance(self.source_languages, tuple):
+                raise TypeError("source_languages must be a tuple or None")
+            if not self.source_languages:
+                raise ValueError("source_languages must select at least one language")
+            if self.source_languages != canonical_source_languages(self.source_languages):
+                raise ValueError("source_languages must be canonical ru/en values")
 
     def accepts_work_type(self, opportunity_type: OpportunityType) -> bool:
         if not isinstance(opportunity_type, OpportunityType):
@@ -219,6 +228,7 @@ def empty_search_profile_preferences() -> SearchProfilePreferences:
         currency=None,
         budget_policy=None,
         languages=None,
+        source_languages=SUPPORTED_SOURCE_LANGUAGES,
         geographies=None,
         work_modes=None,
         excluded_categories=None,
@@ -232,6 +242,7 @@ def parse_search_profile_preferences(
     currency: str | None = None,
     budget_policy: str | BudgetPolicy | None = None,
     languages: Iterable[str] | None = None,
+    source_languages: Iterable[str] | None = None,
     geographies: Iterable[str] | None = None,
     work_modes: Iterable[str | WorkMode] | None = None,
     excluded_categories: Iterable[str] | None = None,
@@ -255,6 +266,11 @@ def parse_search_profile_preferences(
             else _parse_enum_value(budget_policy, BudgetPolicy, "budget_policy")
         ),
         languages=_parse_optional_explicit_terms(languages, "languages"),
+        source_languages=(
+            None
+            if source_languages is None
+            else canonical_source_languages(source_languages)
+        ),
         geographies=_parse_optional_explicit_terms(
             geographies,
             "geographies",
@@ -265,6 +281,39 @@ def parse_search_profile_preferences(
             "excluded_categories",
         ),
     )
+
+
+def legacy_unconfigured_search_profile_preferences() -> SearchProfilePreferences:
+    return SearchProfilePreferences(
+        schema_version=SEARCH_PROFILE_PREFERENCES_SCHEMA_VERSION,
+        work_types=None,
+        minimum_budget=None,
+        currency=None,
+        budget_policy=None,
+        languages=None,
+        source_languages=None,
+        geographies=None,
+        work_modes=None,
+        excluded_categories=None,
+    )
+
+
+def canonical_source_languages(values: Iterable[str]) -> tuple[str, ...]:
+    if isinstance(values, (str, bytes)):
+        raise TypeError("source_languages must be a collection of language codes")
+    seen: set[str] = set()
+    for raw in values:
+        if not isinstance(raw, str):
+            raise TypeError("source_languages must contain strings")
+        language = raw.strip().lower()
+        if language not in SUPPORTED_SOURCE_LANGUAGES:
+            raise ValueError("source_languages supports only ru and en")
+        if language in seen:
+            raise ValueError("source_languages must not contain duplicates")
+        seen.add(language)
+    if not seen:
+        raise ValueError("source_languages must select at least one language")
+    return tuple(language for language in SUPPORTED_SOURCE_LANGUAGES if language in seen)
 
 
 def _parse_terms(

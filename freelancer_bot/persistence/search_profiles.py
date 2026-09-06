@@ -911,6 +911,11 @@ def _preferences_value(preferences: SearchProfilePreferences) -> dict[str, Any]:
             else preferences.budget_policy.value
         ),
         "languages": _optional_term_values(preferences.languages),
+        "source_languages": (
+            None
+            if preferences.source_languages is None
+            else list(preferences.source_languages)
+        ),
         "geographies": _optional_term_values(preferences.geographies),
         "work_modes": _enum_values(preferences.work_modes),
         "excluded_categories": _optional_term_values(
@@ -920,6 +925,8 @@ def _preferences_value(preferences: SearchProfilePreferences) -> dict[str, Any]:
 
 
 def _preferences_from_json(value: Mapping[str, Any]) -> SearchProfilePreferences:
+    if value.get("schema_version") == "search_profile_preferences.v1":
+        value = {**value, "schema_version": "search_profile_preferences.v2", "source_languages": None}
     return SearchProfilePreferences(
         schema_version=str(value["schema_version"]),
         work_types=_optional_enum_tuple(value["work_types"], OpportunityType),
@@ -935,6 +942,11 @@ def _preferences_from_json(value: Mapping[str, Any]) -> SearchProfilePreferences
             else BudgetPolicy(value["budget_policy"])
         ),
         languages=_optional_terms_from_json(value["languages"]),
+        source_languages=(
+            None
+            if value["source_languages"] is None
+            else tuple(str(item) for item in value["source_languages"])
+        ),
         geographies=_optional_terms_from_json(value["geographies"]),
         work_modes=_optional_enum_tuple(value["work_modes"], WorkMode),
         excluded_categories=_optional_terms_from_json(

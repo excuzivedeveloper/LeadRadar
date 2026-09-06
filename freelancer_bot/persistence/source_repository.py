@@ -33,6 +33,13 @@ class SourceStatus(str, Enum):
     RETIRED = "retired"
 
 
+class SourceLanguageOrigin(str, Enum):
+    SEED = "seed"
+    DISCOVERY_QUERY = "discovery_query"
+    AUDIT = "audit"
+    OPERATOR = "operator"
+
+
 class SourceNotFound(LookupError):
     pass
 
@@ -55,6 +62,8 @@ class SourceRecord:
     display_name: str
     handle: str | None
     canonical_url: str | None
+    language: str | None
+    language_origin: SourceLanguageOrigin | None
     created_at: datetime
     updated_at: datetime
 
@@ -101,6 +110,8 @@ class SeedSource:
     provider_run_id: str
     seed_reference: str
     context: Mapping[str, Any]
+    language: str | None = None
+    language_origin: SourceLanguageOrigin | None = None
 
 
 @dataclass(frozen=True)
@@ -196,6 +207,7 @@ class SourceRepository:
         *,
         status: SourceStatus | str | None = None,
         platform: str | None = None,
+        language: str | None = None,
         limit: int = 100,
     ) -> tuple[SourceRecord, ...]:
         if not 1 <= limit <= 1000:
@@ -205,6 +217,8 @@ class SourceRepository:
             statement = statement.where(sources.c.lifecycle_status == _status(status).value)
         if platform is not None:
             statement = statement.where(sources.c.platform == _platform(platform))
+        if language is not None:
+            statement = statement.where(sources.c.language == _source_language(language))
         rows = await connection.execute(
             statement.order_by(sources.c.updated_at.desc(), sources.c.id).limit(limit)
         )
@@ -251,6 +265,8 @@ class SourceRepository:
         lineage_key: str,
         handle: str | None = None,
         canonical_url: str | None = None,
+        language: str | None = None,
+        language_origin: SourceLanguageOrigin | str | None = None,
         provider_run_id: str | None = None,
         discovery_run_id: UUID | None = None,
         seed_source_id: int | None = None,
@@ -265,6 +281,8 @@ class SourceRepository:
             display_name=display_name,
             handle=handle,
             canonical_url=canonical_url,
+            language=language,
+            language_origin=language_origin,
         )
         statement = (
             pg_insert(sources)
@@ -433,6 +451,66 @@ class SourceRepository:
             raise SourceNotFound(f"Source {source_id} does not exist")
         return await self.get(connection, source_id)
 
+    async def update_language(
+        self,
+        connection: AsyncConnection,
+        source_id: int,
+        *,
+        language: str | None,
+        language_origin: SourceLanguageOrigin | str | None,
+    ) -> SourceRecord:
+        values = _source_language_values(language, language_origin)
+        result = await connection.execute(
+            sa.update(sources)
+            .where(sources.c.id == source_id)
+            .values(**values, updated_at=sa.func.now())
+        )
+        if result.rowcount != 1:
+            raise SourceNotFound(f"Source {source_id} does not exist")
+        return await self.get(connection, source_id)
+
+    async def apply_language_evidence(
+        self,
+        connection: AsyncConnection,
+        source_id: int,
+        *,
+        language: str | None,
+        language_origin: SourceLanguageOrigin | str | None,
+    ) -> SourceRecord:
+        proposed = _source_language_values(language, language_origin)
+        current = await self.get(connection, source_id)
+        origin = proposed["language_origin"]
+        if origin is None:
+            return current
+        proposed_origin = SourceLanguageOrigin(origin)
+        if _source_language_origin_rank(current.language_origin) > (
+            _source_language_origin_rank(proposed_origin)
+        ):
+            return current
+        if (
+            current.language is not None
+            and current.language != proposed["language"]
+            and current.language_origin is SourceLanguageOrigin.DISCOVERY_QUERY
+            and proposed_origin is SourceLanguageOrigin.DISCOVERY_QUERY
+        ):
+            return await self.update_language(
+                connection,
+                source_id,
+                language=None,
+                language_origin=None,
+            )
+        if (
+            current.language == proposed["language"]
+            and current.language_origin is not None
+        ):
+            return current
+        return await self.update_language(
+            connection,
+            source_id,
+            language=proposed["language"],
+            language_origin=proposed_origin,
+        )
+
     async def transition(
         self,
         connection: AsyncConnection,
@@ -579,6 +657,8 @@ class SourceRepository:
             display_name=seed.display_name,
             handle=seed.handle,
             canonical_url=seed.canonical_url,
+            language=seed.language,
+            language_origin=seed.language_origin,
         )
         existing = (
             await connection.execute(
@@ -617,7 +697,13 @@ class SourceRepository:
             metadata_values = {
                 key: value
                 for key, value in values.items()
-                if key not in {"platform", "external_id"}
+                if key
+                not in {
+                    "platform",
+                    "external_id",
+                    "language",
+                    "language_origin",
+                }
             }
             updated = any(existing[key] != value for key, value in metadata_values.items())
             if updated:
@@ -625,6 +711,21 @@ class SourceRepository:
                     sa.update(sources)
                     .where(sources.c.id == source_id)
                     .values(**metadata_values, updated_at=sa.func.now())
+                )
+            if seed.language is not None:
+                before = await self.get(connection, source_id)
+                after = await self.apply_language_evidence(
+                    connection,
+                    source_id,
+                    language=seed.language,
+                    language_origin=seed.language_origin,
+                )
+                updated = updated or (
+                    before.language,
+                    before.language_origin,
+                ) != (
+                    after.language,
+                    after.language_origin,
                 )
 
         lineage_created = await self.record_lineage(
@@ -798,6 +899,8 @@ def _source_values(
     display_name: str,
     handle: str | None,
     canonical_url: str | None,
+    language: str | None = None,
+    language_origin: SourceLanguageOrigin | str | None = None,
 ) -> dict[str, Any]:
     return {
         "platform": _platform(platform),
@@ -806,6 +909,7 @@ def _source_values(
         "display_name": _required_text(display_name, "display_name"),
         "handle": None if handle is None else _required_text(handle, "handle").lower(),
         "canonical_url": _optional_text(canonical_url),
+        **_source_language_values(language, language_origin),
     }
 
 
@@ -835,6 +939,43 @@ def _access_type(value: str) -> str:
     return normalized
 
 
+def _source_language(value: str) -> str:
+    normalized = _required_text(value, "language").lower()
+    if normalized not in {"ru", "en"}:
+        raise ValueError("source language must be ru or en")
+    return normalized
+
+
+def _source_language_origin(value: SourceLanguageOrigin | str) -> SourceLanguageOrigin:
+    try:
+        return value if isinstance(value, SourceLanguageOrigin) else SourceLanguageOrigin(value)
+    except ValueError:
+        raise ValueError("source language origin is unsupported") from None
+
+
+def _source_language_origin_rank(origin: SourceLanguageOrigin | None) -> int:
+    if origin is None:
+        return 0
+    return {
+        SourceLanguageOrigin.DISCOVERY_QUERY: 1,
+        SourceLanguageOrigin.SEED: 2,
+        SourceLanguageOrigin.AUDIT: 3,
+        SourceLanguageOrigin.OPERATOR: 4,
+    }[origin]
+
+
+def _source_language_values(
+    language: str | None,
+    language_origin: SourceLanguageOrigin | str | None,
+) -> dict[str, str | None]:
+    if (language is None) != (language_origin is None):
+        raise ValueError("source language and origin must be set or cleared together")
+    if language is None:
+        return {"language": None, "language_origin": None}
+    origin = _source_language_origin(language_origin)
+    return {"language": _source_language(language), "language_origin": origin.value}
+
+
 def _status(value: SourceStatus | str) -> SourceStatus:
     try:
         return SourceStatus(value)
@@ -852,6 +993,12 @@ def _source_record(row: Mapping[str, Any]) -> SourceRecord:
         display_name=str(row["display_name"]),
         handle=row["handle"],
         canonical_url=row["canonical_url"],
+        language=row["language"],
+        language_origin=(
+            None
+            if row["language_origin"] is None
+            else SourceLanguageOrigin(row["language_origin"])
+        ),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )

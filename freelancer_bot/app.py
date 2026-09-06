@@ -93,6 +93,8 @@ from .telegram_navigation import (
     new_profile_prompt,
     setting_field_from_code,
     setting_prompt,
+    source_language_selection_from_mask,
+    toggle_source_language_selection,
 )
 from .telegram_onboarding import (
     WORK_TYPE_CALLBACK_CODES,
@@ -930,6 +932,97 @@ class LeadBot:
                 navigation_response = await self.navigation.settings_for_profile(
                     external_user_id=_telegram_user_id(event),
                     profile_id=UUID(event.pattern_match.group(1).decode("ascii")),
+                )
+            except _PROFILE_INPUT_ERRORS as exc:
+                await event.answer(str(exc), alert=True)
+                return
+            await event.answer("Настройка сохранена")
+            await _respond_navigation(event, navigation_response)
+
+        @self._on_bot_event(
+            events.CallbackQuery(
+                pattern=rb"^nav:sl:([0-9a-f-]{36}):(\d+):(re|r|e)$"
+            )
+        )
+        async def navigation_source_languages(
+            event: events.CallbackQuery.Event,
+        ) -> None:
+            self._pending_navigation_inputs.pop(_telegram_user_id(event), None)
+            try:
+                response = await self.navigation.source_language_settings(
+                    external_user_id=_telegram_user_id(event),
+                    profile_id=UUID(event.pattern_match.group(1).decode("ascii")),
+                    selected=source_language_selection_from_mask(
+                        event.pattern_match.group(3).decode("ascii")
+                    ),
+                )
+            except _PROFILE_INPUT_ERRORS as exc:
+                await event.answer(str(exc), alert=True)
+                return
+            await event.answer()
+            await _respond_navigation(event, response)
+
+        @self._on_bot_event(
+            events.CallbackQuery(
+                pattern=rb"^nav:slt:([0-9a-f-]{36}):(\d+):(re|r|e):([re])$"
+            )
+        )
+        async def navigation_toggle_source_language(
+            event: events.CallbackQuery.Event,
+        ) -> None:
+            self._pending_navigation_inputs.pop(_telegram_user_id(event), None)
+            selected = source_language_selection_from_mask(
+                event.pattern_match.group(3).decode("ascii")
+            )
+            language = {
+                "r": "ru",
+                "e": "en",
+            }[event.pattern_match.group(4).decode("ascii")]
+            updated = toggle_source_language_selection(selected, language)
+            try:
+                response = await self.navigation.source_language_settings(
+                    external_user_id=_telegram_user_id(event),
+                    profile_id=UUID(event.pattern_match.group(1).decode("ascii")),
+                    selected=updated,
+                )
+            except _PROFILE_INPUT_ERRORS as exc:
+                await event.answer(str(exc), alert=True)
+                return
+            answer = (
+                "Нужен хотя бы один язык источников"
+                if updated == selected and language in selected
+                else None
+            )
+            if answer is None:
+                await event.answer()
+            else:
+                await event.answer(answer)
+            await _respond_navigation(event, response)
+
+        @self._on_bot_event(
+            events.CallbackQuery(
+                pattern=rb"^nav:sls:([0-9a-f-]{36}):(\d+):(re|r|e)$"
+            )
+        )
+        async def navigation_save_source_languages(
+            event: events.CallbackQuery.Event,
+        ) -> None:
+            self._pending_navigation_inputs.pop(_telegram_user_id(event), None)
+            profile_id = UUID(event.pattern_match.group(1).decode("ascii"))
+            revision = int(event.pattern_match.group(2))
+            selected = source_language_selection_from_mask(
+                event.pattern_match.group(3).decode("ascii")
+            )
+            try:
+                await self.profile_onboarding.set_source_languages(
+                    external_user_id=_telegram_user_id(event),
+                    profile_id=profile_id,
+                    source_languages=selected,
+                    expected_revision=revision,
+                )
+                navigation_response = await self.navigation.settings_for_profile(
+                    external_user_id=_telegram_user_id(event),
+                    profile_id=profile_id,
                 )
             except _PROFILE_INPUT_ERRORS as exc:
                 await event.answer(str(exc), alert=True)

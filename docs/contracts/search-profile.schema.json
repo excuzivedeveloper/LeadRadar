@@ -11,6 +11,7 @@
     "opportunity_types",
     "budget",
     "languages",
+    "source_languages",
     "geographies",
     "remote_preference",
     "exclusions",
@@ -82,6 +83,21 @@
       "items": {
         "type": "string"
       }
+    },
+    "source_languages": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "enum": [
+          "ru",
+          "en"
+        ]
+      },
+      "uniqueItems": true,
+      "minItems": 1,
+      "maxItems": 2
     },
     "geographies": {
       "type": "array",
