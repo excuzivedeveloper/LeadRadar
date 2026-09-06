@@ -517,7 +517,7 @@ def _is_quality_duplicate_red_flag(value: str) -> bool:
         return False
     if _has_risk_red_flag_signal(text):
         return False
-    return _has_quality_duplicate_red_flag_signal(text)
+    return _matches_complete_quality_duplicate_red_flag(text)
 
 
 def _has_risk_red_flag_signal(text: str) -> bool:
@@ -566,8 +566,17 @@ def _has_risk_red_flag_signal(text: str) -> bool:
     return any(term in text for term in risk_terms)
 
 
-def _has_quality_duplicate_red_flag_signal(text: str) -> bool:
-    quality_terms = (
+def _matches_complete_quality_duplicate_red_flag(text: str) -> bool:
+    tokens = tuple(text.split())
+    return (
+        tokens in _QUALITY_DUPLICATE_TOKEN_FORMS
+        or _matches_scope_budget_quality_form(tokens)
+    )
+
+
+_QUALITY_DUPLICATE_TOKEN_FORMS = frozenset(
+    tuple(form.split())
+    for form in (
         "low budget",
         "budget too low",
         "too low budget",
@@ -575,51 +584,85 @@ def _has_quality_duplicate_red_flag_signal(text: str) -> bool:
         "unrealistic budget",
         "small budget",
         "limited budget",
-        "scope too broad",
-        "broad scope",
-        "large scope",
-        "wide scope",
-        "scope/budget mismatch",
+        "scope too broad for budget",
+        "scope too broad for the budget",
+        "scope too broad for stated budget",
+        "scope too broad for the stated budget",
+        "broad scope for budget",
+        "broad scope for the budget",
+        "broad scope for stated budget",
+        "broad scope for the stated budget",
         "scope budget mismatch",
-        "budget/scope mismatch",
         "budget scope mismatch",
-        "scope for budget",
-        "budget relative to scope",
-        "budget relative to a large",
-        "higher budget",
-        "materially higher budget",
+        "broad scope likely requires a higher budget",
+        "broad scope likely requires a materially higher budget",
         "unclear requirements",
         "vague requirements",
         "undefined scope",
         "unspecified scope",
         "missing deliverables",
+        "unclear deliverables",
         "missing timeline",
         "missing deadline",
         "no timeline",
         "no deadline",
-        "unclear deliverables",
         "unclear process",
         "низкий бюджет",
         "маленький бюджет",
         "недостаточный бюджет",
         "нереалистичный бюджет",
         "бюджет слишком низ",
+        "слишком низкий бюджет",
         "широкий скоуп",
-        "широкий объем",
-        "слишком широкий",
-        "объем работ",
-        "несоответствие бюджета",
-        "бюджет не соответствует",
+        "широкий объем работ",
+        "слишком широкий скоуп",
+        "слишком широкий объем работ",
+        "несоответствие бюджета и скоупа",
+        "бюджет не соответствует скоупу",
         "неясные требования",
         "размытые требования",
         "неопределенный скоуп",
         "неопределённый скоуп",
+        "не указаны результаты",
         "не указан срок",
         "нет сроков",
         "нет дедлайна",
-        "не указаны результаты",
     )
-    return any(term in text for term in quality_terms)
+)
+
+_SAFE_SCOPE_DESCRIPTOR_TOKENS = frozenset(
+    {
+        "ai",
+        "app",
+        "application",
+        "large",
+        "multi",
+        "multi-platform",
+        "multiplatform",
+        "platform",
+        "product",
+        "saas",
+        "software",
+        "web",
+        "wide",
+    }
+)
+
+
+def _matches_scope_budget_quality_form(tokens: tuple[str, ...]) -> bool:
+    if len(tokens) < 7:
+        return False
+    if tokens[:4] != ("low", "budget", "relative", "to"):
+        return False
+    remainder = tokens[4:]
+    if remainder[0] in {"a", "an", "the"}:
+        remainder = remainder[1:]
+    if len(remainder) < 2 or remainder[-1] != "scope":
+        return False
+    if remainder[0] not in {"large", "broad", "wide"}:
+        return False
+    descriptors = remainder[:-1]
+    return all(token in _SAFE_SCOPE_DESCRIPTOR_TOKENS for token in descriptors)
 
 
 def _normalize_match_text(value: str) -> str:

@@ -26,6 +26,7 @@ from freelancer_bot.matching import (
     STRUCTURED_SCORING_POLICY_VERSION,
     STRUCTURED_SCORING_VERSION,
     StructuredScoringPolicy,
+    _is_quality_duplicate_red_flag,
     _penalized_red_flag_count,
 )
 from freelancer_bot.matching_service import CandidateMatchingService
@@ -203,6 +204,36 @@ class MatchDecisionTest(unittest.TestCase):
         self.assertEqual(_penalized_red_flag_count(red_flags), 1)
         self.assertEqual(trace.red_flag_penalty, Decimal("0.0800"))
 
+    def test_quality_substring_with_dubious_requester_stays_counted(self):
+        self._assert_single_red_flag_counted(
+            "low budget and requester seems dubious",
+        )
+
+    def test_scope_quality_with_deceptive_behavior_stays_counted(self):
+        self._assert_single_red_flag_counted(
+            "broad scope but client behavior feels deceptive",
+        )
+
+    def test_requirements_quality_with_fake_counterparty_stays_counted(self):
+        self._assert_single_red_flag_counted(
+            "unclear requirements and counterparty seems fake",
+        )
+
+    def test_budget_quality_with_questionable_payer_stays_counted(self):
+        self._assert_single_red_flag_counted(
+            "small budget with questionable payer behavior",
+        )
+
+    def test_quality_prefix_with_unknown_trust_suffix_stays_counted(self):
+        self._assert_single_red_flag_counted(
+            "low budget; manual trust review required",
+        )
+
+    def test_quality_suffix_with_unknown_trust_prefix_stays_counted(self):
+        self._assert_single_red_flag_counted(
+            "manual trust review required; low budget",
+        )
+
     def test_unknown_red_flag_text_keeps_risk_penalty(self):
         red_flags = ("unusual condition that requires manual review",)
         trace = decide_and_rank_matches(
@@ -259,6 +290,23 @@ class MatchDecisionTest(unittest.TestCase):
         self.assertEqual(default_trace.red_flag_penalty, Decimal("0.0000"))
         self.assertEqual(default_trace.decision_code, MatchDecisionCode.ELIGIBLE)
         self.assertTrue(default_trace.eligible)
+
+    def _assert_single_red_flag_counted(self, red_flag: str) -> None:
+        red_flags = (red_flag,)
+        trace = decide_and_rank_matches(
+            (
+                _scoring(
+                    _owner_web_saas_opportunity(red_flags=red_flags),
+                    (_owner_web_saas_profile(),),
+                ),
+            ),
+            evaluated_at=EVALUATED_AT,
+            policy=MatchDecisionPolicy(),
+        ).traces[0]
+
+        self.assertFalse(_is_quality_duplicate_red_flag(red_flag))
+        self.assertEqual(_penalized_red_flag_count(red_flags), 1)
+        self.assertEqual(trace.red_flag_penalty, Decimal("0.0800"))
 
     def test_default_threshold_stays_0300_for_ru_en_web_canary_repair(self):
         policy = MatchDecisionPolicy()
