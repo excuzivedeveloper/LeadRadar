@@ -1185,6 +1185,10 @@ sa.Index(
     sources.c.platform,
 )
 sa.Index(
+    "ix_sources_language",
+    sources.c.language,
+)
+sa.Index(
     "uq_sources_platform_handle",
     sources.c.platform,
     sources.c.handle,
