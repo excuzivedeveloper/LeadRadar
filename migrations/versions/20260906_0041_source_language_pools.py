@@ -36,6 +36,15 @@ _V2_DEFAULT = (
 def upgrade() -> None:
     op.add_column("sources", sa.Column("language", sa.String(2), nullable=True))
     op.add_column("sources", sa.Column("language_origin", sa.String(20), nullable=True))
+    op.add_column(
+        "sources",
+        sa.Column(
+            "language_conflict",
+            sa.Boolean(),
+            nullable=False,
+            server_default=sa.false(),
+        ),
+    )
     op.create_check_constraint(
         op.f("ck_sources_language_supported"),
         "sources",
@@ -158,5 +167,6 @@ def downgrade() -> None:
     op.drop_constraint(op.f("ck_sources_language_origin_consistent"), "sources", type_="check")
     op.drop_constraint(op.f("ck_sources_language_origin_supported"), "sources", type_="check")
     op.drop_constraint(op.f("ck_sources_language_supported"), "sources", type_="check")
+    op.drop_column("sources", "language_conflict")
     op.drop_column("sources", "language_origin")
     op.drop_column("sources", "language")

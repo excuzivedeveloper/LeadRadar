@@ -955,7 +955,16 @@ class LeadBot:
                     selected=source_language_selection_from_mask(
                         event.pattern_match.group(3).decode("ascii")
                     ),
+                    expected_revision=int(event.pattern_match.group(2)),
                 )
+            except SearchProfileEditConflict:
+                refreshed = await self._refresh_stale_source_language_settings(
+                    event,
+                    profile_id=UUID(event.pattern_match.group(1).decode("ascii")),
+                )
+                if refreshed is None:
+                    return
+                response = refreshed
             except _PROFILE_INPUT_ERRORS as exc:
                 await event.answer(str(exc), alert=True)
                 return
@@ -971,20 +980,35 @@ class LeadBot:
             event: events.CallbackQuery.Event,
         ) -> None:
             self._pending_navigation_inputs.pop(_telegram_user_id(event), None)
-            selected = source_language_selection_from_mask(
-                event.pattern_match.group(3).decode("ascii")
-            )
-            language = {
-                "r": "ru",
-                "e": "en",
-            }[event.pattern_match.group(4).decode("ascii")]
-            updated = toggle_source_language_selection(selected, language)
+            profile_id = UUID(event.pattern_match.group(1).decode("ascii"))
             try:
+                selected = source_language_selection_from_mask(
+                    event.pattern_match.group(3).decode("ascii")
+                )
+                language = {
+                    "r": "ru",
+                    "e": "en",
+                }[event.pattern_match.group(4).decode("ascii")]
+                updated = toggle_source_language_selection(selected, language)
                 response = await self.navigation.source_language_settings(
                     external_user_id=_telegram_user_id(event),
-                    profile_id=UUID(event.pattern_match.group(1).decode("ascii")),
+                    profile_id=profile_id,
                     selected=updated,
+                    expected_revision=int(event.pattern_match.group(2)),
                 )
+            except SearchProfileEditConflict:
+                refreshed = await self._refresh_stale_source_language_settings(
+                    event,
+                    profile_id=profile_id,
+                )
+                if refreshed is None:
+                    return
+                await event.answer(
+                    "Настройки уже изменились. Показаны сохранённые языки "
+                    "источников.",
+                )
+                await _respond_navigation(event, refreshed)
+                return
             except _PROFILE_INPUT_ERRORS as exc:
                 await event.answer(str(exc), alert=True)
                 return
@@ -1253,6 +1277,27 @@ class LeadBot:
             lead_id = int(event.pattern_match.group(1))
             self.storage.mark_ignored(lead_id)
             await event.answer("Лид помечен как ignored")
+
+    async def _refresh_stale_source_language_settings(
+        self,
+        event: events.CallbackQuery.Event,
+        *,
+        profile_id: UUID,
+    ):
+        """Discard a stale source-language draft and reload persisted state."""
+
+        try:
+            response = await self.navigation.source_language_settings(
+                external_user_id=_telegram_user_id(event),
+                profile_id=profile_id,
+            )
+        except _PROFILE_INPUT_ERRORS as exc:
+            await event.answer(str(exc), alert=True)
+            return None
+        await event.answer(
+            "Настройки уже изменились. Показаны сохранённые языки источников."
+        )
+        return response
 
     async def _handle_delivery_action_callback(
         self,

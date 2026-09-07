@@ -747,7 +747,12 @@ Remaining ordered work:
 Repository head note: source/channel language pools are modeled separately from
 opportunity content languages. The migration keeps existing source rows
 unresolved unless an explicit seed/discovery/audit/operator provenance exists,
-and existing profiles keep `source_languages = NULL` legacy routing until saved.
+conflicting RU/EN discovery evidence is persisted as unresolved until stronger
+evidence resolves it, and existing profiles keep `source_languages = NULL`
+legacy routing until saved. Telegram source-language callbacks carry the
+profile revision that rendered them; stale open/toggle callbacks discard their
+encoded selection mask and refresh the persisted state, while stale save
+callbacks remain blocked by `expected_revision`.
 5. evaluate provider/model strict-schema capability later as a separate gate;
 6. separately review candidate promotion/joining and broader discovery/audit
    rollout;

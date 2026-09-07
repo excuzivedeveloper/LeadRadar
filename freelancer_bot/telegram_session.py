@@ -2,18 +2,11 @@
 
 from __future__ import annotations
 
+import fcntl
 import os
 from pathlib import Path
 import re
 from typing import ClassVar
-
-try:
-    import fcntl
-except ImportError:  # pragma: no cover - exercised on Windows
-    fcntl = None
-    import msvcrt
-else:  # pragma: no cover - exercised on Unix
-    msvcrt = None
 
 
 class TelegramSessionInUseError(RuntimeError):
@@ -51,7 +44,7 @@ class TelegramSessionFileLock:
         self.lock_path.parent.mkdir(parents=True, exist_ok=True)
         descriptor = os.open(self.lock_path, os.O_RDWR | os.O_CREAT, 0o600)
         try:
-            _lock_descriptor(descriptor)
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             owner = _read_owner_metadata(self.lock_path)
             os.close(descriptor)
@@ -75,7 +68,7 @@ class TelegramSessionFileLock:
         self._descriptor = None
         self._held_paths.discard(self._key)
         try:
-            _unlock_descriptor(descriptor)
+            fcntl.flock(descriptor, fcntl.LOCK_UN)
         finally:
             os.close(descriptor)
 
@@ -88,29 +81,6 @@ class TelegramSessionFileLock:
 
 
 _ROLE_RE = re.compile(r"[^A-Za-z0-9_.:-]")
-
-
-def _lock_descriptor(descriptor: int) -> None:
-    if fcntl is not None:
-        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        return
-    assert msvcrt is not None
-    os.lseek(descriptor, 0, os.SEEK_SET)
-    os.write(descriptor, b"\0")
-    os.lseek(descriptor, 0, os.SEEK_SET)
-    try:
-        msvcrt.locking(descriptor, msvcrt.LK_NBLCK, 1)
-    except OSError as exc:
-        raise BlockingIOError(str(exc)) from exc
-
-
-def _unlock_descriptor(descriptor: int) -> None:
-    if fcntl is not None:
-        fcntl.flock(descriptor, fcntl.LOCK_UN)
-        return
-    assert msvcrt is not None
-    os.lseek(descriptor, 0, os.SEEK_SET)
-    msvcrt.locking(descriptor, msvcrt.LK_UNLCK, 1)
 
 
 def _safe_role(role: str) -> str:

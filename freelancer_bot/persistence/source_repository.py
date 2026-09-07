@@ -44,6 +44,10 @@ class SourceNotFound(LookupError):
     pass
 
 
+class SourceLanguageColumnsUnavailable(RuntimeError):
+    pass
+
+
 class SourceIdentityConflict(RuntimeError):
     pass
 
@@ -64,6 +68,7 @@ class SourceRecord:
     canonical_url: str | None
     language: str | None
     language_origin: SourceLanguageOrigin | None
+    language_conflict: bool
     created_at: datetime
     updated_at: datetime
 
@@ -470,11 +475,12 @@ class SourceRepository:
         language: str | None,
         language_origin: SourceLanguageOrigin | str | None,
     ) -> SourceRecord:
+        await _require_source_language_columns(connection)
         values = _source_language_values(language, language_origin)
         result = await connection.execute(
             sa.update(sources)
             .where(sources.c.id == source_id)
-            .values(**values, updated_at=sa.func.now())
+            .values(**values, language_conflict=False, updated_at=sa.func.now())
         )
         if result.rowcount != 1:
             raise SourceNotFound(f"Source {source_id} does not exist")
@@ -488,39 +494,107 @@ class SourceRepository:
         language: str | None,
         language_origin: SourceLanguageOrigin | str | None,
     ) -> SourceRecord:
+        """Apply language evidence atomically under row serialization.
+
+        The transition is monotonic per evidence strength ordering
+        ``operator > audit > seed > discovery_query``:
+
+        - same-language stronger evidence promotes the origin;
+        - same-language weaker evidence never downgrades it;
+        - stronger contradictory evidence wins deterministically;
+        - weaker contradictory evidence never overwrites stronger state;
+        - once discovery-query evidence has conflicted across both supported
+          languages, weak discovery evidence alone can no longer re-resolve the
+          source; the durable ``sources.language_conflict`` state keeps it
+          unresolved until seed, audit or operator evidence resolves it.
+
+        The caller's transaction serializes concurrent writers through
+        ``SELECT ... FOR UPDATE`` on the source row, so a weaker writer can
+        never overwrite stronger evidence regardless of writer ordering.
+        """
+
+        await _require_source_language_columns(connection)
         proposed = _source_language_values(language, language_origin)
-        current = await self.get(connection, source_id)
-        origin = proposed["language_origin"]
-        if origin is None:
+        row = (
+            await connection.execute(
+                _select_sources(True)
+                .where(sources.c.id == source_id)
+                .with_for_update()
+            )
+        ).mappings().one_or_none()
+        if row is None:
+            raise SourceNotFound(f"Source {source_id} does not exist")
+        current = _source_record(row)
+        proposed_origin_raw = proposed["language_origin"]
+        if proposed_origin_raw is None:
             return current
-        proposed_origin = SourceLanguageOrigin(origin)
-        if _source_language_origin_rank(current.language_origin) > (
-            _source_language_origin_rank(proposed_origin)
-        ):
-            return current
+        proposed_origin = SourceLanguageOrigin(proposed_origin_raw)
+        proposed_language = proposed["language"]
+        current_rank = _source_language_origin_rank(current.language_origin)
+        proposed_rank = _source_language_origin_rank(proposed_origin)
+
+        if proposed_origin is SourceLanguageOrigin.DISCOVERY_QUERY:
+            if current.language_conflict and current.language is None:
+                return current
+            if (
+                current.language is not None
+                and current.language != proposed_language
+                and current.language_origin
+                is SourceLanguageOrigin.DISCOVERY_QUERY
+            ):
+                await _record_discovery_language_conflict(
+                    connection,
+                    source_id,
+                    current.language,
+                    proposed_language,
+                )
+                return await self._write_language(
+                    connection,
+                    source_id,
+                    language=None,
+                    language_origin=None,
+                    language_conflict=True,
+                )
+
         if (
-            current.language is not None
-            and current.language != proposed["language"]
-            and current.language_origin is SourceLanguageOrigin.DISCOVERY_QUERY
-            and proposed_origin is SourceLanguageOrigin.DISCOVERY_QUERY
+            proposed_rank > current_rank
+            or current.language is None
+            or (
+                current.language == proposed_language
+                and current.language_origin is None
+            )
         ):
-            return await self.update_language(
+            return await self._write_language(
                 connection,
                 source_id,
-                language=None,
-                language_origin=None,
+                language=proposed_language,
+                language_origin=proposed_origin,
+                language_conflict=False,
             )
-        if (
-            current.language == proposed["language"]
-            and current.language_origin is not None
-        ):
-            return current
-        return await self.update_language(
-            connection,
-            source_id,
-            language=proposed["language"],
-            language_origin=proposed_origin,
+        return current
+
+    async def _write_language(
+        self,
+        connection: AsyncConnection,
+        source_id: int,
+        *,
+        language: str | None,
+        language_origin: SourceLanguageOrigin | None,
+        language_conflict: bool,
+    ) -> SourceRecord:
+        values = _source_language_values(language, language_origin)
+        result = await connection.execute(
+            sa.update(sources)
+            .where(sources.c.id == source_id)
+            .values(
+                **values,
+                language_conflict=language_conflict,
+                updated_at=sa.func.now(),
+            )
         )
+        if result.rowcount != 1:
+            raise SourceNotFound(f"Source {source_id} does not exist")
+        return await self.get(connection, source_id)
 
     async def transition(
         self,
@@ -932,28 +1006,45 @@ async def _sources_have_language_columns(connection: AsyncConnection) -> bool:
     return await connection.run_sync(_sync_sources_have_language_columns)
 
 
+async def _require_source_language_columns(connection: AsyncConnection) -> None:
+    if not await _sources_have_language_columns(connection):
+        raise SourceLanguageColumnsUnavailable(
+            "source language columns are unavailable until migration "
+            "20260906_0041 is applied; language mutations fail closed"
+        )
+
+
 def _sync_sources_have_language_columns(connection: sa.Connection) -> bool:
     cached = connection.info.get(_SOURCE_LANGUAGE_COLUMNS_CACHE_KEY)
-    if cached is not None:
-        return bool(cached)
+    if cached:
+        return True
     column_names = {
         column["name"]
         for column in sa.inspect(connection).get_columns(sources.name)
     }
-    has_columns = {"language", "language_origin"}.issubset(column_names)
-    connection.info[_SOURCE_LANGUAGE_COLUMNS_CACHE_KEY] = has_columns
+    has_columns = {"language", "language_origin", "language_conflict"}.issubset(
+        column_names
+    )
+    # Cache only positive detection: a cached pre-migration False would stay
+    # stale on the same physical connection after the migration is applied.
+    if has_columns:
+        connection.info[_SOURCE_LANGUAGE_COLUMNS_CACHE_KEY] = True
     return has_columns
 
 
 def _select_sources(has_language_columns: bool) -> sa.Select[tuple[Any, ...]]:
-    language_columns = (
-        (sources.c.language, sources.c.language_origin)
-        if has_language_columns
-        else (
+    if has_language_columns:
+        language_columns: tuple[Any, ...] = (
+            sources.c.language,
+            sources.c.language_origin,
+            sources.c.language_conflict,
+        )
+    else:
+        language_columns = (
             sa.null().label("language"),
             sa.null().label("language_origin"),
+            sa.false().label("language_conflict"),
         )
-    )
     return sa.select(
         sources.c.id,
         sources.c.platform,
@@ -1020,6 +1111,26 @@ def _source_language_origin_rank(origin: SourceLanguageOrigin | None) -> int:
     }[origin]
 
 
+async def _record_discovery_language_conflict(
+    connection: AsyncConnection,
+    source_id: int,
+    current_language: str,
+    proposed_language: str,
+) -> None:
+    if {current_language, proposed_language} != {"ru", "en"}:
+        return
+    result = await connection.execute(
+        sa.update(sources)
+        .where(
+            sources.c.id == source_id,
+            sources.c.language_conflict.is_(False),
+        )
+        .values(language_conflict=True, updated_at=sa.func.now())
+    )
+    if result.rowcount != 1:
+        raise SourceNotFound(f"Source {source_id} does not exist")
+
+
 def _source_language_values(
     language: str | None,
     language_origin: SourceLanguageOrigin | str | None,
@@ -1055,6 +1166,7 @@ def _source_record(row: Mapping[str, Any]) -> SourceRecord:
             if row["language_origin"] is None
             else SourceLanguageOrigin(row["language_origin"])
         ),
+        language_conflict=bool(row["language_conflict"]),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )

@@ -8,10 +8,11 @@ from uuid import UUID
 
 from freelancer_bot.app import LeadBot
 from freelancer_bot.delivery_actions import encode_delivery_action_callback
-from freelancer_bot.persistence.delivery_actions import DeliveryActionType
 from freelancer_bot.persistence.database import Database
+from freelancer_bot.persistence.delivery_actions import DeliveryActionType
 from freelancer_bot.profile_confirmation import ProfileConfirmationService
 from freelancer_bot.profile_onboarding import OnboardingProfileError
+from freelancer_bot.persistence.search_profiles import SearchProfileEditConflict
 from freelancer_bot.telegram_navigation import TelegramNavigationService
 from freelancer_bot.telegram_onboarding import TelegramProfileOnboarding
 from postgres_support import TEST_DATABASE_URL, migrate_to_head, temporary_database
@@ -423,6 +424,76 @@ class TelegramNavigationHandlerTest(unittest.IsolatedAsyncioTestCase):
         event.answer.assert_awaited_once_with("Настройка сохранена")
         self.assertNotIn("4242", bot._pending_navigation_inputs)
 
+    async def test_stale_source_language_open_callback_discards_mask(self):
+        profile_id = UUID("11111111-2222-3333-4444-555555555555")
+        bot = LeadBot.__new__(LeadBot)
+        bot.bot_client = _HandlerClient()
+        bot.config = SimpleNamespace(telegram_allowed_user_ids=(4242,))
+        bot._pending_navigation_inputs = {}
+        bot.navigation = SimpleNamespace(
+            source_language_settings=AsyncMock(
+                side_effect=SearchProfileEditConflict("stale revision")
+            )
+        )
+        bot._register_callback_handlers()
+        open_settings = next(
+            handler
+            for _, handler in bot.bot_client.handlers
+            if handler.__name__ == "navigation_source_languages"
+        )
+        data = f"nav:sl:{profile_id}:5:r".encode("ascii")
+        event = _TelegramEvent(sender_id=4242)
+        event.data = data
+        event.pattern_match = re.match(
+            rb"^nav:sl:([0-9a-f-]{36}):(\d+):(re|r|e)$",
+            data,
+        )
+
+        await open_settings(event)
+
+        first_call = bot.navigation.source_language_settings.await_args_list[0]
+        self.assertEqual(first_call.kwargs.get("selected"), ("ru",))
+        self.assertEqual(first_call.kwargs.get("expected_revision"), 5)
+        refresh_call = bot.navigation.source_language_settings.await_args_list[1]
+        self.assertNotIn("selected", refresh_call.kwargs)
+        self.assertNotIn("expected_revision", refresh_call.kwargs)
+        self.assertTrue(event.answer.await_count >= 1)
+
+    async def test_stale_source_language_toggle_callback_discards_mask(self):
+        profile_id = UUID("11111111-2222-3333-4444-555555555555")
+        bot = LeadBot.__new__(LeadBot)
+        bot.bot_client = _HandlerClient()
+        bot.config = SimpleNamespace(telegram_allowed_user_ids=(4242,))
+        bot._pending_navigation_inputs = {}
+        bot.navigation = SimpleNamespace(
+            source_language_settings=AsyncMock(
+                side_effect=SearchProfileEditConflict("stale revision")
+            )
+        )
+        bot._register_callback_handlers()
+        toggle = next(
+            handler
+            for _, handler in bot.bot_client.handlers
+            if handler.__name__ == "navigation_toggle_source_language"
+        )
+        data = f"nav:slt:{profile_id}:5:r:e".encode("ascii")
+        event = _TelegramEvent(sender_id=4242)
+        event.data = data
+        event.pattern_match = re.match(
+            rb"^nav:slt:([0-9a-f-]{36}):(\d+):(re|r|e):([re])$",
+            data,
+        )
+
+        await toggle(event)
+
+        first_call = bot.navigation.source_language_settings.await_args_list[0]
+        self.assertEqual(first_call.kwargs.get("selected"), ("ru", "en"))
+        self.assertEqual(first_call.kwargs.get("expected_revision"), 5)
+        refresh_call = bot.navigation.source_language_settings.await_args_list[1]
+        self.assertNotIn("selected", refresh_call.kwargs)
+        self.assertNotIn("expected_revision", refresh_call.kwargs)
+        self.assertTrue(event.answer.await_count >= 1)
+
     async def test_real_onboarding_adapter_marks_provider_error_retryable(self):
         confirmation = SimpleNamespace(show=AsyncMock())
         onboarding = TelegramProfileOnboarding(confirmation, _UnavailableAI())
@@ -594,6 +665,169 @@ class TelegramNavigationIntegrationTest(unittest.IsolatedAsyncioTestCase):
         )
         self.assertIn("Пробный период активирован", subscription.text)
         self.assertIn("действует до", subscription.text)
+
+    async def test_stale_open_toggle_and_save_callbacks_cannot_rebase_mask(self):
+        draft = await self._draft("stale-owner", "stale")
+        confirmed = await self.confirmation.confirm(
+            platform="telegram",
+            external_user_id="stale-owner",
+            profile_id=draft.profile.id,
+            expected_revision=draft.profile.revision,
+        )
+        await self.confirmation.activate(
+            platform="telegram",
+            external_user_id="stale-owner",
+            profile_id=confirmed.profile.id,
+            expected_revision=confirmed.profile.revision,
+        )
+        view = await self.confirmation.show(
+            platform="telegram",
+            external_user_id="stale-owner",
+            profile_id=draft.profile.id,
+        )
+        revision_five = view.profile.revision
+        saved = await self.confirmation.set_source_languages(
+            platform="telegram",
+            external_user_id="stale-owner",
+            profile_id=draft.profile.id,
+            source_languages=("ru",),
+            expected_revision=revision_five,
+        )
+        self.assertEqual(saved.profile.revision, revision_five + 1)
+
+        # Simulate the old rev-5 UI: callback encodes the stale revision and
+        # the stale mask "r" (ru only) while the persisted rev-6 state is [en].
+        rebased = await self.confirmation.set_source_languages(
+            platform="telegram",
+            external_user_id="stale-owner",
+            profile_id=draft.profile.id,
+            source_languages=("en",),
+            expected_revision=saved.profile.revision,
+        )
+        current = await self.confirmation.show(
+            platform="telegram",
+            external_user_id="stale-owner",
+            profile_id=draft.profile.id,
+        )
+        self.assertEqual(current.profile.preferences.source_languages, ("en",))
+
+        stale_revision = revision_five
+        with self.assertRaises(SearchProfileEditConflict):
+            await self.navigation.source_language_settings(
+                external_user_id="stale-owner",
+                profile_id=draft.profile.id,
+                selected=("ru",),
+                expected_revision=stale_revision,
+            )
+
+        refreshed = await self.navigation.source_language_settings(
+            external_user_id="stale-owner",
+            profile_id=draft.profile.id,
+        )
+        labels = [
+            button.label
+            for row in refreshed.buttons
+            for button in row
+        ]
+        self.assertIn("[x] English", labels)
+        self.assertNotIn("[x] Русский", labels)
+        save_buttons = [
+            button.data
+            for row in refreshed.buttons
+            for button in row
+            if button.data.startswith(b"nav:sls:")
+        ]
+        self.assertEqual(len(save_buttons), 1)
+        self.assertIn(f":{current.profile.revision}:".encode("ascii"), save_buttons[0])
+        self.assertNotIn(f":{stale_revision}:".encode("ascii"), save_buttons[0])
+
+        with self.assertRaises(SearchProfileEditConflict):
+            await self.onboarding.set_source_languages(
+                external_user_id="stale-owner",
+                profile_id=draft.profile.id,
+                source_languages=("ru",),
+                expected_revision=stale_revision,
+            )
+        after = await self.confirmation.show(
+            platform="telegram",
+            external_user_id="stale-owner",
+            profile_id=draft.profile.id,
+        )
+        self.assertEqual(
+            after.profile.preferences.source_languages,
+            ("en",),
+        )
+
+    async def test_stale_toggle_callback_raises_conflict_for_old_revision(self):
+        draft = await self._draft("stale-toggle-owner", "stale-toggle")
+        confirmed = await self.confirmation.confirm(
+            platform="telegram",
+            external_user_id="stale-toggle-owner",
+            profile_id=draft.profile.id,
+            expected_revision=draft.profile.revision,
+        )
+        activated = await self.confirmation.activate(
+            platform="telegram",
+            external_user_id="stale-toggle-owner",
+            profile_id=confirmed.profile.id,
+            expected_revision=confirmed.profile.revision,
+        )
+        revision = activated.profile.profile.revision
+        saved = await self.confirmation.set_source_languages(
+            platform="telegram",
+            external_user_id="stale-toggle-owner",
+            profile_id=draft.profile.id,
+            source_languages=("en",),
+            expected_revision=revision,
+        )
+
+        with self.assertRaises(SearchProfileEditConflict):
+            await self.navigation.source_language_settings(
+                external_user_id="stale-toggle-owner",
+                profile_id=draft.profile.id,
+                selected=("ru",),
+                expected_revision=revision,
+            )
+        current = await self.confirmation.show(
+            platform="telegram",
+            external_user_id="stale-toggle-owner",
+            profile_id=draft.profile.id,
+        )
+        self.assertEqual(
+            current.profile.preferences.source_languages,
+            ("en",),
+        )
+        self.assertEqual(current.profile.revision, saved.profile.revision)
+
+    async def test_current_revision_source_language_callback_still_works(self):
+        draft = await self._draft("fresh-owner", "fresh")
+        confirmed = await self.confirmation.confirm(
+            platform="telegram",
+            external_user_id="fresh-owner",
+            profile_id=draft.profile.id,
+            expected_revision=draft.profile.revision,
+        )
+        activated = await self.confirmation.activate(
+            platform="telegram",
+            external_user_id="fresh-owner",
+            profile_id=confirmed.profile.id,
+            expected_revision=confirmed.profile.revision,
+        )
+        revision = activated.profile.profile.revision
+
+        response = await self.navigation.source_language_settings(
+            external_user_id="fresh-owner",
+            profile_id=draft.profile.id,
+            selected=("ru", "en"),
+            expected_revision=revision,
+        )
+        labels = [
+            button.label
+            for row in response.buttons
+            for button in row
+        ]
+        self.assertIn("[x] Русский", labels)
+        self.assertIn("[x] English", labels)
 
     async def _draft(self, external_user_id: str, suffix: str):
         return await self.confirmation.create_manual_draft(

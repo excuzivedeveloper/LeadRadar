@@ -12,6 +12,7 @@ from .billing import (
 )
 from .persistence.search_profiles import (
     SearchProfileConfirmationStatus,
+    SearchProfileEditConflict,
     UserNotFound,
 )
 from .persistence.entitlements import is_owner_telegram_identity
@@ -318,6 +319,7 @@ class TelegramNavigationService:
         external_user_id: str,
         profile_id: UUID,
         selected: tuple[str, ...] | None = None,
+        expected_revision: int | None = None,
     ) -> TelegramOnboardingResponse:
         view = await self._confirmation.show(
             platform="telegram",
@@ -325,6 +327,10 @@ class TelegramNavigationService:
             profile_id=profile_id,
         )
         profile = view.profile
+        if expected_revision is not None and profile.revision != expected_revision:
+            raise SearchProfileEditConflict(
+                "source language settings changed; stale selection discarded"
+            )
         selected_languages = (
             profile.preferences.source_languages or ("ru", "en")
             if selected is None

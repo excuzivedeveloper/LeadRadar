@@ -1114,6 +1114,12 @@ sources = sa.Table(
     sa.Column("language", sa.String(2)),
     sa.Column("language_origin", sa.String(20)),
     sa.Column(
+        "language_conflict",
+        sa.Boolean(),
+        nullable=False,
+        server_default=sa.false(),
+    ),
+    sa.Column(
         "created_at",
         sa.DateTime(timezone=True),
         nullable=False,
