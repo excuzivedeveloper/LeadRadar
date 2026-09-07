@@ -151,8 +151,9 @@ sources.language_conflict = true | false
 `language` and `language_origin` are set or cleared together. Existing
 production rows are not guessed during migration; unresolved rows remain
 `NULL/NULL`. A `language_conflict=true` row is deliberately unresolved after
-opposing RU/EN discovery-query evidence. Seed-backed language is accepted only
-from the explicit
+opposing RU/EN discovery-query evidence and is valid only while
+`language/language_origin` are both `NULL`. Seed-backed language is accepted
+only from the explicit
 `config/sources.json` `language` field. Discovery query language may provide
 `discovery_query` evidence for supported `ru`/`en` candidates, while Source
 Audit may provide `audit` evidence only from an exact supported

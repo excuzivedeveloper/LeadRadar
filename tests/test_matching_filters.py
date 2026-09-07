@@ -183,6 +183,28 @@ class MatchingHardFilterTest(unittest.TestCase):
             {HardFilterCode.SOURCE_LANGUAGE_MISMATCH},
         )
 
+    def test_known_source_language_matrix(self):
+        cases = (
+            ("ru", ("ru",), True, None),
+            ("ru", ("en",), False, HardFilterCode.SOURCE_LANGUAGE_MISMATCH),
+            ("ru", ("ru", "en"), True, None),
+            ("en", ("en",), True, None),
+            ("en", ("ru",), False, HardFilterCode.SOURCE_LANGUAGE_MISMATCH),
+            ("en", ("ru", "en"), True, None),
+        )
+        for source_language, selected, expected_eligible, expected_reason in cases:
+            with self.subTest(source_language=source_language, selected=selected):
+                decision = evaluate_hard_filters(
+                    _opportunity(source_language=source_language),
+                    _profile(preferences=_preferences(source_languages=selected)),
+                )
+
+                self.assertEqual(decision.eligible, expected_eligible)
+                if expected_reason is None:
+                    self.assertEqual(decision.failures, ())
+                else:
+                    self.assertEqual(_failure_codes(decision), {expected_reason})
+
     def test_unresolved_source_language_fails_closed_for_explicit_profiles(self):
         ru_only = _profile(preferences=_preferences(source_languages=("ru",)))
         en_only = _profile(preferences=_preferences(source_languages=("en",)))
@@ -520,6 +542,86 @@ class CandidateMatchingPostgresTest(unittest.IsolatedAsyncioTestCase):
             },
         )
 
+    async def test_explicit_ru_en_profile_rejects_db_backed_unresolved_source_language(self):
+        active = await self._active_profile(
+            "explicit-ru-en-unresolved",
+            skill="Python",
+            source_languages=("ru", "en"),
+        )
+        opportunity_id = uuid4()
+        async with self.database.transaction() as connection:
+            raw_message_id = await _insert_known_source_message(
+                connection,
+                opportunity_id=opportunity_id,
+                source_language=None,
+            )
+            await connection.execute(
+                opportunities.insert().values(
+                    id=opportunity_id,
+                    schema_version=CANONICAL_OPPORTUNITY_SCHEMA_VERSION,
+                    canonical_title="Python developer",
+                    task_summary="Build a Telegram bot",
+                    market_direction="buyer_to_specialist",
+                    intent_stage="active",
+                    opportunity_type="project",
+                    category="Telegram",
+                    role_title="Python developer",
+                    skills=["Python"],
+                    budget_known=False,
+                    budget_explicit=False,
+                    work_remote=True,
+                    work_location=None,
+                    work_full_time=None,
+                    work_part_time=None,
+                    language=None,
+                    contact_telegram=None,
+                    contact_email=None,
+                    contact_url=None,
+                    analysis_confidence=Decimal("0.9"),
+                    quality_actionability=Decimal("0.8"),
+                    quality_commercial_plausibility=Decimal("0.8"),
+                    quality_specificity=Decimal("0.8"),
+                    quality_credibility=Decimal("0.8"),
+                    red_flags=[],
+                    first_seen_at=NOW,
+                    last_seen_at=NOW,
+                    lifecycle_status="active",
+                    lifecycle_changed_at=NOW,
+                    preferred_raw_message_id=raw_message_id,
+                    preferred_source_policy_version=PREFERRED_SOURCE_POLICY_VERSION,
+                )
+            )
+            await connection.execute(
+                opportunity_source_messages.insert().values(
+                    raw_message_id=raw_message_id,
+                    opportunity_id=opportunity_id,
+                )
+            )
+
+        service = CandidateMatchingService(self.database)
+        generated = await service.generate_matches(
+            (opportunity_id,),
+            evaluated_at=NOW,
+        )
+        self.assertEqual(generated.report.candidate_pair_count, 1)
+        self.assertEqual(generated.report.eligible_match_count, 0)
+        self.assertEqual(generated.report.hard_rejected_count, 1)
+        trace = generated.persistence.traces[0].trace
+        self.assertEqual(trace.search_profile_id, active.profile.id)
+        self.assertFalse(trace.hard_filter_eligible)
+        self.assertFalse(trace.eligible)
+        self.assertEqual(
+            {reason["code"] for reason in trace.hard_filter_reasons},
+            {"source_language_unresolved"},
+        )
+        self.assertTrue(
+            {
+                "routing.source_language_unresolved",
+                "narrowing.source_language_unresolved",
+            }
+            & {reason["code"] for reason in trace.narrowing_diagnostics},
+        )
+
     async def _confirmed_profile(
         self,
         user: str,
@@ -550,6 +652,7 @@ class CandidateMatchingPostgresTest(unittest.IsolatedAsyncioTestCase):
         role: str = "Developer",
         skill: str,
         category: str = "Telegram",
+        source_languages: tuple[str, ...] | None = None,
     ):
         confirmed = await self._confirmed_profile(
             user,
@@ -563,6 +666,14 @@ class CandidateMatchingPostgresTest(unittest.IsolatedAsyncioTestCase):
             profile_id=confirmed.profile.id,
             expected_revision=confirmed.profile.revision,
         )
+        if source_languages is not None:
+            return await self.profiles.set_source_languages(
+                platform="telegram",
+                external_user_id=user,
+                profile_id=activated.profile.profile.id,
+                source_languages=source_languages,
+                expected_revision=activated.profile.profile.revision,
+            )
         return activated.profile
 
 
@@ -619,7 +730,12 @@ def _preferences(**overrides):
     return parse_search_profile_preferences(**values)
 
 
-async def _insert_known_source_message(connection, *, opportunity_id):
+async def _insert_known_source_message(
+    connection,
+    *,
+    opportunity_id,
+    source_language="en",
+):
     raw_message_id = uuid4()
     raw_job_id = uuid4()
     correlation_id = uuid4()
@@ -643,8 +759,8 @@ async def _insert_known_source_message(connection, *, opportunity_id):
             display_name="Matching filters fixture source",
             handle=f"@matching_filters_{source_key[:15]}",
             canonical_url=f"https://t.me/matching_filters_{source_key}",
-            language="en",
-            language_origin="seed",
+            language=source_language,
+            language_origin=None if source_language is None else "seed",
         )
         .returning(sources.c.id)
     )

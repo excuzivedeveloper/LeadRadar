@@ -542,12 +542,6 @@ class SourceRepository:
                 and current.language_origin
                 is SourceLanguageOrigin.DISCOVERY_QUERY
             ):
-                await _record_discovery_language_conflict(
-                    connection,
-                    source_id,
-                    current.language,
-                    proposed_language,
-                )
                 return await self._write_language(
                     connection,
                     source_id,
@@ -1109,26 +1103,6 @@ def _source_language_origin_rank(origin: SourceLanguageOrigin | None) -> int:
         SourceLanguageOrigin.AUDIT: 3,
         SourceLanguageOrigin.OPERATOR: 4,
     }[origin]
-
-
-async def _record_discovery_language_conflict(
-    connection: AsyncConnection,
-    source_id: int,
-    current_language: str,
-    proposed_language: str,
-) -> None:
-    if {current_language, proposed_language} != {"ru", "en"}:
-        return
-    result = await connection.execute(
-        sa.update(sources)
-        .where(
-            sources.c.id == source_id,
-            sources.c.language_conflict.is_(False),
-        )
-        .values(language_conflict=True, updated_at=sa.func.now())
-    )
-    if result.rowcount != 1:
-        raise SourceNotFound(f"Source {source_id} does not exist")
 
 
 def _source_language_values(

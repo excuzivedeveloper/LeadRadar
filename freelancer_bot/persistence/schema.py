@@ -1178,6 +1178,11 @@ sources = sa.Table(
         "(language IS NOT NULL AND language_origin IS NOT NULL)",
         name="language_origin_consistent",
     ),
+    sa.CheckConstraint(
+        "NOT language_conflict OR "
+        "(language IS NULL AND language_origin IS NULL)",
+        name="language_conflict_unresolved",
+    ),
     sa.UniqueConstraint(
         "platform",
         "external_id",

@@ -630,6 +630,40 @@ class SourceRepositoryTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(resolved.language_origin, SourceLanguageOrigin.OPERATOR)
             self.assertFalse(resolved.language_conflict)
 
+    async def test_language_conflict_db_constraint_accepts_only_unresolved_conflicts(self):
+        valid_states = (
+            ("valid-null-clear", None, None, False),
+            ("valid-null-conflict", None, None, True),
+            ("valid-ru-audit", "ru", "audit", False),
+            ("valid-en-operator", "en", "operator", False),
+        )
+        for external_id, language, origin, conflict in valid_states:
+            with self.subTest(external_id=external_id):
+                async with self.database.transaction() as connection:
+                    await _insert_source_language_state(
+                        connection,
+                        external_id=external_id,
+                        language=language,
+                        language_origin=origin,
+                        language_conflict=conflict,
+                    )
+
+        invalid_states = (
+            ("invalid-ru-audit-conflict", "ru", "audit", True),
+            ("invalid-en-operator-conflict", "en", "operator", True),
+        )
+        for external_id, language, origin, conflict in invalid_states:
+            with self.subTest(external_id=external_id):
+                with self.assertRaises(IntegrityError):
+                    async with self.database.transaction() as connection:
+                        await _insert_source_language_state(
+                            connection,
+                            external_id=external_id,
+                            language=language,
+                            language_origin=origin,
+                            language_conflict=conflict,
+                        )
+
     async def _create_candidate(self, external_id: str, handle: str):
         async with self.database.transaction() as connection:
             return await self.repository.create_candidate(
@@ -750,6 +784,29 @@ async def _detect_columns(connection):
     from freelancer_bot.persistence import source_repository
 
     return await source_repository._sources_have_language_columns(connection)
+
+
+async def _insert_source_language_state(
+    connection,
+    *,
+    external_id: str,
+    language: str | None,
+    language_origin: str | None,
+    language_conflict: bool,
+) -> None:
+    await connection.execute(
+        sources.insert().values(
+            platform="telegram",
+            external_id=external_id,
+            access_type="public",
+            lifecycle_status="candidate",
+            display_name=f"Source {external_id}",
+            handle=f"@{external_id.replace('-', '_')}",
+            language=language,
+            language_origin=language_origin,
+            language_conflict=language_conflict,
+        )
+    )
 
 
 if __name__ == "__main__":

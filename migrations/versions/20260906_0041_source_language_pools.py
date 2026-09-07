@@ -62,6 +62,12 @@ def upgrade() -> None:
         "(language IS NULL AND language_origin IS NULL) OR "
         "(language IS NOT NULL AND language_origin IS NOT NULL)",
     )
+    op.create_check_constraint(
+        op.f("ck_sources_language_conflict_unresolved"),
+        "sources",
+        "NOT language_conflict OR "
+        "(language IS NULL AND language_origin IS NULL)",
+    )
     op.create_index("ix_sources_language", "sources", ["language"])
 
     op.drop_constraint(
@@ -164,8 +170,21 @@ def downgrade() -> None:
         "jsonb_typeof(preferences -> 'excluded_categories') = 'array')",
     )
     op.drop_index("ix_sources_language", table_name="sources")
-    op.drop_constraint(op.f("ck_sources_language_origin_consistent"), "sources", type_="check")
-    op.drop_constraint(op.f("ck_sources_language_origin_supported"), "sources", type_="check")
+    op.drop_constraint(
+        op.f("ck_sources_language_conflict_unresolved"),
+        "sources",
+        type_="check",
+    )
+    op.drop_constraint(
+        op.f("ck_sources_language_origin_consistent"),
+        "sources",
+        type_="check",
+    )
+    op.drop_constraint(
+        op.f("ck_sources_language_origin_supported"),
+        "sources",
+        type_="check",
+    )
     op.drop_constraint(op.f("ck_sources_language_supported"), "sources", type_="check")
     op.drop_column("sources", "language_conflict")
     op.drop_column("sources", "language_origin")
