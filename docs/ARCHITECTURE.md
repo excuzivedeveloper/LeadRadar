@@ -171,6 +171,65 @@ Current deployment:
 2 CANDIDATE
 ```
 
+### Owner candidate notification aid
+
+Repository head includes a bounded, explicit one-shot mode for notifying the
+Owner about Telegram source candidates that appear fresh enough for manual
+review.
+
+Eligibility is intentionally narrow:
+
+```text
+platform=telegram
+lifecycle_status=candidate
+safe direct t.me channel URL available
+latest Telegram message exists
+latest_message_at >= now - 10 days
+no prior owner_source_candidate_notifications row for (Owner, source_id)
+```
+
+The freshness check uses actual Telegram message activity fetched with the
+dedicated collector account through `TelegramRequestGovernor` categories
+`ENTITY_ACCESS` and `HISTORY`. Discovery timestamps, `sources.updated_at`,
+provider snippets, and inferred language do not satisfy the freshness gate.
+Exactly 10 days old is still eligible; older, empty, unresolvable, unsafe URL,
+non-candidate, or already-attempted sources are skipped.
+
+Candidate backlog scanning uses durable keyset progress in
+`owner_source_candidate_notification_scan_state`, keyed by Owner recipient. Each
+one-shot pass considers a bounded page of unnotified candidate `source_id`s
+after the last scanned id, then wraps back to the beginning after exhaustion.
+This prevents a stale top page from starving deeper candidates while still
+allowing stale, empty, or temporarily unresolvable candidates to be reprobed on
+a later pass.
+
+For each notification attempt the probed Telegram identity and Owner URL come
+from one coherent address decision: a valid source handle wins and produces both
+the `get_entity` lookup and `https://t.me/<same handle>` button URL; otherwise a
+valid canonical Telegram username URL is used for both. The reservation
+transaction locks and rereads the source, then verifies the relevant Telegram
+identity fields still match the probed address. Metadata drift suppresses the
+send without writing a permanent notification marker.
+
+Each eligible source reserves one durable row in
+`owner_source_candidate_notifications` before sending a Telegram card to
+`RuntimeConfig.owner_telegram_user_id`. The row is unique by
+`(recipient_chat_id, source_id)`, so dedupe follows the source identity rather
+than a mutable handle. `sent`, `failed`, and ambiguous attempts are terminal for
+automatic notification: future passes do not retry them. Stale or empty probes
+do not write a row, allowing a candidate to become fresh later and then notify
+once.
+
+Reservation outcomes are reported distinctly: true duplicate attempts increment
+`ALREADY_NOTIFIED`, while source disappearance, no-longer-candidate races, and
+Telegram identity changes use separate suppression counters.
+
+The card contains source identity, language display (`RU`, `EN`, or
+`не определён`), latest message date/age, candidate status, and only one URL
+button to open the channel. It does not approve, reject, join, leave, delete,
+score, audit, or change lifecycle state. Candidate promotion and Telegram
+membership remain separate manual/reviewed gates.
+
 ### Telegram membership prerequisite
 
 For live channel updates, an APPROVED source is not sufficient by itself.

@@ -26,6 +26,7 @@ class RuntimeMode(str, Enum):
     CHECK_SOURCES = "check_sources"
     DRAFT_TEXT = "draft_text"
     OPPORTUNITY_ANALYSIS_JOB = "opportunity_analysis_job"
+    OWNER_CANDIDATE_NOTIFICATIONS = "owner_candidate_notifications"
     DATABASE = "database"
 
 

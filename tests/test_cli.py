@@ -180,6 +180,90 @@ class CliModeTest(unittest.TestCase):
     def test_opportunity_analysis_job_id_conflict_with_draft_text_rejects_before_side_effects(self):
         self._assert_one_shot_conflict_rejected("--draft-text", "Нужен telegram бот")
 
+    def test_owner_candidate_notifications_uses_one_shot_mode(self):
+        config = SimpleNamespace()
+        runner = AsyncMock()
+
+        with (
+            patch("sys.argv", ["freelancer_bot", "--owner-candidate-notifications"]),
+            patch("freelancer_bot.app.RuntimeConfig.from_env", return_value=config) as from_env,
+            patch("freelancer_bot.app.run_owner_candidate_notifications_once", runner),
+            patch("freelancer_bot.app.TelegramClient") as telegram_client,
+            patch("freelancer_bot.app.LeadBot") as lead_bot,
+        ):
+            cli()
+
+        from_env.assert_called_once_with(
+            mode=RuntimeMode.OWNER_CANDIDATE_NOTIFICATIONS
+        )
+        runner.assert_awaited_once_with(config, limit=10)
+        telegram_client.assert_not_called()
+        lead_bot.assert_not_called()
+
+    def test_owner_candidate_notifications_accepts_bounded_limit(self):
+        config = SimpleNamespace()
+        runner = AsyncMock()
+
+        with (
+            patch(
+                "sys.argv",
+                [
+                    "freelancer_bot",
+                    "--owner-candidate-notifications",
+                    "--owner-candidate-notification-limit",
+                    "3",
+                ],
+            ),
+            patch("freelancer_bot.app.RuntimeConfig.from_env", return_value=config),
+            patch("freelancer_bot.app.run_owner_candidate_notifications_once", runner),
+        ):
+            cli()
+
+        runner.assert_awaited_once_with(config, limit=3)
+
+    def test_owner_candidate_notifications_rejects_unbounded_limit_before_config(self):
+        runner = AsyncMock()
+
+        with (
+            patch(
+                "sys.argv",
+                [
+                    "freelancer_bot",
+                    "--owner-candidate-notifications",
+                    "--owner-candidate-notification-limit",
+                    "101",
+                ],
+            ),
+            patch("freelancer_bot.app.RuntimeConfig.from_env") as from_env,
+            patch("freelancer_bot.app.run_owner_candidate_notifications_once", runner),
+            self.assertRaises(SystemExit),
+        ):
+            cli()
+
+        from_env.assert_not_called()
+        runner.assert_not_awaited()
+
+    def test_owner_candidate_notifications_conflict_with_run_rejects_before_side_effects(self):
+        runner = AsyncMock()
+
+        with (
+            patch(
+                "sys.argv",
+                ["freelancer_bot", "--owner-candidate-notifications", "--run"],
+            ),
+            patch("freelancer_bot.app.RuntimeConfig.from_env") as from_env,
+            patch("freelancer_bot.app.run_owner_candidate_notifications_once", runner),
+            patch("freelancer_bot.app.run_app", new_callable=AsyncMock) as run,
+            redirect_stderr(io.StringIO()) as error_output,
+            self.assertRaises(SystemExit),
+        ):
+            cli()
+
+        self.assertIn("conflicting action modes", error_output.getvalue())
+        from_env.assert_not_called()
+        runner.assert_not_awaited()
+        run.assert_not_awaited()
+
     def _assert_one_shot_conflict_rejected(self, *extra_args: str):
         runner = AsyncMock()
         job_id = "11111111-1111-1111-1111-111111111111"
