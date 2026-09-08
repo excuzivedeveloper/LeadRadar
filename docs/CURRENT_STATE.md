@@ -247,6 +247,20 @@ This bounded WEB_ONLY mode may be repeated as a separate development task to
 grow the candidate pool. It does **not** authorize persistent discovery or any
 promotion/join automation.
 
+For the next profile-driven Web Discovery rollout, the one-shot operator command
+supports an explicit post-dedup executable-query bound:
+
+```text
+python -m freelancer_bot.operator_cli profile-discovery run --max-queries 12
+```
+
+The flag is optional; omission preserves legacy unbounded behavior. When set,
+the full generated query plan is still built and exact/near duplicates are
+collapsed before deterministic balanced selection across discovery angles. The
+provider reports full generated/executable counts separately from selected and
+executed query counts. No live Web validation is implied by this repository
+state.
+
 ### Bot and owner-only access
 
 Completed:
@@ -716,7 +730,7 @@ Delivery Canary requires separate Owner authorization.
 | Matching | yes; includes local high-precision RU/EN technical concept bridge | PR13 reviewed/merged; repeat bounded canary completed with C++/HFT sample; RU/EN web repair result inconclusive because no relevant fresh RU/EN web sample appeared |
 | Personalized delivery | yes | bounded Owner Delivery Canary completed INCONCLUSIVE; owner-only safety passed; no eligible fresh match and no real sent delivery yet |
 | Owner-only bot access | yes | owner positive path live-validated |
-| Source discovery/audit | yes | bounded WEB_ONLY candidate discovery live-used (15→20 sources; candidates 2→7); repository head has optional `sources.language` provenance; persistent/Telegram discovery and Source Audit remain disabled |
+| Source discovery/audit | yes | bounded WEB_ONLY candidate discovery live-used (15→20 sources; candidates 2→7); profile Web Discovery supports explicit post-dedup `--max-queries`; repository head has optional `sources.language` provenance; persistent/Telegram discovery and Source Audit remain disabled |
 | Owner candidate notifications | code exists | explicit one-shot only; durable source-id cursor with wrap-around; coherent probed identity/URL; fresh Telegram candidate <=10 days, Owner-only URL card, durable at-most-once marker; no auto approve/reject/join/lifecycle change |
 | Persistent runtime/service | supporting code exists | **not authorized/deployed** |
 
@@ -740,8 +754,9 @@ Remaining ordered work:
 2. use that canary to validate the corrected OA retry/telemetry behavior and
    prove a real fresh owner-only sent delivery if a relevant natural lead arrives;
 3. continue separate bounded WEB_ONLY candidate discovery during development
-   when useful, without auto-approval, joining, Source Audit or Telegram
-   discovery;
+   when useful, explicitly bounding profile Web query execution with
+   `--max-queries 12` for the next rollout, without auto-approval, joining,
+   Source Audit or Telegram discovery;
 4. separately authorize and run the bounded Owner candidate notification
    one-shot if manual review of fresh candidate channels is desired;
 5. evaluate accumulated matching/shadow evidence before any threshold or policy

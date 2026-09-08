@@ -282,6 +282,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_profile.add_argument("--run-key")
     run_profile.add_argument("--results-per-query", type=_positive_int, default=10)
     run_profile.add_argument("--max-candidates", type=_positive_int, default=100)
+    run_profile.add_argument("--max-queries", type=_positive_int)
     coverage = profile_discovery_commands.add_parser(
         "coverage",
         help="project approved-source coverage for one active confirmed profile",
@@ -1747,6 +1748,7 @@ async def _profile_discovery_command(args: argparse.Namespace) -> None:
                 searxng_url=searxng_url,
                 results_per_query=args.results_per_query,
                 max_candidates=args.max_candidates,
+                max_queries=args.max_queries,
             )
             _emit(_profile_execution_payload(execution))
             return

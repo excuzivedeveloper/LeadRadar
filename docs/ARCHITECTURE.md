@@ -565,6 +565,21 @@ separate later-stage capabilities and remain disabled in deployment.
 
 Their existence does not authorize execution.
 
+Profile-driven Web Discovery supports an explicit executable-query bound for
+separately authorized one-shot runs:
+
+```bash
+python -m freelancer_bot.operator_cli profile-discovery run --max-queries 12
+```
+
+When the flag is omitted, legacy unbounded behavior is preserved. When provided,
+the bound is applied after full strategy query generation, exact deduplication
+and near-duplicate collapse, but before any Web backend call. Selection is
+deterministic round-robin by discovery angle in priority order
+`direct`, `buyer_habitat`, `adjacent`, followed by unknown future angles in
+first-seen order. Provider observability preserves the full generated and
+executable plan counts alongside the selected and actually executed counts.
+
 ## Persistent runtime
 
 Supporting runtime code exists, but no persistent LeadRadar service is currently

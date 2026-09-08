@@ -422,6 +422,7 @@ class ProfileDiscoveryService:
         searxng_url: str | None = None,
         results_per_query: int = 10,
         max_candidates: int = 100,
+        max_queries: int | None = None,
     ) -> ProfileDiscoveryExecution:
         _aware(requested_at, "requested_at")
         outcome = await self.ensure_intent(profile)
@@ -434,6 +435,7 @@ class ProfileDiscoveryService:
             searxng_url=searxng_url,
             results_per_query=results_per_query,
             max_candidates=max_candidates,
+            max_queries=max_queries,
             persist_relevance=True,
         )
 
@@ -577,6 +579,7 @@ class ProfileDiscoveryService:
             searxng_url=searxng_url,
             results_per_query=results_per_query,
             max_candidates=max_candidates,
+            max_queries=None,
             persist_relevance=False,
             previous_source_ids=previous_source_ids,
         )
@@ -650,6 +653,7 @@ class ProfileDiscoveryService:
         searxng_url: str | None,
         results_per_query: int,
         max_candidates: int,
+        max_queries: int | None,
         persist_relevance: bool,
         previous_source_ids: set[int] | None = None,
     ) -> ProfileDiscoveryExecution:
@@ -666,6 +670,7 @@ class ProfileDiscoveryService:
             backend,
             strategy=strategy,
             governor=self._web_governor,
+            max_queries=max_queries,
         )
         execution = await self._runner.run(
             provider,

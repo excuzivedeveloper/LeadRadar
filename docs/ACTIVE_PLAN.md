@@ -565,6 +565,14 @@ During development, further **separately bounded WEB_ONLY** discovery tasks may
 be used to grow the candidate pool without waiting for the entire Owner MVP to
 finish. They must remain isolated from live delivery canaries.
 
+For profile-driven Web Discovery, `profile-discovery run` supports an explicit
+`--max-queries` executable-query bound. The production rollout preflight that
+observed 36 generated / 34 executable queries should pass `--max-queries 12`
+explicitly. The bound is applied only after exact and near-duplicate collapse,
+then selects queries by deterministic round-robin across `direct`,
+`buyer_habitat` and `adjacent` discovery angles. Omitting the flag preserves
+legacy unbounded execution.
+
 Required development-mode boundaries:
 
 ```text

@@ -236,6 +236,94 @@ class ProfileDiscoveryPostgresIntegrationTest(unittest.IsolatedAsyncioTestCase):
             len(collapse_near_duplicate_queries(queries).queries),
         )
 
+    async def test_profile_web_discovery_persists_with_bounded_query_execution(self):
+        confirmation = ProfileConfirmationService(self.database)
+        draft = await confirmation.create_manual_draft(
+            platform="telegram",
+            external_user_id="profile-discovery-owner",
+            semantic_text="Python Telegram automation",
+            roles=("Python developer",),
+            skills=("Telethon", "PostgreSQL"),
+            categories=("Telegram bots",),
+        )
+        confirmed = await confirmation.confirm(
+            platform="telegram",
+            external_user_id="profile-discovery-owner",
+            profile_id=draft.profile.id,
+            expected_revision=draft.profile.revision,
+        )
+        activated = await confirmation.activate(
+            platform="telegram",
+            external_user_id="profile-discovery-owner",
+            profile_id=draft.profile.id,
+            expected_revision=confirmed.profile.revision,
+        )
+
+        class Backend:
+            def __init__(self):
+                self.calls = []
+
+            async def search(self, query, *, language, limit):
+                self.calls.append((query, language, limit))
+                return (
+                    WebSearchResult(
+                        "https://t.me/python_bounded_buyers/1",
+                        "Python Telegram Automation Buyers",
+                        "Need a Telethon implementation partner",
+                    ),
+                )
+
+        backend = Backend()
+        service = ProfileDiscoveryService(self.database)
+        first = await service.discover_profile(
+            activated.profile.profile,
+            requested_at=NOW,
+            run_key="profile-discovery-bounded-integration-v1",
+            backend=backend,
+            max_queries=12,
+        )
+        second = await service.discover_profile(
+            activated.profile.profile,
+            requested_at=NOW,
+            run_key="profile-discovery-bounded-integration-v1",
+            backend=backend,
+            max_queries=12,
+        )
+
+        async with self.database.connect() as connection:
+            intent_count = await connection.scalar(
+                sa.select(sa.func.count()).select_from(profile_discovery_intents)
+            )
+            relevance_count = await connection.scalar(
+                sa.select(sa.func.count()).select_from(source_profile_relevance)
+            )
+            source_count = await connection.scalar(
+                sa.select(sa.func.count()).select_from(sources)
+            )
+            run_count = await connection.scalar(
+                sa.select(sa.func.count())
+                .select_from(discovery_runs)
+                .where(
+                    discovery_runs.c.run_key
+                    == "profile-discovery-bounded-integration-v1"
+                )
+            )
+
+        self.assertEqual(intent_count, 1)
+        self.assertEqual(relevance_count, 1)
+        self.assertEqual(source_count, 1)
+        self.assertEqual(run_count, 1)
+        self.assertEqual(first.new_candidates, 1)
+        self.assertEqual(second.unique_candidates, 1)
+        self.assertLessEqual(len(backend.calls), 12)
+        self.assertEqual(len(backend.calls), 12)
+        self.assertEqual(first.provider_observability["queries_selected"], 12)
+        self.assertEqual(first.provider_observability["query_limit"], 12)
+        self.assertGreaterEqual(
+            first.provider_observability["queries_executable"],
+            first.provider_observability["queries_selected"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
