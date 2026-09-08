@@ -8,10 +8,13 @@ import unittest
 from freelancer_bot.config import RuntimeConfig
 from freelancer_bot.owner_candidate_notifications import (
     OwnerCandidateNotificationService,
+    telegram_candidate_address,
     telegram_source_url,
 )
 from freelancer_bot.persistence.owner_candidate_notifications import (
     OwnerSourceCandidateNotificationReservation,
+    OwnerSourceCandidateReservationResult,
+    OwnerSourceCandidateReservationStatus,
 )
 from freelancer_bot.persistence.source_repository import SourceRecord, SourceStatus
 from freelancer_bot.telegram_request_governor import TelegramRequestCategory
@@ -55,7 +58,10 @@ class OwnerCandidateNotificationServiceTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Последнее сообщение", call["body"])
         self.assertNotIn("Approve", call["body"])
         self.assertNotIn("Reject", call["body"])
-        self.assertEqual(call["buttons"], [[("url", "📲 Открыть канал", "https://t.me/ru_jobs")]])
+        self.assertEqual(
+            call["buttons"],
+            [[("url", "📲 Открыть канал", "https://t.me/ru_jobs")]],
+        )
 
     async def test_stale_candidate_does_not_create_marker_and_can_become_fresh_later(self):
         source = _source(2, handle="@later_fresh")
@@ -168,6 +174,90 @@ class OwnerCandidateNotificationServiceTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(summary.candidates_considered, 0)
         self.assertEqual(repository.reserved_source_ids, [15])
 
+    async def test_backlog_cursor_reaches_fresh_candidate_behind_stale_batch(self):
+        stale_sources = [
+            _source(source_id, handle=f"@source_{source_id}")
+            for source_id in range(1, 11)
+        ]
+        fresh_source = _source(11, handle="@source_11")
+        repository = _Repository(candidates=[*stale_sources, fresh_source])
+        service = _service(repository)
+
+        first = await service.run_once(
+            config=_config(),
+            collector_account_id=11,
+            user_client=_MappedUserClient(
+                {source.id: NOW - timedelta(days=20) for source in stale_sources}
+                | {fresh_source.id: NOW}
+            ),
+            bot_client=_BotClient(),
+            governor=_Governor(),
+            limit=10,
+        )
+        second = await service.run_once(
+            config=_config(),
+            collector_account_id=11,
+            user_client=_MappedUserClient(
+                {source.id: NOW - timedelta(days=20) for source in stale_sources}
+                | {fresh_source.id: NOW}
+            ),
+            bot_client=_BotClient(),
+            governor=_Governor(),
+            limit=10,
+        )
+
+        self.assertEqual(first.stale_or_empty, 10)
+        self.assertEqual(first.sent, 0)
+        self.assertEqual(second.candidates_considered, 1)
+        self.assertEqual(second.sent, 1)
+        self.assertEqual(repository.reserved_source_ids, [11])
+
+    async def test_handle_identity_drives_probe_and_button_when_canonical_differs(self):
+        source = _source(
+            16,
+            handle="@new_handle",
+            canonical_url="https://t.me/old_handle",
+        )
+        bot = _BotClient()
+        user = _UserClient(message_date=NOW)
+
+        summary = await _service(_Repository(candidates=[source])).run_once(
+            config=_config(),
+            collector_account_id=11,
+            user_client=user,
+            bot_client=bot,
+            governor=_Governor(),
+        )
+
+        self.assertEqual(summary.sent, 1)
+        self.assertEqual(user.lookups, ["new_handle"])
+        self.assertEqual(
+            bot.calls[0]["buttons"],
+            [[("url", "📲 Открыть канал", "https://t.me/new_handle")]],
+        )
+
+    async def test_identity_change_before_reserve_fails_closed_without_marker(self):
+        source = _source(17, handle="@before_race")
+        repository = _Repository(
+            candidates=[source],
+            reserve_status=OwnerSourceCandidateReservationStatus.IDENTITY_CHANGED,
+        )
+        bot = _BotClient()
+
+        summary = await _service(repository).run_once(
+            config=_config(),
+            collector_account_id=11,
+            user_client=_UserClient(message_date=NOW),
+            bot_client=bot,
+            governor=_Governor(),
+        )
+
+        self.assertEqual(summary.identity_changed, 1)
+        self.assertEqual(summary.already_notified, 0)
+        self.assertEqual(summary.sent, 0)
+        self.assertEqual(repository.reserved_source_ids, [])
+        self.assertEqual(bot.calls, [])
+
     async def test_owner_not_configured_fails_closed_before_probe_or_send(self):
         source = _source(4, handle="@ownerless")
         repository = _Repository(candidates=[source])
@@ -225,7 +315,10 @@ class OwnerCandidateNotificationServiceTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_lifecycle_race_after_probe_does_not_send(self):
         source = _source(7, handle="@race_source")
-        repository = _Repository(candidates=[source], reserve_returns_none=True)
+        repository = _Repository(
+            candidates=[source],
+            reserve_status=OwnerSourceCandidateReservationStatus.NOT_CANDIDATE,
+        )
         bot = _BotClient()
 
         summary = await _service(repository).run_once(
@@ -237,9 +330,29 @@ class OwnerCandidateNotificationServiceTest(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(summary.fresh_within_10_days, 1)
-        self.assertEqual(summary.already_notified, 1)
+        self.assertEqual(summary.already_notified, 0)
+        self.assertEqual(summary.no_longer_candidate, 1)
         self.assertEqual(summary.sent, 0)
         self.assertEqual(bot.calls, [])
+
+    async def test_true_duplicate_reservation_counts_already_notified(self):
+        source = _source(18, handle="@duplicate_source")
+        repository = _Repository(
+            candidates=[source],
+            reserve_status=OwnerSourceCandidateReservationStatus.ALREADY_NOTIFIED,
+        )
+
+        summary = await _service(repository).run_once(
+            config=_config(),
+            collector_account_id=11,
+            user_client=_UserClient(message_date=NOW),
+            bot_client=_BotClient(),
+            governor=_Governor(),
+        )
+
+        self.assertEqual(summary.already_notified, 1)
+        self.assertEqual(summary.no_longer_candidate, 0)
+        self.assertEqual(summary.identity_changed, 0)
 
     async def test_activity_probe_uses_entity_and_history_governor_categories(self):
         source = _source(8, handle="@governed_source")
@@ -261,7 +374,7 @@ class OwnerCandidateNotificationServiceTest(unittest.IsolatedAsyncioTestCase):
             ],
         )
 
-    def test_safe_url_prefers_valid_canonical_and_rejects_provider_urls(self):
+    def test_safe_url_prefers_valid_handle_and_rejects_provider_urls(self):
         self.assertEqual(
             telegram_source_url(
                 _source(
@@ -270,7 +383,7 @@ class OwnerCandidateNotificationServiceTest(unittest.IsolatedAsyncioTestCase):
                     canonical_url="https://t.me/canonical_handle",
                 )
             ),
-            "https://t.me/canonical_handle",
+            "https://t.me/fallback_handle",
         )
         self.assertEqual(
             telegram_source_url(
@@ -287,6 +400,12 @@ class OwnerCandidateNotificationServiceTest(unittest.IsolatedAsyncioTestCase):
                 _source(11, handle=None, canonical_url="https://provider.test/x")
             )
         )
+        address = telegram_candidate_address(
+            _source(19, handle=None, canonical_url="https://t.me/canonical_handle")
+        )
+        self.assertIsNotNone(address)
+        self.assertEqual(address.lookup, "https://t.me/canonical_handle")
+        self.assertEqual(address.url, "https://t.me/canonical_handle")
 
 
 def _service(repository: _Repository) -> OwnerCandidateNotificationService:
@@ -343,16 +462,18 @@ class _Repository:
         self,
         *,
         candidates: list[SourceRecord],
-        reserve_returns_none: bool = False,
+        reserve_status: OwnerSourceCandidateReservationStatus
+        | None = OwnerSourceCandidateReservationStatus.RESERVED,
     ) -> None:
         self.candidates = list(candidates)
-        self.reserve_returns_none = reserve_returns_none
+        self.reserve_status = reserve_status
         self.list_calls = 0
         self.reserved_source_ids: list[int] = []
         self.sent_ids: list[int] = []
         self.failed_ids: list[int] = []
         self._attempted_source_ids: set[int] = set()
         self._next_id = 1
+        self._cursor: int | None = None
 
     async def list_unnotified_candidates(self, _connection, *, recipient_chat_id: int, limit: int):
         self.list_calls += 1
@@ -361,7 +482,15 @@ class _Repository:
             for source in self.candidates
             if source.id not in self._attempted_source_ids
         ]
-        return tuple(unnotified[:limit])
+        after_cursor = (
+            [source for source in unnotified if self._cursor is None or source.id > self._cursor]
+        )
+        selected = after_cursor[:limit]
+        if not selected and self._cursor is not None:
+            selected = unnotified[:limit]
+        if selected:
+            self._cursor = selected[-1].id
+        return tuple(selected)
 
     async def reserve(
         self,
@@ -371,19 +500,31 @@ class _Repository:
         recipient_chat_id: int,
         source_identity_snapshot: dict,
         source_url_snapshot: str,
+        expected_handle: str | None,
+        expected_canonical_url: str | None,
         latest_message_at: datetime,
         attempted_at: datetime,
     ):
-        if self.reserve_returns_none or source_id in self._attempted_source_ids:
-            return None
+        if (
+            self.reserve_status
+            is not OwnerSourceCandidateReservationStatus.RESERVED
+        ):
+            return OwnerSourceCandidateReservationResult(self.reserve_status)
+        if source_id in self._attempted_source_ids:
+            return OwnerSourceCandidateReservationResult(
+                OwnerSourceCandidateReservationStatus.ALREADY_NOTIFIED
+            )
         self._attempted_source_ids.add(source_id)
         self.reserved_source_ids.append(source_id)
         notification_id = self._next_id
         self._next_id += 1
         source = next(source for source in self.candidates if source.id == source_id)
-        return OwnerSourceCandidateNotificationReservation(
-            id=notification_id,
-            source=source,
+        return OwnerSourceCandidateReservationResult(
+            OwnerSourceCandidateReservationStatus.RESERVED,
+            OwnerSourceCandidateNotificationReservation(
+                id=notification_id,
+                source=source,
+            ),
         )
 
     async def mark_sent(
@@ -425,8 +566,10 @@ class _UserClient:
     ) -> None:
         self.message_date = message_date
         self.resolve_fails = resolve_fails
+        self.lookups: list[str] = []
 
     async def get_entity(self, lookup: str):
+        self.lookups.append(lookup)
         if self.resolve_fails:
             raise ValueError("cannot resolve")
         return SimpleNamespace(lookup=lookup)
@@ -435,6 +578,23 @@ class _UserClient:
         async def messages():
             if self.message_date is not None:
                 yield SimpleNamespace(date=self.message_date)
+
+        return messages()
+
+
+class _MappedUserClient:
+    def __init__(self, messages_by_source_id: dict[int, datetime | None]) -> None:
+        self.messages_by_source_id = messages_by_source_id
+
+    async def get_entity(self, lookup: str):
+        source_id = int(str(lookup).rsplit("_", 1)[1])
+        return SimpleNamespace(source_id=source_id)
+
+    def iter_messages(self, entity, *, limit: int):
+        async def messages():
+            message_date = self.messages_by_source_id[entity.source_id]
+            if message_date is not None:
+                yield SimpleNamespace(date=message_date)
 
         return messages()
 

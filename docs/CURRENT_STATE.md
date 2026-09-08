@@ -717,7 +717,7 @@ Delivery Canary requires separate Owner authorization.
 | Personalized delivery | yes | bounded Owner Delivery Canary completed INCONCLUSIVE; owner-only safety passed; no eligible fresh match and no real sent delivery yet |
 | Owner-only bot access | yes | owner positive path live-validated |
 | Source discovery/audit | yes | bounded WEB_ONLY candidate discovery live-used (15→20 sources; candidates 2→7); repository head has optional `sources.language` provenance; persistent/Telegram discovery and Source Audit remain disabled |
-| Owner candidate notifications | code exists | explicit one-shot only; fresh Telegram candidate <=10 days, Owner-only URL card, durable at-most-once marker; no auto approve/reject/join/lifecycle change |
+| Owner candidate notifications | code exists | explicit one-shot only; durable source-id cursor with wrap-around; coherent probed identity/URL; fresh Telegram candidate <=10 days, Owner-only URL card, durable at-most-once marker; no auto approve/reject/join/lifecycle change |
 | Persistent runtime/service | supporting code exists | **not authorized/deployed** |
 
 ## Credentials and incidents

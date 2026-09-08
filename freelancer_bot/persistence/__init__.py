@@ -91,6 +91,8 @@ from .opportunities import (
 from .owner_candidate_notifications import (
     OwnerSourceCandidateNotificationRepository,
     OwnerSourceCandidateNotificationReservation,
+    OwnerSourceCandidateReservationResult,
+    OwnerSourceCandidateReservationStatus,
 )
 from .raw_messages import (
     IneligibleRawMessageSource,
@@ -203,6 +205,8 @@ __all__ = [
     "OpportunityLifecycleWriteOutcome",
     "OwnerSourceCandidateNotificationRepository",
     "OwnerSourceCandidateNotificationReservation",
+    "OwnerSourceCandidateReservationResult",
+    "OwnerSourceCandidateReservationStatus",
     "MessagePrefilterRepository",
     "OpportunityAnalysisCacheRepository",
     "OpportunityLinkConflict",

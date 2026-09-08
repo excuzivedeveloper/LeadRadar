@@ -107,9 +107,39 @@ def upgrade() -> None:
         "owner_source_candidate_notifications",
         ["status", "attempted_at"],
     )
+    op.create_table(
+        "owner_source_candidate_notification_scan_state",
+        sa.Column("recipient_chat_id", sa.BigInteger(), primary_key=True),
+        sa.Column("last_source_id", sa.BigInteger()),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+        sa.CheckConstraint(
+            "recipient_chat_id <> 0",
+            name=op.f(
+                "ck_owner_source_candidate_notification_scan_state_recipient_chat_id_nonzero"
+            ),
+        ),
+        sa.CheckConstraint(
+            "last_source_id IS NULL OR last_source_id > 0",
+            name=op.f(
+                "ck_owner_source_candidate_notification_scan_state_last_source_id_positive"
+            ),
+        ),
+    )
 
 
 def downgrade() -> None:
+    op.drop_table("owner_source_candidate_notification_scan_state")
     op.drop_index(
         "ix_owner_source_candidate_notifications_status_attempted",
         table_name="owner_source_candidate_notifications",

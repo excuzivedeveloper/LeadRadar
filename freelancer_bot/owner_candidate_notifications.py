@@ -14,6 +14,7 @@ from .config import RuntimeConfig
 from .persistence.database import Database
 from .persistence.owner_candidate_notifications import (
     OwnerSourceCandidateNotificationRepository,
+    OwnerSourceCandidateReservationStatus,
 )
 from .persistence.source_repository import SourceRecord, SourceStatus
 from .telegram_request_governor import TelegramRequestCategory, TelegramRequestGovernor
@@ -22,6 +23,14 @@ from .telegram_request_governor import TelegramRequestCategory, TelegramRequestG
 MAX_OWNER_CANDIDATE_NOTIFICATIONS_PER_PASS = 10
 FRESH_ACTIVITY_WINDOW = timedelta(days=10)
 _TELEGRAM_HANDLE_RE = re.compile(r"^@?[a-zA-Z][a-zA-Z0-9_]{4,31}$")
+
+
+@dataclass(frozen=True)
+class TelegramCandidateAddress:
+    lookup: str
+    url: str
+    expected_handle: str | None
+    expected_canonical_url: str | None
 
 
 @dataclass
@@ -35,6 +44,9 @@ class OwnerCandidateNotificationSummary:
     reserved: int = 0
     sent: int = 0
     failed: int = 0
+    no_longer_candidate: int = 0
+    identity_changed: int = 0
+    source_not_found: int = 0
 
     def as_lines(self) -> tuple[str, ...]:
         return (
@@ -47,6 +59,9 @@ class OwnerCandidateNotificationSummary:
             f"RESERVED={self.reserved}",
             f"SENT={self.sent}",
             f"FAILED={self.failed}",
+            f"NO_LONGER_CANDIDATE={self.no_longer_candidate}",
+            f"IDENTITY_CHANGED={self.identity_changed}",
+            f"SOURCE_NOT_FOUND={self.source_not_found}",
         )
 
 
@@ -99,7 +114,7 @@ class OwnerCandidateNotificationService:
         if owner_chat_id is None:
             return summary
 
-        async with self._database.connect() as connection:
+        async with self._database.transaction() as connection:
             candidates = await self._repository.list_unnotified_candidates(
                 connection,
                 recipient_chat_id=owner_chat_id,
@@ -110,9 +125,8 @@ class OwnerCandidateNotificationService:
         for source in candidates:
             if source.platform != "telegram" or source.lifecycle_status != SourceStatus.CANDIDATE:
                 continue
-            source_url = telegram_source_url(source)
-            lookup = telegram_lookup(source, source_url=source_url)
-            if source_url is None or lookup is None:
+            address = telegram_candidate_address(source)
+            if address is None:
                 summary.unresolvable += 1
                 continue
 
@@ -120,7 +134,7 @@ class OwnerCandidateNotificationService:
             probe = await self._latest_message_at(
                 user_client=user_client,
                 governor=governor,
-                lookup=lookup,
+                lookup=address.lookup,
             )
             if probe.unresolvable:
                 summary.unresolvable += 1
@@ -138,18 +152,32 @@ class OwnerCandidateNotificationService:
 
             attempted_at = now
             async with self._database.transaction() as connection:
-                reservation = await self._repository.reserve(
+                result = await self._repository.reserve(
                     connection,
                     source_id=source.id,
                     recipient_chat_id=owner_chat_id,
                     source_identity_snapshot=_identity_snapshot(source),
-                    source_url_snapshot=source_url,
+                    source_url_snapshot=address.url,
+                    expected_handle=address.expected_handle,
+                    expected_canonical_url=address.expected_canonical_url,
                     latest_message_at=latest_message_at,
                     attempted_at=attempted_at,
                 )
-            if reservation is None:
+            if result.status is OwnerSourceCandidateReservationStatus.ALREADY_NOTIFIED:
                 summary.already_notified += 1
                 continue
+            if result.status is OwnerSourceCandidateReservationStatus.NOT_CANDIDATE:
+                summary.no_longer_candidate += 1
+                continue
+            if result.status is OwnerSourceCandidateReservationStatus.IDENTITY_CHANGED:
+                summary.identity_changed += 1
+                continue
+            if result.status is OwnerSourceCandidateReservationStatus.SOURCE_NOT_FOUND:
+                summary.source_not_found += 1
+                continue
+            reservation = result.reservation
+            if reservation is None:
+                raise RuntimeError("reserved notification result did not include a row")
             summary.reserved += 1
 
             try:
@@ -162,7 +190,7 @@ class OwnerCandidateNotificationService:
                         [
                             self._button_factory(
                                 "📲 Открыть канал",
-                                source_url,
+                                address.url,
                             )
                         ]
                     ],
@@ -220,22 +248,29 @@ class OwnerCandidateNotificationService:
         return _ActivityProbe(latest_message_at=latest)
 
 
-def telegram_source_url(source: SourceRecord) -> str | None:
-    canonical = _safe_telegram_channel_url(source.canonical_url)
-    if canonical is not None:
-        return canonical
-    handle = _safe_handle(source.handle)
-    if handle is None:
-        return None
-    return f"https://t.me/{handle}"
-
-
-def telegram_lookup(source: SourceRecord, *, source_url: str | None = None) -> str | None:
+def telegram_candidate_address(source: SourceRecord) -> TelegramCandidateAddress | None:
     handle = _safe_handle(source.handle)
     if handle is not None:
-        return handle
-    url = source_url if source_url is not None else telegram_source_url(source)
-    return url
+        return TelegramCandidateAddress(
+            lookup=handle,
+            url=f"https://t.me/{handle}",
+            expected_handle=handle,
+            expected_canonical_url=None,
+        )
+    canonical = _safe_telegram_channel_url(source.canonical_url)
+    if canonical is None:
+        return None
+    return TelegramCandidateAddress(
+        lookup=canonical,
+        url=canonical,
+        expected_handle=None,
+        expected_canonical_url=canonical,
+    )
+
+
+def telegram_source_url(source: SourceRecord) -> str | None:
+    address = telegram_candidate_address(source)
+    return None if address is None else address.url
 
 
 def _safe_telegram_channel_url(value: str | None) -> str | None:

@@ -1277,6 +1277,30 @@ owner_source_candidate_notifications = sa.Table(
     ),
 )
 
+owner_source_candidate_notification_scan_state = sa.Table(
+    "owner_source_candidate_notification_scan_state",
+    metadata,
+    sa.Column("recipient_chat_id", sa.BigInteger(), primary_key=True),
+    sa.Column("last_source_id", sa.BigInteger()),
+    sa.Column(
+        "created_at",
+        sa.DateTime(timezone=True),
+        nullable=False,
+        server_default=sa.func.now(),
+    ),
+    sa.Column(
+        "updated_at",
+        sa.DateTime(timezone=True),
+        nullable=False,
+        server_default=sa.func.now(),
+    ),
+    sa.CheckConstraint("recipient_chat_id <> 0", name="recipient_chat_id_nonzero"),
+    sa.CheckConstraint(
+        "last_source_id IS NULL OR last_source_id > 0",
+        name="last_source_id_positive",
+    ),
+)
+
 sa.Index(
     "ix_owner_source_candidate_notifications_source",
     owner_source_candidate_notifications.c.source_id,

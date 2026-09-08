@@ -606,6 +606,18 @@ message is at most 10 days old, inclusive, may reserve a durable
 `owner_source_candidate_notifications` row and send one Owner-only Telegram
 review card with a channel URL button.
 
+The one-shot maintains durable Owner-keyed scan progress in
+`owner_source_candidate_notification_scan_state`. Repeated bounded passes move
+through candidate `source_id`s and wrap around, so stale or unresolvable
+candidates do not permanently starve deeper backlog entries. Stale checks are
+still not notification attempts; those rows remain eligible for future reprobe.
+
+The probed Telegram address and Owner URL must be the same address decision. A
+valid handle produces both lookup and button URL; only sources without a valid
+handle may use a valid canonical Telegram URL for both. If source Telegram
+identity changes between probe and locked reservation, the pass fails closed
+without reserving or sending.
+
 Non-goals remain explicit:
 
 ```text
