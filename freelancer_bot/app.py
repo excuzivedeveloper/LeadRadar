@@ -42,6 +42,10 @@ from .opportunity_one_shot import (
     OpportunityAnalysisOneShotError,
     run_opportunity_analysis_job_once,
 )
+from .owner_candidate_notifications import (
+    MAX_OWNER_CANDIDATE_NOTIFICATIONS_PER_PASS,
+    OwnerCandidateNotificationService,
+)
 from .persistence.database import Database
 from .persistence.delivery_actions import (
     DeliveryActionError,
@@ -1815,6 +1819,76 @@ async def check_sources(config: RuntimeConfig) -> None:
             await client.disconnect()
 
 
+async def run_owner_candidate_notifications_once(
+    config: RuntimeConfig,
+    *,
+    limit: int = MAX_OWNER_CANDIDATE_NOTIFICATIONS_PER_PASS,
+) -> None:
+    """Probe fresh source candidates and send bounded Owner review cards."""
+    if config.owner_telegram_user_id is None:
+        print("OWNER_CANDIDATE_NOTIFICATIONS_SKIPPED=owner_not_configured")
+        return
+    if config.api_id is None:
+        raise ConfigurationError(
+            "TELEGRAM_API_ID/API_ID is required for owner candidate notifications"
+        )
+    config.user_session_path.parent.mkdir(parents=True, exist_ok=True)
+    config.bot_session_path.parent.mkdir(parents=True, exist_ok=True)
+
+    database = Database(config.postgresql_url())
+    user_client = TelegramClient(
+        str(config.user_session_path),
+        config.api_id,
+        _required_secret(config.api_hash, "TELEGRAM_API_HASH/API_HASH"),
+        flood_sleep_threshold=0,
+    )
+    bot_client = TelegramClient(
+        str(config.bot_session_path),
+        config.api_id,
+        _required_secret(config.api_hash, "TELEGRAM_API_HASH/API_HASH"),
+    )
+    session_lock = TelegramSessionFileLock(
+        config.user_session_path,
+        role="owner_candidate_notifications",
+    )
+    session_lock.acquire()
+    try:
+        await user_client.start()
+        await bot_client.start(
+            bot_token=_required_secret(config.bot_token, "TELEGRAM_BOT_TOKEN/BOT_TOKEN")
+        )
+        snapshot = await ApprovedTelegramSourceAdapter(database).list_for_session(
+            user_client
+        )
+        governor = TelegramRequestGovernor(
+            database,
+            snapshot.collector_account.id,
+            config,
+        )
+        summary = await OwnerCandidateNotificationService.from_config(
+            config,
+            database,
+        ).run_once(
+            config=config,
+            collector_account_id=snapshot.collector_account.id,
+            user_client=user_client,
+            bot_client=bot_client,
+            governor=governor,
+            limit=limit,
+        )
+        for line in summary.as_lines():
+            print(line)
+    finally:
+        try:
+            await bot_client.disconnect()
+        finally:
+            try:
+                await user_client.disconnect()
+            finally:
+                session_lock.release()
+                await database.close()
+
+
 def cli() -> None:
     parser = argparse.ArgumentParser(
         description=(
@@ -1829,6 +1903,17 @@ def cli() -> None:
     parser.add_argument(
         "--opportunity-analysis-job-id",
         help="Process exactly one explicit opportunity.analysis.v1 durable job UUID.",
+    )
+    parser.add_argument(
+        "--owner-candidate-notifications",
+        action="store_true",
+        help="Probe fresh Telegram source candidates and send bounded Owner review cards.",
+    )
+    parser.add_argument(
+        "--owner-candidate-notification-limit",
+        type=int,
+        default=MAX_OWNER_CANDIDATE_NOTIFICATIONS_PER_PASS,
+        help="Maximum source candidates to consider in one notification pass.",
     )
     parser.add_argument(
         "--run",
@@ -1886,6 +1971,18 @@ def cli() -> None:
             if error.failure_code:
                 details.append(f"failure_code={error.failure_code}")
             parser.exit(1, f"opportunity analysis one-shot failed: {' '.join(details)}\n")
+        return
+
+    if args.owner_candidate_notifications:
+        if not 1 <= args.owner_candidate_notification_limit <= 100:
+            parser.error("--owner-candidate-notification-limit must be between 1 and 100")
+        config = RuntimeConfig.from_env(mode=RuntimeMode.OWNER_CANDIDATE_NOTIFICATIONS)
+        asyncio.run(
+            run_owner_candidate_notifications_once(
+                config,
+                limit=args.owner_candidate_notification_limit,
+            )
+        )
         return
 
     if args.collector_only:
@@ -1953,6 +2050,8 @@ def _reject_conflicting_action_modes(
         selected.append("--check-sources")
     if args.opportunity_analysis_job_id:
         selected.append("--opportunity-analysis-job-id")
+    if args.owner_candidate_notifications:
+        selected.append("--owner-candidate-notifications")
     if args.run:
         selected.append("--run")
     if args.bot_only:

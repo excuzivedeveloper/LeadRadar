@@ -587,6 +587,42 @@ gates.
 
 Do not combine a bounded discovery pass with a delivery, AI, or matching canary.
 
+## Step 7A — Owner candidate notification one-shot
+
+**Status: CODED FOR REVIEW; LIVE TELEGRAM NOTIFICATION PASS NOT AUTHORIZED BY
+THIS DOCUMENT.**
+
+Repository head adds an explicit one-shot review aid for the existing candidate
+backlog:
+
+```text
+python -m freelancer_bot --owner-candidate-notifications
+```
+
+The command considers at most 10 Telegram candidate sources by default. For each
+candidate it uses the dedicated collector account, the Telegram request
+governor, and a single latest-message history probe. Only sources whose latest
+message is at most 10 days old, inclusive, may reserve a durable
+`owner_source_candidate_notifications` row and send one Owner-only Telegram
+review card with a channel URL button.
+
+Non-goals remain explicit:
+
+```text
+AUTO_APPROVE=NO
+AUTO_REJECT=NO
+AUTO_JOIN=NO
+AUTO_LEAVE=NO
+SOURCE_AUDIT=NO
+AI_SCORING=NO
+LIFECYCLE_CHANGE=NO
+PERSISTENT_RUNTIME=NO
+```
+
+The at-most-once marker is written only for sources that pass the freshness gate
+and reach the send-attempt stage. Stale, empty, unresolvable, unsafe URL, and
+non-candidate rows are not marked as notified.
+
 ## Step 8 — Persistent runtime deployment
 
 **Not currently authorized.**

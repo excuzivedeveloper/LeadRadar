@@ -453,6 +453,7 @@ EXPECTED_TABLES = {
     "message_prefilter_shadow_evaluations",
     "opportunity_analysis_cache",
     "opportunity_evidence_shadow_traces",
+    "owner_source_candidate_notifications",
     "opportunities",
     "opportunity_analysis_links",
     "opportunity_lifecycle_events",

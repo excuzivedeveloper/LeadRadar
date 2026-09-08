@@ -171,6 +171,45 @@ Current deployment:
 2 CANDIDATE
 ```
 
+### Owner candidate notification aid
+
+Repository head includes a bounded, explicit one-shot mode for notifying the
+Owner about Telegram source candidates that appear fresh enough for manual
+review.
+
+Eligibility is intentionally narrow:
+
+```text
+platform=telegram
+lifecycle_status=candidate
+safe direct t.me channel URL available
+latest Telegram message exists
+latest_message_at >= now - 10 days
+no prior owner_source_candidate_notifications row for (Owner, source_id)
+```
+
+The freshness check uses actual Telegram message activity fetched with the
+dedicated collector account through `TelegramRequestGovernor` categories
+`ENTITY_ACCESS` and `HISTORY`. Discovery timestamps, `sources.updated_at`,
+provider snippets, and inferred language do not satisfy the freshness gate.
+Exactly 10 days old is still eligible; older, empty, unresolvable, unsafe URL,
+non-candidate, or already-attempted sources are skipped.
+
+Each eligible source reserves one durable row in
+`owner_source_candidate_notifications` before sending a Telegram card to
+`RuntimeConfig.owner_telegram_user_id`. The row is unique by
+`(recipient_chat_id, source_id)`, so dedupe follows the source identity rather
+than a mutable handle. `sent`, `failed`, and ambiguous attempts are terminal for
+automatic notification: future passes do not retry them. Stale or empty probes
+do not write a row, allowing a candidate to become fresh later and then notify
+once.
+
+The card contains source identity, language display (`RU`, `EN`, or
+`не определён`), latest message date/age, candidate status, and only one URL
+button to open the channel. It does not approve, reject, join, leave, delete,
+score, audit, or change lifecycle state. Candidate promotion and Telegram
+membership remain separate manual/reviewed gates.
+
 ### Telegram membership prerequisite
 
 For live channel updates, an APPROVED source is not sufficient by itself.

@@ -717,6 +717,7 @@ Delivery Canary requires separate Owner authorization.
 | Personalized delivery | yes | bounded Owner Delivery Canary completed INCONCLUSIVE; owner-only safety passed; no eligible fresh match and no real sent delivery yet |
 | Owner-only bot access | yes | owner positive path live-validated |
 | Source discovery/audit | yes | bounded WEB_ONLY candidate discovery live-used (15→20 sources; candidates 2→7); repository head has optional `sources.language` provenance; persistent/Telegram discovery and Source Audit remain disabled |
+| Owner candidate notifications | code exists | explicit one-shot only; fresh Telegram candidate <=10 days, Owner-only URL card, durable at-most-once marker; no auto approve/reject/join/lifecycle change |
 | Persistent runtime/service | supporting code exists | **not authorized/deployed** |
 
 ## Credentials and incidents
@@ -741,7 +742,9 @@ Remaining ordered work:
 3. continue separate bounded WEB_ONLY candidate discovery during development
    when useful, without auto-approval, joining, Source Audit or Telegram
    discovery;
-4. evaluate accumulated matching/shadow evidence before any threshold or policy
+4. separately authorize and run the bounded Owner candidate notification
+   one-shot if manual review of fresh candidate channels is desired;
+5. evaluate accumulated matching/shadow evidence before any threshold or policy
    changes;
 
 Repository head note: source/channel language pools are modeled separately from
@@ -753,10 +756,10 @@ legacy routing until saved. Telegram source-language callbacks carry the
 profile revision that rendered them; stale open/toggle callbacks discard their
 encoded selection mask and refresh the persisted state, while stale save
 callbacks remain blocked by `expected_revision`.
-5. evaluate provider/model strict-schema capability later as a separate gate;
-6. separately review candidate promotion/joining and broader discovery/audit
+6. evaluate provider/model strict-schema capability later as a separate gate;
+7. separately review candidate promotion/joining and broader discovery/audit
    rollout;
-7. authorize persistent runtime only after bounded end-to-end Owner MVP
+8. authorize persistent runtime only after bounded end-to-end Owner MVP
    validation and operational safeguards are complete.
 
 The authoritative order is in `docs/ACTIVE_PLAN.md`.

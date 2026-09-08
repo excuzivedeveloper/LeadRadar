@@ -88,6 +88,10 @@ from .opportunities import (
     OpportunityPersistenceError,
     OpportunitySourceObservationRecord,
 )
+from .owner_candidate_notifications import (
+    OwnerSourceCandidateNotificationRepository,
+    OwnerSourceCandidateNotificationReservation,
+)
 from .raw_messages import (
     IneligibleRawMessageSource,
     RawMessageIngestor,
@@ -197,6 +201,8 @@ __all__ = [
     "OpportunityLifecycleEventRecord",
     "OpportunityLifecycleStatus",
     "OpportunityLifecycleWriteOutcome",
+    "OwnerSourceCandidateNotificationRepository",
+    "OwnerSourceCandidateNotificationReservation",
     "MessagePrefilterRepository",
     "OpportunityAnalysisCacheRepository",
     "OpportunityLinkConflict",
