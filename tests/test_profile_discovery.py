@@ -383,7 +383,10 @@ class ProfileDiscoveryPostgresIntegrationTest(unittest.IsolatedAsyncioTestCase):
                 provider="web_search",
                 run_key="profile-discovery-bound-request-v1",
             )
-        self.assertEqual(run.request["profile_discovery"]["max_queries"], 12)
+        self.assertEqual(
+            run.request["parameters"]["profile_discovery"]["max_queries"],
+            12,
+        )
 
         await service.discover_profile(
             profile,
@@ -428,7 +431,10 @@ class ProfileDiscoveryPostgresIntegrationTest(unittest.IsolatedAsyncioTestCase):
                 provider="web_search",
                 run_key="profile-discovery-unbounded-request-v1",
             )
-        self.assertNotIn("max_queries", unbounded.request["profile_discovery"])
+        self.assertNotIn(
+            "max_queries",
+            unbounded.request["parameters"]["profile_discovery"],
+        )
 
         await service.discover_profile(
             profile,
