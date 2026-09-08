@@ -2,6 +2,7 @@ import io
 import sys
 import unittest
 from contextlib import redirect_stderr
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -131,6 +132,138 @@ class OperatorCliProfileDiscoveryTest(unittest.IsolatedAsyncioTestCase):
             expected,
         )
         database.close.assert_awaited_once()
+
+    def test_profile_execution_payload_exposes_bounded_plan_at_top_level(self):
+        execution = self._execution(
+            provider_observability={
+                "queries_executable": 34,
+                "queries_selected": 12,
+                "queries_executed": 12,
+                "query_limit": 12,
+                "query_angle_counts": {
+                    "executable": {
+                        "direct": 16,
+                        "buyer_habitat": 10,
+                        "adjacent": 8,
+                    },
+                    "selected": {
+                        "direct": 4,
+                        "buyer_habitat": 4,
+                        "adjacent": 4,
+                    },
+                },
+            }
+        )
+
+        payload = operator_cli._profile_execution_payload(execution)
+
+        self.assertEqual(payload["generated_query_count"], 36)
+        self.assertEqual(payload["executable_query_count"], 34)
+        self.assertEqual(payload["selected_query_count"], 12)
+        self.assertEqual(payload["executed_query_count"], 12)
+        self.assertEqual(payload["query_limit"], 12)
+        self.assertEqual(payload["direct_query_count"], 16)
+        self.assertEqual(payload["buyer_habitat_query_count"], 10)
+        self.assertEqual(payload["adjacent_query_count"], 8)
+        self.assertEqual(
+            payload["selected_query_angle_counts"],
+            {"direct": 4, "buyer_habitat": 4, "adjacent": 4},
+        )
+        self.assertEqual(
+            payload["executable_query_angle_counts"],
+            {"direct": 16, "buyer_habitat": 10, "adjacent": 8},
+        )
+
+    def test_profile_execution_payload_exposes_unbounded_plan_without_limit(self):
+        execution = self._execution(
+            provider_observability={
+                "queries_executable": 34,
+                "queries_selected": 34,
+                "queries_executed": 20,
+                "query_limit": None,
+                "query_angle_counts": {
+                    "selected": {
+                        "direct": 16,
+                        "buyer_habitat": 10,
+                        "adjacent": 8,
+                    },
+                },
+            }
+        )
+
+        payload = operator_cli._profile_execution_payload(execution)
+
+        self.assertEqual(payload["executable_query_count"], 34)
+        self.assertEqual(payload["selected_query_count"], 34)
+        self.assertEqual(payload["executed_query_count"], 20)
+        self.assertIsNone(payload["query_limit"])
+        self.assertEqual(
+            payload["selected_query_angle_counts"],
+            {"direct": 16, "buyer_habitat": 10, "adjacent": 8},
+        )
+
+    def test_profile_execution_payload_tolerates_missing_observability(self):
+        payload = operator_cli._profile_execution_payload(
+            self._execution(provider_observability={})
+        )
+
+        self.assertIsNone(payload["executable_query_count"])
+        self.assertIsNone(payload["selected_query_count"])
+        self.assertIsNone(payload["executed_query_count"])
+        self.assertIsNone(payload["query_limit"])
+        self.assertEqual(payload["selected_query_angle_counts"], {})
+
+    def _execution(self, *, provider_observability):
+        now = datetime(2026, 9, 8, tzinfo=timezone.utc)
+        intent = SimpleNamespace(
+            id="intent-id",
+            search_profile_id="profile-id",
+            profile_revision=1,
+            version="profile-discovery-intent.v1",
+            roles=("Python developer",),
+            services=("Telegram bots",),
+            skills=("Telethon",),
+            industries=("Telegram bots",),
+            languages=("en", "ru"),
+            geo_remote={"geographies": [], "work_modes": ["remote"]},
+            likely_buyer_roles=("founder",),
+            buyer_habitats=("startup founders",),
+            literal_concepts=("Python developer",),
+            adjacent_concepts=("Python agency",),
+            generated_web_queries=("q",) * 36,
+        )
+        run = SimpleNamespace(
+            id="run-id",
+            provider="web_search",
+            provider_kind="web",
+            run_key="run-key",
+            status=SimpleNamespace(value="completed"),
+            result_count=1,
+            materialized_count=1,
+            failure_code=None,
+            started_at=now,
+            finished_at=now,
+            created_at=now,
+            request={},
+        )
+        return SimpleNamespace(
+            profile_key="profile-id",
+            intent=intent,
+            execution=SimpleNamespace(run=run),
+            generated_query_count=36,
+            direct_query_count=16,
+            buyer_habitat_query_count=10,
+            adjacent_query_count=8,
+            search_results_considered=0,
+            telegram_like_candidates=0,
+            unique_candidates=0,
+            known_candidates=0,
+            new_candidates=0,
+            overlap_with_previous_profiles=0,
+            candidate_priority_counts={},
+            provider_observability=provider_observability,
+            coverage=None,
+        )
 
 
 if __name__ == "__main__":

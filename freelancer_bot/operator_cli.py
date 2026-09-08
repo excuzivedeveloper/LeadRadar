@@ -2390,17 +2390,48 @@ def _coverage_payload(coverage: ProfileSourceCoverage) -> dict[str, object]:
     }
 
 
+def _optional_int(value: object) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    return None
+
+
 def _profile_execution_payload(
     execution: ProfileDiscoveryExecution,
 ) -> dict[str, object]:
+    observability = dict(execution.provider_observability or {})
+    query_angle_counts = observability.get("query_angle_counts")
+    angle_counts = query_angle_counts if isinstance(query_angle_counts, Mapping) else {}
+    executable_angle_counts = angle_counts.get("executable")
+    selected_angle_counts = angle_counts.get("selected")
     return {
         "profile_key": execution.profile_key,
         "intent": _intent_payload(execution.intent),
         "discovery_run": _discovery_run_payload(execution.execution.run),
         "generated_query_count": execution.generated_query_count,
+        "executable_query_count": _optional_int(
+            observability.get("queries_executable")
+        ),
+        "selected_query_count": _optional_int(observability.get("queries_selected")),
+        "executed_query_count": _optional_int(observability.get("queries_executed")),
+        "query_limit": _optional_int(observability.get("query_limit")),
         "direct_query_count": execution.direct_query_count,
         "buyer_habitat_query_count": execution.buyer_habitat_query_count,
         "adjacent_query_count": execution.adjacent_query_count,
+        "executable_query_angle_counts": (
+            dict(executable_angle_counts)
+            if isinstance(executable_angle_counts, Mapping)
+            else {}
+        ),
+        "selected_query_angle_counts": (
+            dict(selected_angle_counts)
+            if isinstance(selected_angle_counts, Mapping)
+            else {}
+        ),
         "search_results_considered": execution.search_results_considered,
         "telegram_like_candidates": execution.telegram_like_candidates,
         "unique_candidates": execution.unique_candidates,
@@ -2408,7 +2439,7 @@ def _profile_execution_payload(
         "new_candidates": execution.new_candidates,
         "overlap_with_previous_profiles": execution.overlap_with_previous_profiles,
         "candidate_queue": dict(execution.candidate_priority_counts),
-        "provider_observability": dict(execution.provider_observability),
+        "provider_observability": observability,
         "coverage": (
             None if execution.coverage is None else _coverage_payload(execution.coverage)
         ),

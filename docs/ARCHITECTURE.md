@@ -577,8 +577,21 @@ the bound is applied after full strategy query generation, exact deduplication
 and near-duplicate collapse, but before any Web backend call. Selection is
 deterministic round-robin by discovery angle in priority order
 `direct`, `buyer_habitat`, `adjacent`, followed by unknown future angles in
-first-seen order. Provider observability preserves the full generated and
-executable plan counts alongside the selected and actually executed counts.
+first-seen order.
+
+For bounded profile-discovery runs, the explicit `max_queries` value is part of
+the persisted semantic discovery request. Reusing the same run key with a
+different explicit bound, or mixing bounded and unbounded request forms, is a
+request conflict rather than a silent result reuse. Historical unbounded request
+payloads remain compatible because omitted `--max-queries` does not add a new
+semantic key.
+
+Provider and operator observability preserve the full generated and executable
+plan counts alongside the selected and actually executed counts. Operator
+payloads expose these as separate top-level `executable_query_count`,
+`selected_query_count`, `executed_query_count`, `query_limit` and
+`selected_query_angle_counts` fields while retaining the legacy generated-plan
+counts.
 
 ## Persistent runtime
 

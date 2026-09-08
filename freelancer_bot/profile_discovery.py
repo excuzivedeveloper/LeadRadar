@@ -672,17 +672,20 @@ class ProfileDiscoveryService:
             governor=self._web_governor,
             max_queries=max_queries,
         )
+        profile_discovery_payload: dict[str, Any] = {
+            "intent_id": str(intent.id),
+            "profile_revision": intent.profile_revision,
+            "intent_version": intent.version,
+        }
+        if max_queries is not None:
+            profile_discovery_payload["max_queries"] = max_queries
         execution = await self._runner.run(
             provider,
             run_key=run_key,
             request=DiscoveryRequest(
                 parameters={
                     "trigger": "profile_discovery",
-                    "profile_discovery": {
-                        "intent_id": str(intent.id),
-                        "profile_revision": intent.profile_revision,
-                        "intent_version": intent.version,
-                    },
+                    "profile_discovery": profile_discovery_payload,
                 },
                 requested_at=requested_at,
             ),

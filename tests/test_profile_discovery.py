@@ -14,6 +14,10 @@ from freelancer_bot.persistence.schema import (
     source_profile_relevance,
     sources,
 )
+from freelancer_bot.persistence.discovery import (
+    DiscoveryRunConflict,
+    DiscoveryRunRepository,
+)
 from freelancer_bot.profile_discovery import (
     ProfileDiscoveryService,
     build_evaluation_intent,
@@ -323,6 +327,127 @@ class ProfileDiscoveryPostgresIntegrationTest(unittest.IsolatedAsyncioTestCase):
             first.provider_observability["queries_executable"],
             first.provider_observability["queries_selected"],
         )
+
+    async def test_profile_web_discovery_run_key_includes_explicit_query_bound(self):
+        confirmation = ProfileConfirmationService(self.database)
+        draft = await confirmation.create_manual_draft(
+            platform="telegram",
+            external_user_id="profile-discovery-owner",
+            semantic_text="Python Telegram automation",
+            roles=("Python developer",),
+            skills=("Telethon", "PostgreSQL"),
+            categories=("Telegram bots",),
+        )
+        confirmed = await confirmation.confirm(
+            platform="telegram",
+            external_user_id="profile-discovery-owner",
+            profile_id=draft.profile.id,
+            expected_revision=draft.profile.revision,
+        )
+        activated = await confirmation.activate(
+            platform="telegram",
+            external_user_id="profile-discovery-owner",
+            profile_id=draft.profile.id,
+            expected_revision=confirmed.profile.revision,
+        )
+        profile = activated.profile.profile
+
+        class Backend:
+            def __init__(self):
+                self.calls = []
+
+            async def search(self, query, *, language, limit):
+                self.calls.append(query)
+                return (
+                    WebSearchResult(
+                        "https://t.me/python_run_key_buyers/1",
+                        "Python Telegram Automation Buyers",
+                        "Need a Telethon implementation partner",
+                    ),
+                )
+
+        backend = Backend()
+        service = ProfileDiscoveryService(self.database)
+        await service.discover_profile(
+            profile,
+            requested_at=NOW,
+            run_key="profile-discovery-bound-request-v1",
+            backend=backend,
+            max_queries=12,
+        )
+        calls_after_first = len(backend.calls)
+        self.assertEqual(calls_after_first, 12)
+        async with self.database.connect() as connection:
+            run = await DiscoveryRunRepository().get_by_key(
+                connection,
+                provider="web_search",
+                run_key="profile-discovery-bound-request-v1",
+            )
+        self.assertEqual(run.request["profile_discovery"]["max_queries"], 12)
+
+        await service.discover_profile(
+            profile,
+            requested_at=NOW,
+            run_key="profile-discovery-bound-request-v1",
+            backend=backend,
+            max_queries=12,
+        )
+        self.assertEqual(len(backend.calls), calls_after_first)
+
+        with self.assertRaises(DiscoveryRunConflict):
+            await service.discover_profile(
+                profile,
+                requested_at=NOW,
+                run_key="profile-discovery-bound-request-v1",
+                backend=backend,
+                max_queries=6,
+            )
+        self.assertEqual(len(backend.calls), calls_after_first)
+
+        with self.assertRaises(DiscoveryRunConflict):
+            await service.discover_profile(
+                profile,
+                requested_at=NOW,
+                run_key="profile-discovery-bound-request-v1",
+                backend=backend,
+                max_queries=None,
+            )
+        self.assertEqual(len(backend.calls), calls_after_first)
+
+        await service.discover_profile(
+            profile,
+            requested_at=NOW,
+            run_key="profile-discovery-unbounded-request-v1",
+            backend=backend,
+            max_queries=None,
+        )
+        calls_after_unbounded = len(backend.calls)
+        async with self.database.connect() as connection:
+            unbounded = await DiscoveryRunRepository().get_by_key(
+                connection,
+                provider="web_search",
+                run_key="profile-discovery-unbounded-request-v1",
+            )
+        self.assertNotIn("max_queries", unbounded.request["profile_discovery"])
+
+        await service.discover_profile(
+            profile,
+            requested_at=NOW,
+            run_key="profile-discovery-unbounded-request-v1",
+            backend=backend,
+            max_queries=None,
+        )
+        self.assertEqual(len(backend.calls), calls_after_unbounded)
+
+        with self.assertRaises(DiscoveryRunConflict):
+            await service.discover_profile(
+                profile,
+                requested_at=NOW,
+                run_key="profile-discovery-unbounded-request-v1",
+                backend=backend,
+                max_queries=12,
+            )
+        self.assertEqual(len(backend.calls), calls_after_unbounded)
 
 
 if __name__ == "__main__":

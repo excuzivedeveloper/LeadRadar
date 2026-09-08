@@ -258,8 +258,10 @@ The flag is optional; omission preserves legacy unbounded behavior. When set,
 the full generated query plan is still built and exact/near duplicates are
 collapsed before deterministic balanced selection across discovery angles. The
 provider reports full generated/executable counts separately from selected and
-executed query counts. No live Web validation is implied by this repository
-state.
+executed query counts, and the operator payload surfaces those counts at top
+level. A bounded run's explicit `max_queries` is part of the persisted semantic
+request, so the same run key cannot silently reuse results for a different
+bound. No live Web validation is implied by this repository state.
 
 ### Bot and owner-only access
 

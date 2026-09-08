@@ -571,7 +571,11 @@ observed 36 generated / 34 executable queries should pass `--max-queries 12`
 explicitly. The bound is applied only after exact and near-duplicate collapse,
 then selects queries by deterministic round-robin across `direct`,
 `buyer_habitat` and `adjacent` discovery angles. Omitting the flag preserves
-legacy unbounded execution.
+legacy unbounded execution. Reusing a run key with a different explicit bound,
+or between bounded and unbounded forms, is a discovery request conflict. The
+operator payload distinguishes generated, executable, selected and executed
+query counts so a bounded run does not look as though only the selected queries
+ever existed.
 
 Required development-mode boundaries:
 
