@@ -249,6 +249,28 @@ class OwnerSourceCandidateNotificationRepository:
             )
         )
 
+    async def mark_failed(
+        self,
+        connection: AsyncConnection,
+        *,
+        notification_id: int,
+        failure_code: str,
+        failed_at: datetime,
+    ) -> None:
+        if notification_id <= 0:
+            raise ValueError("notification_id must be positive")
+        if not failure_code or failure_code.strip() != failure_code:
+            raise ValueError("failure_code must be normalized")
+        await connection.execute(
+            sa.update(owner_source_candidate_notifications)
+            .where(owner_source_candidate_notifications.c.id == notification_id)
+            .values(
+                status="failed",
+                failure_code=failure_code,
+                updated_at=failed_at,
+            )
+        )
+
 
 def _identity_matches(
     source: SourceRecord,
@@ -285,25 +307,3 @@ def _safe_handle(value: str | None) -> str | None:
     if not _TELEGRAM_HANDLE_RE.fullmatch(candidate):
         return None
     return candidate.removeprefix("@")
-
-    async def mark_failed(
-        self,
-        connection: AsyncConnection,
-        *,
-        notification_id: int,
-        failure_code: str,
-        failed_at: datetime,
-    ) -> None:
-        if notification_id <= 0:
-            raise ValueError("notification_id must be positive")
-        if not failure_code or failure_code.strip() != failure_code:
-            raise ValueError("failure_code must be normalized")
-        await connection.execute(
-            sa.update(owner_source_candidate_notifications)
-            .where(owner_source_candidate_notifications.c.id == notification_id)
-            .values(
-                status="failed",
-                failure_code=failure_code,
-                updated_at=failed_at,
-            )
-        )

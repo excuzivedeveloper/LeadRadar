@@ -85,7 +85,7 @@ class OwnerCandidateNotificationsPostgresTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_stale_candidate_remains_reprobe_eligible_after_wrap(self):
         async with self.database.transaction() as connection:
-            source_id = await _insert_source(connection, handle="@pg_later_fresh")
+            source_id = await _insert_source(connection, handle="@pg_later_1")
 
         service = _service(self.database, self.repository)
         stale = await service.run_once(
