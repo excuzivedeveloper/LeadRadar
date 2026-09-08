@@ -43,14 +43,20 @@ from freelancer_bot.persistence.opportunities import (
 )
 from freelancer_bot.persistence.schema import (
     ai_call_telemetry,
+    collector_accounts,
+    durable_jobs,
     match_evaluation_runs,
     match_traces,
     opportunities,
     opportunity_analysis_cache,
     opportunity_analysis_links,
+    opportunity_source_messages,
+    raw_messages,
     search_profiles,
+    sources,
     users,
 )
+from freelancer_bot.opportunity_dedup import PREFERRED_SOURCE_POLICY_VERSION
 from freelancer_bot.profile_confirmation import ProfileConfirmationService
 from freelancer_bot.search_profiles import (
     SEARCH_PROFILE_PARSER_VERSION,
@@ -70,6 +76,66 @@ EVALUATED_AT = datetime(2026, 8, 14, 18, 37, tzinfo=timezone.utc)
 
 
 class MatchDecisionTest(unittest.TestCase):
+    def test_source_language_unresolved_diagnostic_preserves_profile_and_source_context(self):
+        profile = _profile()
+        profile = replace(
+            profile,
+            preferences=replace(profile.preferences, source_languages=("ru",)),
+        )
+
+        trace = decide_and_rank_matches(
+            (_scoring(_opportunity(), (profile,)),),
+            evaluated_at=EVALUATED_AT,
+            policy=_permissive_policy(),
+        ).traces[0]
+
+        self.assertFalse(trace.hard_filter_eligible)
+        self.assertEqual(
+            {reason["code"] for reason in trace.hard_filter_reasons},
+            {"source_language_unresolved"},
+        )
+        diagnostics = tuple(
+            reason
+            for reason in trace.narrowing_diagnostics
+            if reason["code"] == "routing.source_language_unresolved"
+        )
+        self.assertEqual(len(diagnostics), 1)
+        self.assertEqual(diagnostics[0]["profile_id"], str(profile.id))
+        self.assertEqual(diagnostics[0]["profile_revision"], profile.revision)
+        self.assertIsNone(diagnostics[0]["source_id"])
+        self.assertIsNone(diagnostics[0]["source_language"])
+        self.assertEqual(diagnostics[0]["selected_source_languages"], ("ru",))
+
+    def test_unresolved_source_language_blocks_explicit_all_language_selection(self):
+        profile = _profile()
+        profile = replace(
+            profile,
+            preferences=replace(profile.preferences, source_languages=("ru", "en")),
+        )
+
+        trace = decide_and_rank_matches(
+            (_scoring(_opportunity(), (profile,)),),
+            evaluated_at=EVALUATED_AT,
+            policy=_permissive_policy(),
+        ).traces[0]
+
+        self.assertFalse(trace.hard_filter_eligible)
+        self.assertEqual(
+            {reason["code"] for reason in trace.hard_filter_reasons},
+            {"source_language_unresolved"},
+        )
+        diagnostics = tuple(
+            reason
+            for reason in trace.narrowing_diagnostics
+            if reason["code"] == "routing.source_language_unresolved"
+        )
+        self.assertEqual(len(diagnostics), 1)
+        self.assertEqual(diagnostics[0]["profile_id"], str(profile.id))
+        self.assertEqual(diagnostics[0]["profile_revision"], profile.revision)
+        self.assertIsNone(diagnostics[0]["source_id"])
+        self.assertIsNone(diagnostics[0]["source_language"])
+        self.assertEqual(diagnostics[0]["selected_source_languages"], ("ru", "en"))
+
     def test_quality_duplicate_flags_do_not_double_penalize_case2_shape(self):
         profile = _owner_web_saas_profile()
         red_flags = (
@@ -858,6 +924,12 @@ class MatchTracePostgresTest(unittest.IsolatedAsyncioTestCase):
     async def _opportunity(self, last_seen_at: datetime):
         opportunity_id = uuid4()
         async with self.database.transaction() as connection:
+            raw_message_id = await _insert_known_source_message(
+                connection,
+                opportunity_id=opportunity_id,
+                message_date=last_seen_at,
+                content="Build and integrate a Telegram automation bot",
+            )
             await connection.execute(
                 opportunities.insert().values(
                     id=opportunity_id,
@@ -883,6 +955,14 @@ class MatchTracePostgresTest(unittest.IsolatedAsyncioTestCase):
                     last_seen_at=last_seen_at,
                     lifecycle_status="active",
                     lifecycle_changed_at=last_seen_at,
+                    preferred_raw_message_id=raw_message_id,
+                    preferred_source_policy_version=PREFERRED_SOURCE_POLICY_VERSION,
+                )
+            )
+            await connection.execute(
+                opportunity_source_messages.insert().values(
+                    raw_message_id=raw_message_id,
+                    opportunity_id=opportunity_id,
                 )
             )
         return opportunity_id
@@ -900,6 +980,7 @@ class MatchTracePostgresTest(unittest.IsolatedAsyncioTestCase):
             "geographies": None,
             "work_modes": ["remote"],
             "excluded_categories": None,
+            "source_languages": ["ru", "en"],
         }
         async with self.database.transaction() as connection:
             await connection.execute(
@@ -953,6 +1034,12 @@ class MatchTracePostgresTest(unittest.IsolatedAsyncioTestCase):
         content_hash = sha256(content.encode("utf-8")).hexdigest()
         input_hash = sha256(f"analysis:{content}".encode("utf-8")).hexdigest()
         async with self.database.transaction() as connection:
+            raw_message_id = await _insert_known_source_message(
+                connection,
+                opportunity_id=opportunity_id,
+                message_date=last_seen_at,
+                content=content,
+            )
             await connection.execute(
                 opportunity_analysis_cache.insert().values(
                     id=cache_id,
@@ -989,6 +1076,14 @@ class MatchTracePostgresTest(unittest.IsolatedAsyncioTestCase):
                     last_seen_at=last_seen_at,
                     lifecycle_status="active",
                     lifecycle_changed_at=last_seen_at,
+                    preferred_raw_message_id=raw_message_id,
+                    preferred_source_policy_version=PREFERRED_SOURCE_POLICY_VERSION,
+                )
+            )
+            await connection.execute(
+                opportunity_source_messages.insert().values(
+                    raw_message_id=raw_message_id,
+                    opportunity_id=opportunity_id,
                 )
             )
             await connection.execute(
@@ -1003,6 +1098,71 @@ class MatchTracePostgresTest(unittest.IsolatedAsyncioTestCase):
                 )
             )
         return opportunity_id, cache_id
+
+
+async def _insert_known_source_message(
+    connection,
+    *,
+    opportunity_id,
+    message_date: datetime,
+    content: str,
+):
+    raw_message_id = uuid4()
+    raw_job_id = uuid4()
+    correlation_id = uuid4()
+    source_key = opportunity_id.hex
+    collector_account_id = await connection.scalar(
+        collector_accounts.insert()
+        .values(
+            platform="telegram",
+            external_account_id=f"match-decisions:{source_key}",
+            display_name="Match decisions fixture collector",
+        )
+        .returning(collector_accounts.c.id)
+    )
+    source_id = await connection.scalar(
+        sources.insert()
+        .values(
+            platform="telegram",
+            external_id=f"username:match_decisions_{source_key}",
+            access_type="public",
+            lifecycle_status="approved",
+            display_name="Match decisions fixture source",
+            handle=f"@match_decisions_{source_key[:16]}",
+            canonical_url=f"https://t.me/match_decisions_{source_key}",
+            language="en",
+            language_origin="seed",
+        )
+        .returning(sources.c.id)
+    )
+    await connection.execute(
+        durable_jobs.insert().values(
+            id=raw_job_id,
+            job_type="telegram.raw_message.v1",
+            idempotency_key=f"match-decisions-fixture:{source_key}",
+            correlation_id=correlation_id,
+        )
+    )
+    await connection.execute(
+        raw_messages.insert().values(
+            id=raw_message_id,
+            source_id=source_id,
+            collector_account_id=collector_account_id,
+            processing_job_id=raw_job_id,
+            schema_version="telegram.raw_message.v1",
+            platform="telegram",
+            external_source_id=f"username:match_decisions_{source_key}",
+            external_message_id=42,
+            message_date=message_date,
+            observed_at=message_date,
+            message_url=f"https://t.me/match_decisions_{source_key}/42",
+            content=content,
+            transport_metadata={},
+            ingestion_origin="live",
+            correlation_id=correlation_id,
+        )
+    )
+    return raw_message_id
 
 
 def _scoring(opportunity, profiles, *, provider=..., structured_policy=None):

@@ -13,7 +13,12 @@ import sqlalchemy as sa
 from ..config import RuntimeConfig, RuntimeMode
 from ..sources import Source, load_sources
 from .database import Database
-from .source_repository import SeedSource, SourceRepository, SourceStatus
+from .source_repository import (
+    SeedSource,
+    SourceLanguageOrigin,
+    SourceRepository,
+    SourceStatus,
+)
 
 
 SEED_PROVIDER = "repository_seed"
@@ -97,6 +102,10 @@ def _seed_source(source: Source, *, snapshot_sha256: str) -> SeedSource:
         lineage_key=f"repository-json:{username}",
         provider_run_id=snapshot_sha256,
         seed_reference=handle,
+        language=source.language,
+        language_origin=(
+            None if source.language is None else SourceLanguageOrigin.SEED
+        ),
         context={
             "enabled": enabled,
             "reason": source.reason,

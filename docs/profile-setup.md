@@ -18,6 +18,17 @@ Multiple SearchProfiles per user are supported with ownership isolation.
 The normal UI path starts from the Telegram bot and can create a draft from a
 natural-language description, then lets the user confirm/activate it.
 
+SearchProfile settings now have two separate language controls:
+
+- `Языки заявок` updates `preferences.languages` and constrains the analyzed
+  opportunity/content language from `OpportunityAnalysis.language`;
+- `Языки источников` updates `preferences.source_languages` and constrains the
+  source/channel pool by PostgreSQL `sources.language`.
+
+Existing migrated profiles with `source_languages = NULL` keep legacy
+unconfigured routing. New profiles default to both supported source languages,
+`ru,en`, and Telegram saves explicit selections through checkboxes.
+
 ### Natural-language onboarding
 
 Natural-language SearchProfile extraction requires a configured onboarding AI
@@ -108,6 +119,11 @@ SearchProfile.
 
 `config/sources.json` seeds candidate/approved sources. Runtime monitoring uses
 PostgreSQL source lifecycle/access state.
+
+The seed file may include an explicit `language` field with only `ru` or `en`.
+That field is seed provenance for `sources.language`; free-form tags are not a
+permanent language contract. Sources without explicit seed, discovery, audit or
+operator language evidence remain unresolved.
 
 Changing a user's SearchProfile does not automatically make a source approved.
 

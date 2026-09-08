@@ -326,7 +326,7 @@ class SourceMetricsMigrationCompatibilityTest(unittest.TestCase):
             self.assertEqual(len(after), 15)
             self.assertEqual(
                 (repeated.created, repeated.updated, repeated.unchanged),
-                (0, 0, 15),
+                (0, 11, 4),
             )
 
 

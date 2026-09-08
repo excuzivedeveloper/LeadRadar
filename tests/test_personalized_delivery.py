@@ -1209,6 +1209,7 @@ class PersonalizedDeliveryPostgresTest(unittest.IsolatedAsyncioTestCase):
             "geographies": None,
             "work_modes": ["remote"],
             "excluded_categories": None,
+            "source_languages": ["ru", "en"],
         }
         async with self.database.transaction() as connection:
             await connection.execute(
@@ -1283,6 +1284,8 @@ class PersonalizedDeliveryPostgresTest(unittest.IsolatedAsyncioTestCase):
                     display_name="Delivery fixture source",
                     handle=f"@delivery_{source_key}",
                     canonical_url=f"https://t.me/delivery_{source_key}",
+                    language="en",
+                    language_origin="seed",
                 )
                 .returning(sources.c.id)
             )

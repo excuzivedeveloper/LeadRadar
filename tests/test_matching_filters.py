@@ -23,8 +23,17 @@ from freelancer_bot.persistence.opportunities import (
     CANONICAL_OPPORTUNITY_SCHEMA_VERSION,
     CanonicalOpportunityRecord,
     OpportunityLifecycleStatus,
+    OpportunitySourceObservationRecord,
 )
-from freelancer_bot.persistence.schema import opportunities
+from freelancer_bot.persistence.schema import (
+    collector_accounts,
+    durable_jobs,
+    opportunities,
+    opportunity_source_messages,
+    raw_messages,
+    sources,
+)
+from freelancer_bot.opportunity_dedup import PREFERRED_SOURCE_POLICY_VERSION
 from freelancer_bot.persistence.search_profiles import (
     SearchProfileConfirmationStatus,
     SearchProfileRecord,
@@ -154,6 +163,77 @@ class MatchingHardFilterTest(unittest.TestCase):
             all(failure.opportunity_value is not None for failure in decision.failures)
         )
 
+    def test_source_languages_are_separate_profile_routing_constraint(self):
+        ru_source_profile = _profile(
+            preferences=_preferences(
+                languages=("English",),
+                source_languages=("ru",),
+            )
+        )
+        opportunity = _opportunity(
+            analysis=_analysis(language="English"),
+            source_language="en",
+        )
+
+        decision = evaluate_hard_filters(opportunity, ru_source_profile)
+
+        self.assertFalse(decision.eligible)
+        self.assertEqual(
+            _failure_codes(decision),
+            {HardFilterCode.SOURCE_LANGUAGE_MISMATCH},
+        )
+
+    def test_known_source_language_matrix(self):
+        cases = (
+            ("ru", ("ru",), True, None),
+            ("ru", ("en",), False, HardFilterCode.SOURCE_LANGUAGE_MISMATCH),
+            ("ru", ("ru", "en"), True, None),
+            ("en", ("en",), True, None),
+            ("en", ("ru",), False, HardFilterCode.SOURCE_LANGUAGE_MISMATCH),
+            ("en", ("ru", "en"), True, None),
+        )
+        for source_language, selected, expected_eligible, expected_reason in cases:
+            with self.subTest(source_language=source_language, selected=selected):
+                decision = evaluate_hard_filters(
+                    _opportunity(source_language=source_language),
+                    _profile(preferences=_preferences(source_languages=selected)),
+                )
+
+                self.assertEqual(decision.eligible, expected_eligible)
+                if expected_reason is None:
+                    self.assertEqual(decision.failures, ())
+                else:
+                    self.assertEqual(_failure_codes(decision), {expected_reason})
+
+    def test_unresolved_source_language_fails_closed_for_explicit_profiles(self):
+        ru_only = _profile(preferences=_preferences(source_languages=("ru",)))
+        en_only = _profile(preferences=_preferences(source_languages=("en",)))
+        ru_en = _profile(preferences=_preferences(source_languages=("ru", "en")))
+        legacy = _profile(preferences=_preferences(source_languages=None))
+        opportunity = _opportunity(source_language=None)
+
+        ru_only_decision = evaluate_hard_filters(opportunity, ru_only)
+        en_only_decision = evaluate_hard_filters(opportunity, en_only)
+        ru_en_decision = evaluate_hard_filters(opportunity, ru_en)
+        legacy_decision = evaluate_hard_filters(opportunity, legacy)
+
+        self.assertFalse(ru_only_decision.eligible)
+        self.assertFalse(en_only_decision.eligible)
+        self.assertFalse(ru_en_decision.eligible)
+        self.assertEqual(
+            _failure_codes(ru_only_decision),
+            {HardFilterCode.SOURCE_LANGUAGE_UNRESOLVED},
+        )
+        self.assertEqual(
+            _failure_codes(en_only_decision),
+            {HardFilterCode.SOURCE_LANGUAGE_UNRESOLVED},
+        )
+        self.assertEqual(
+            _failure_codes(ru_en_decision),
+            {HardFilterCode.SOURCE_LANGUAGE_UNRESOLVED},
+        )
+        self.assertTrue(legacy_decision.eligible)
+
     def test_unknown_opportunity_fields_are_nonblocking_and_never_fabricated(self):
         profile = _profile(
             preferences=_preferences(
@@ -261,7 +341,13 @@ class MatchingHardFilterTest(unittest.TestCase):
         self.assertEqual(len(result.eligible_profiles), 8)
         self.assertEqual(
             set(result.trace.narrowing_dimensions),
-            {"category_role_skills", "work_type", "language", "geography"},
+            {
+                "category_role_skills",
+                "work_type",
+                "language",
+                "source_language",
+                "geography",
+            },
         )
         self.assertEqual(
             {exclusion.code for exclusion in result.trace.exclusions},
@@ -351,6 +437,10 @@ class CandidateMatchingPostgresTest(unittest.IsolatedAsyncioTestCase):
         )
         opportunity_id = uuid4()
         async with self.database.transaction() as connection:
+            raw_message_id = await _insert_known_source_message(
+                connection,
+                opportunity_id=opportunity_id,
+            )
             await connection.execute(
                 opportunities.insert().values(
                     id=opportunity_id,
@@ -383,6 +473,14 @@ class CandidateMatchingPostgresTest(unittest.IsolatedAsyncioTestCase):
                     last_seen_at=NOW,
                     lifecycle_status="active",
                     lifecycle_changed_at=NOW,
+                    preferred_raw_message_id=raw_message_id,
+                    preferred_source_policy_version=PREFERRED_SOURCE_POLICY_VERSION,
+                )
+            )
+            await connection.execute(
+                opportunity_source_messages.insert().values(
+                    raw_message_id=raw_message_id,
+                    opportunity_id=opportunity_id,
                 )
             )
 
@@ -444,6 +542,86 @@ class CandidateMatchingPostgresTest(unittest.IsolatedAsyncioTestCase):
             },
         )
 
+    async def test_explicit_ru_en_profile_rejects_db_backed_unresolved_source_language(self):
+        active = await self._active_profile(
+            "explicit-ru-en-unresolved",
+            skill="Python",
+            source_languages=("ru", "en"),
+        )
+        opportunity_id = uuid4()
+        async with self.database.transaction() as connection:
+            raw_message_id = await _insert_known_source_message(
+                connection,
+                opportunity_id=opportunity_id,
+                source_language=None,
+            )
+            await connection.execute(
+                opportunities.insert().values(
+                    id=opportunity_id,
+                    schema_version=CANONICAL_OPPORTUNITY_SCHEMA_VERSION,
+                    canonical_title="Python developer",
+                    task_summary="Build a Telegram bot",
+                    market_direction="buyer_to_specialist",
+                    intent_stage="active",
+                    opportunity_type="project",
+                    category="Telegram",
+                    role_title="Python developer",
+                    skills=["Python"],
+                    budget_known=False,
+                    budget_explicit=False,
+                    work_remote=True,
+                    work_location=None,
+                    work_full_time=None,
+                    work_part_time=None,
+                    language=None,
+                    contact_telegram=None,
+                    contact_email=None,
+                    contact_url=None,
+                    analysis_confidence=Decimal("0.9"),
+                    quality_actionability=Decimal("0.8"),
+                    quality_commercial_plausibility=Decimal("0.8"),
+                    quality_specificity=Decimal("0.8"),
+                    quality_credibility=Decimal("0.8"),
+                    red_flags=[],
+                    first_seen_at=NOW,
+                    last_seen_at=NOW,
+                    lifecycle_status="active",
+                    lifecycle_changed_at=NOW,
+                    preferred_raw_message_id=raw_message_id,
+                    preferred_source_policy_version=PREFERRED_SOURCE_POLICY_VERSION,
+                )
+            )
+            await connection.execute(
+                opportunity_source_messages.insert().values(
+                    raw_message_id=raw_message_id,
+                    opportunity_id=opportunity_id,
+                )
+            )
+
+        service = CandidateMatchingService(self.database)
+        generated = await service.generate_matches(
+            (opportunity_id,),
+            evaluated_at=NOW,
+        )
+        self.assertEqual(generated.report.candidate_pair_count, 1)
+        self.assertEqual(generated.report.eligible_match_count, 0)
+        self.assertEqual(generated.report.hard_rejected_count, 1)
+        trace = generated.persistence.traces[0].trace
+        self.assertEqual(trace.search_profile_id, active.profile.id)
+        self.assertFalse(trace.hard_filter_eligible)
+        self.assertFalse(trace.eligible)
+        self.assertEqual(
+            {reason["code"] for reason in trace.hard_filter_reasons},
+            {"source_language_unresolved"},
+        )
+        self.assertTrue(
+            {
+                "routing.source_language_unresolved",
+                "narrowing.source_language_unresolved",
+            }
+            & {reason["code"] for reason in trace.narrowing_diagnostics},
+        )
+
     async def _confirmed_profile(
         self,
         user: str,
@@ -474,6 +652,7 @@ class CandidateMatchingPostgresTest(unittest.IsolatedAsyncioTestCase):
         role: str = "Developer",
         skill: str,
         category: str = "Telegram",
+        source_languages: tuple[str, ...] | None = None,
     ):
         confirmed = await self._confirmed_profile(
             user,
@@ -487,6 +666,14 @@ class CandidateMatchingPostgresTest(unittest.IsolatedAsyncioTestCase):
             profile_id=confirmed.profile.id,
             expected_revision=confirmed.profile.revision,
         )
+        if source_languages is not None:
+            return await self.profiles.set_source_languages(
+                platform="telegram",
+                external_user_id=user,
+                profile_id=activated.profile.profile.id,
+                source_languages=source_languages,
+                expected_revision=activated.profile.profile.revision,
+            )
         return activated.profile
 
 
@@ -537,13 +724,84 @@ def _preferences(**overrides):
         "geographies": None,
         "work_modes": None,
         "excluded_categories": None,
+        "source_languages": None,
     }
     values.update(overrides)
     return parse_search_profile_preferences(**values)
 
 
-def _opportunity(*, analysis=None, budget=None) -> CanonicalOpportunityRecord:
+async def _insert_known_source_message(
+    connection,
+    *,
+    opportunity_id,
+    source_language="en",
+):
+    raw_message_id = uuid4()
+    raw_job_id = uuid4()
+    correlation_id = uuid4()
+    source_key = opportunity_id.hex
+    collector_account_id = await connection.scalar(
+        collector_accounts.insert()
+        .values(
+            platform="telegram",
+            external_account_id=f"matching-filters:{source_key}",
+            display_name="Matching filters fixture collector",
+        )
+        .returning(collector_accounts.c.id)
+    )
+    source_id = await connection.scalar(
+        sources.insert()
+        .values(
+            platform="telegram",
+            external_id=f"username:matching_filters_{source_key}",
+            access_type="public",
+            lifecycle_status="approved",
+            display_name="Matching filters fixture source",
+            handle=f"@matching_filters_{source_key[:15]}",
+            canonical_url=f"https://t.me/matching_filters_{source_key}",
+            language=source_language,
+            language_origin=None if source_language is None else "seed",
+        )
+        .returning(sources.c.id)
+    )
+    await connection.execute(
+        durable_jobs.insert().values(
+            id=raw_job_id,
+            job_type="telegram.raw_message.v1",
+            idempotency_key=f"matching-filters-fixture:{source_key}",
+            correlation_id=correlation_id,
+        )
+    )
+    await connection.execute(
+        raw_messages.insert().values(
+            id=raw_message_id,
+            source_id=source_id,
+            collector_account_id=collector_account_id,
+            processing_job_id=raw_job_id,
+            schema_version="telegram.raw_message.v1",
+            platform="telegram",
+            external_source_id=f"username:matching_filters_{source_key}",
+            external_message_id=42,
+            message_date=NOW,
+            observed_at=NOW,
+            message_url=f"https://t.me/matching_filters_{source_key}/42",
+            content="Build a Telegram bot",
+            transport_metadata={},
+            ingestion_origin="live",
+            correlation_id=correlation_id,
+        )
+    )
+    return raw_message_id
+
+
+def _opportunity(
+    *,
+    analysis=None,
+    budget=None,
+    source_language="en",
+) -> CanonicalOpportunityRecord:
     selected_analysis = analysis or _analysis(budget=budget)
+    preferred_source = _source_observation(language=source_language)
     return CanonicalOpportunityRecord(
         id=uuid4(),
         schema_version=CANONICAL_OPPORTUNITY_SCHEMA_VERSION,
@@ -558,11 +816,30 @@ def _opportunity(*, analysis=None, budget=None) -> CanonicalOpportunityRecord:
         analysis_cache_ids=(),
         analysis_links=(),
         preferred_source_policy_version=None,
-        preferred_source=None,
-        source_observations=(),
+        preferred_source=preferred_source,
+        source_observations=(preferred_source,),
         lifecycle_events=(),
         created_at=NOW,
         updated_at=NOW,
+    )
+
+
+def _source_observation(*, language="en") -> OpportunitySourceObservationRecord:
+    return OpportunitySourceObservationRecord(
+        raw_message_id=uuid4(),
+        source_id=42,
+        platform="telegram",
+        external_source_id="username:source_fixture",
+        source_display_name="Source fixture",
+        source_handle="@source_fixture",
+        source_canonical_url="https://t.me/source_fixture",
+        source_language=language,
+        source_language_origin=None if language is None else "seed",
+        message_url="https://t.me/source_fixture/1",
+        message_date=NOW,
+        observed_at=NOW,
+        linked_at=NOW,
+        is_preferred=True,
     )
 
 

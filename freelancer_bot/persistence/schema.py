@@ -421,10 +421,11 @@ search_profiles = sa.Table(
         nullable=False,
         server_default=sa.text(
             "jsonb_build_object("
-            "'schema_version', 'search_profile_preferences.v1', "
+            "'schema_version', 'search_profile_preferences.v2', "
             "'work_types', NULL, 'minimum_budget', NULL, 'currency', NULL, "
             "'budget_policy', NULL, 'languages', NULL, 'geographies', NULL, "
-            "'work_modes', NULL, 'excluded_categories', NULL)"
+            "'work_modes', NULL, 'excluded_categories', NULL, "
+            "'source_languages', jsonb_build_array('ru', 'en'))"
         ),
     ),
     sa.Column(
@@ -496,10 +497,10 @@ search_profiles = sa.Table(
     sa.CheckConstraint(
         "jsonb_typeof(preferences) = 'object' "
         "AND preferences ->> 'schema_version' = "
-        "'search_profile_preferences.v1' "
+        "'search_profile_preferences.v2' "
         "AND preferences ?& ARRAY['work_types', 'minimum_budget', 'currency', "
         "'budget_policy', 'languages', 'geographies', 'work_modes', "
-        "'excluded_categories'] "
+        "'excluded_categories', 'source_languages'] "
         "AND (preferences -> 'work_types' = 'null'::jsonb OR "
         "jsonb_typeof(preferences -> 'work_types') = 'array') "
         "AND (preferences -> 'minimum_budget' = 'null'::jsonb OR "
@@ -516,7 +517,10 @@ search_profiles = sa.Table(
         "AND (preferences -> 'work_modes' = 'null'::jsonb OR "
         "jsonb_typeof(preferences -> 'work_modes') = 'array') "
         "AND (preferences -> 'excluded_categories' = 'null'::jsonb OR "
-        "jsonb_typeof(preferences -> 'excluded_categories') = 'array')",
+        "jsonb_typeof(preferences -> 'excluded_categories') = 'array') "
+        "AND (preferences -> 'source_languages' = 'null'::jsonb OR "
+        "preferences -> 'source_languages' IN "
+        "('[\"ru\"]'::jsonb, '[\"en\"]'::jsonb, '[\"ru\", \"en\"]'::jsonb))",
         name="preferences_contract_valid",
     ),
     sa.CheckConstraint(
@@ -1107,6 +1111,14 @@ sources = sa.Table(
     sa.Column("display_name", sa.Text(), nullable=False),
     sa.Column("handle", sa.String(255)),
     sa.Column("canonical_url", sa.Text()),
+    sa.Column("language", sa.String(2)),
+    sa.Column("language_origin", sa.String(20)),
+    sa.Column(
+        "language_conflict",
+        sa.Boolean(),
+        nullable=False,
+        server_default=sa.false(),
+    ),
     sa.Column(
         "created_at",
         sa.DateTime(timezone=True),
@@ -1152,6 +1164,25 @@ sources = sa.Table(
         "AND canonical_url <> '')",
         name="canonical_url_valid",
     ),
+    sa.CheckConstraint(
+        "language IS NULL OR language IN ('ru', 'en')",
+        name="language_supported",
+    ),
+    sa.CheckConstraint(
+        "language_origin IS NULL OR language_origin IN "
+        "('seed', 'discovery_query', 'audit', 'operator')",
+        name="language_origin_supported",
+    ),
+    sa.CheckConstraint(
+        "(language IS NULL AND language_origin IS NULL) OR "
+        "(language IS NOT NULL AND language_origin IS NOT NULL)",
+        name="language_origin_consistent",
+    ),
+    sa.CheckConstraint(
+        "NOT language_conflict OR "
+        "(language IS NULL AND language_origin IS NULL)",
+        name="language_conflict_unresolved",
+    ),
     sa.UniqueConstraint(
         "platform",
         "external_id",
@@ -1163,6 +1194,10 @@ sa.Index(
     "ix_sources_lifecycle_status_platform",
     sources.c.lifecycle_status,
     sources.c.platform,
+)
+sa.Index(
+    "ix_sources_language",
+    sources.c.language,
 )
 sa.Index(
     "uq_sources_platform_handle",

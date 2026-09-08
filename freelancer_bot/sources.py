@@ -18,6 +18,7 @@ class Source:
     reason: str
     enabled: bool = True
     tags: tuple[str, ...] = ()
+    language: str | None = None
 
     @property
     def username(self) -> str:
@@ -77,6 +78,13 @@ def load_sources(path: Path = DEFAULT_SOURCES_PATH) -> list[Source]:
         tags = item.get("tags", [])
         if not isinstance(tags, list) or any(not isinstance(tag, str) or not tag.strip() for tag in tags):
             raise ValueError(f"Source #{index}: 'tags' must be an array of non-empty strings")
+        language = item.get("language")
+        if language is not None:
+            if not isinstance(language, str):
+                raise ValueError(f"Source #{index}: 'language' must be a string")
+            language = language.strip().lower()
+            if language not in {"ru", "en"}:
+                raise ValueError(f"Source #{index}: 'language' must be ru or en")
 
         sources.append(
             Source(
@@ -85,6 +93,7 @@ def load_sources(path: Path = DEFAULT_SOURCES_PATH) -> list[Source]:
                 reason=_required_text(item, "reason", index),
                 enabled=enabled,
                 tags=tuple(tag.strip() for tag in tags),
+                language=language,
             )
         )
 

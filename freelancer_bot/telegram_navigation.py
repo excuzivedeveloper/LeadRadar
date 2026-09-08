@@ -12,6 +12,7 @@ from .billing import (
 )
 from .persistence.search_profiles import (
     SearchProfileConfirmationStatus,
+    SearchProfileEditConflict,
     UserNotFound,
 )
 from .persistence.entitlements import is_owner_telegram_identity
@@ -46,11 +47,14 @@ SETTING_FIELD_LABELS = {
     "skills": "Навыки",
     "categories": "Категории",
     "budget": "Бюджет",
-    "languages": "Языки",
+    "languages": "Языки заявок",
+    "source_languages": "Языки источников",
     "geographies": "География",
     "work_modes": "Формат работы",
     "excluded_categories": "Исключения",
 }
+
+_SOURCE_LANGUAGE_OPTIONS = (("ru", "Русский"), ("en", "English"))
 
 _WORK_TYPE_OPTIONS = (
     (OpportunityType.ONE_OFF_ORDER, "o", "Заказы"),
@@ -256,6 +260,18 @@ class TelegramNavigationService:
                 ("geographies", "work_modes"),
             )
         )
+        rows.append(
+            (
+                _button(
+                    SETTING_FIELD_LABELS["source_languages"],
+                    _source_language_settings_data(
+                        profile.id,
+                        profile.revision,
+                        profile.preferences.source_languages,
+                    ),
+                ),
+            )
+        )
         rows.append((_setting_button(profile, "excluded_categories"),))
 
         if profile.confirmation_status is SearchProfileConfirmationStatus.DRAFT:
@@ -294,6 +310,72 @@ class TelegramNavigationService:
             f"{format_profile_summary(view)}\n\n"
             "Выберите параметр. После нажатия отправьте новое значение "
             "обычным сообщением.",
+            tuple(rows),
+        )
+
+    async def source_language_settings(
+        self,
+        *,
+        external_user_id: str,
+        profile_id: UUID,
+        selected: tuple[str, ...] | None = None,
+        expected_revision: int | None = None,
+    ) -> TelegramOnboardingResponse:
+        view = await self._confirmation.show(
+            platform="telegram",
+            external_user_id=external_user_id,
+            profile_id=profile_id,
+        )
+        profile = view.profile
+        if expected_revision is not None and profile.revision != expected_revision:
+            raise SearchProfileEditConflict(
+                "source language settings changed; stale selection discarded"
+            )
+        selected_languages = (
+            profile.preferences.source_languages or ("ru", "en")
+            if selected is None
+            else _canonical_source_language_selection(selected)
+        )
+        rows = [
+            (
+                _button(
+                    f"{'[x]' if code in selected_languages else '[ ]'} {label}",
+                    _source_language_toggle_data(
+                        profile.id,
+                        profile.revision,
+                        selected_languages,
+                        code,
+                    ),
+                ),
+            )
+            for code, label in _SOURCE_LANGUAGE_OPTIONS
+        ]
+        rows.append(
+            (
+                _button(
+                    "Сохранить",
+                    _source_language_save_data(
+                        profile.id,
+                        profile.revision,
+                        selected_languages,
+                    ),
+                ),
+            )
+        )
+        rows.append(
+            (
+                _button(
+                    "Назад к настройкам",
+                    (
+                        f"nav:settings:{profile.id}:"
+                        f"{profile.revision}"
+                    ).encode("ascii"),
+                ),
+            )
+        )
+        return TelegramOnboardingResponse(
+            "<b>Языки источников</b>\n\n"
+            f"{format_profile_summary(view)}",
             tuple(rows),
         )
 
@@ -381,6 +463,32 @@ def setting_prompt(code: str) -> str:
     )
 
 
+def source_language_selection_from_mask(mask: str) -> tuple[str, ...]:
+    if mask == "r":
+        return ("ru",)
+    if mask == "e":
+        return ("en",)
+    if mask == "re":
+        return ("ru", "en")
+    raise ValueError("unknown source language selection")
+
+
+def toggle_source_language_selection(
+    selected: tuple[str, ...],
+    language: str,
+) -> tuple[str, ...]:
+    current = set(_canonical_source_language_selection(selected))
+    if language not in {"ru", "en"}:
+        raise ValueError("unknown source language")
+    if language in current:
+        if len(current) == 1:
+            return tuple(selected)
+        current.remove(language)
+    else:
+        current.add(language)
+    return _canonical_source_language_selection(tuple(current))
+
+
 def new_profile_prompt() -> str:
     return (
         "<b>Новый поиск</b>\n\n"
@@ -430,6 +538,60 @@ def _setting_button(profile, field: str) -> TelegramButtonSpec:
             f"{SETTING_FIELD_CODES[field]}"
         ).encode("ascii"),
     )
+
+
+def _source_language_settings_data(
+    profile_id: UUID,
+    revision: int,
+    selected: tuple[str, ...] | None,
+) -> bytes:
+    effective = ("ru", "en") if selected is None else selected
+    return f"nav:sl:{profile_id}:{revision}:{_source_language_mask(effective)}".encode(
+        "ascii"
+    )
+
+
+def _source_language_toggle_data(
+    profile_id: UUID,
+    revision: int,
+    selected: tuple[str, ...],
+    language: str,
+) -> bytes:
+    return (
+        f"nav:slt:{profile_id}:{revision}:"
+        f"{_source_language_mask(selected)}:{language[0]}"
+    ).encode("ascii")
+
+
+def _source_language_save_data(
+    profile_id: UUID,
+    revision: int,
+    selected: tuple[str, ...],
+) -> bytes:
+    return f"nav:sls:{profile_id}:{revision}:{_source_language_mask(selected)}".encode(
+        "ascii"
+    )
+
+
+def _source_language_mask(selected: tuple[str, ...]) -> str:
+    canonical = _canonical_source_language_selection(selected)
+    if canonical == ("ru",):
+        return "r"
+    if canonical == ("en",):
+        return "e"
+    if canonical == ("ru", "en"):
+        return "re"
+    raise ValueError("source language selection must not be empty")
+
+
+def _canonical_source_language_selection(values: tuple[str, ...]) -> tuple[str, ...]:
+    selected = tuple(dict.fromkeys(values))
+    if not selected:
+        raise ValueError("source language selection must not be empty")
+    unsupported = set(selected) - {"ru", "en"}
+    if unsupported:
+        raise ValueError("source language selection supports only ru and en")
+    return tuple(code for code in ("ru", "en") if code in selected)
 
 
 def _trial_status(

@@ -13,6 +13,7 @@ from .config import RuntimeConfig
 from .matching import (
     MATCHING_FILTER_VERSION,
     CandidateExclusionCode,
+    HardFilterCode,
     HardFilterDecision,
     StructuredScoreComponent,
     StructuredScoringPolicy,
@@ -314,6 +315,13 @@ def _profile_trace(
                 "profile_values": (),
             },
         )
+    source_language_diagnostics = _source_language_diagnostics(
+        opportunity,
+        profile,
+        hard_decision,
+    )
+    if source_language_diagnostics is not None:
+        narrowing_diagnostics = (*narrowing_diagnostics, source_language_diagnostics)
     hard_eligible = hard_decision.eligible and not _blocks_hard_eligibility(
         narrowing_exclusion
     )
@@ -429,6 +437,36 @@ def _profile_trace(
         decision_policy_version=policy.version,
         evaluated_at=evaluated_at,
     )
+
+
+def _source_language_diagnostics(
+    opportunity: CanonicalOpportunityRecord,
+    profile: SearchProfileRecord,
+    hard_decision: HardFilterDecision,
+) -> dict[str, object] | None:
+    source_failures = {
+        HardFilterCode.SOURCE_LANGUAGE_MISMATCH,
+        HardFilterCode.SOURCE_LANGUAGE_UNRESOLVED,
+    }
+    failure = next(
+        (
+            item
+            for item in hard_decision.failures
+            if item.code in source_failures
+        ),
+        None,
+    )
+    if failure is None:
+        return None
+    source = opportunity.preferred_source
+    return {
+        "code": f"routing.{failure.code.value}",
+        "profile_id": str(profile.id),
+        "profile_revision": profile.revision,
+        "source_id": None if source is None else source.source_id,
+        "source_language": None if source is None else source.source_language,
+        "selected_source_languages": failure.profile_values,
+    }
 
 
 def _rank_eligible(traces: tuple[MatchTraceDraft, ...]) -> tuple[MatchTraceDraft, ...]:

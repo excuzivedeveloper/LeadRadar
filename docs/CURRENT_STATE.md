@@ -712,11 +712,11 @@ Delivery Canary requires separate Owner authorization.
 | Opportunity AI analysis | yes | bounded live path passed for one fresh natural lead sample |
 | OpportunityAnalysisV2 evidence-aware matching shadow | yes; deterministic explicit-evidence contract and SearchProfile-derived capability/platform surface | **live-validated via PR15 bounded runtime canary**; separate durable persistence; `SHADOW_LIVE_VALIDATED=YES`, `PRODUCTION_MATCH_POLICY_CHANGED=NO`, `DELIVERY_POLICY_CHANGED=NO` |
 | Canonical Opportunities/dedup | yes | not live-validated with real AI output |
-| SearchProfiles/onboarding | yes | owner UI exists; AI onboarding not enabled |
+| SearchProfiles/onboarding | yes | owner UI exists; AI onboarding not enabled; repository head separates content languages from source-language pools |
 | Matching | yes; includes local high-precision RU/EN technical concept bridge | PR13 reviewed/merged; repeat bounded canary completed with C++/HFT sample; RU/EN web repair result inconclusive because no relevant fresh RU/EN web sample appeared |
 | Personalized delivery | yes | bounded Owner Delivery Canary completed INCONCLUSIVE; owner-only safety passed; no eligible fresh match and no real sent delivery yet |
 | Owner-only bot access | yes | owner positive path live-validated |
-| Source discovery/audit | yes | bounded WEB_ONLY candidate discovery live-used (15→20 sources; candidates 2→7); persistent/Telegram discovery and Source Audit remain disabled |
+| Source discovery/audit | yes | bounded WEB_ONLY candidate discovery live-used (15→20 sources; candidates 2→7); repository head has optional `sources.language` provenance; persistent/Telegram discovery and Source Audit remain disabled |
 | Persistent runtime/service | supporting code exists | **not authorized/deployed** |
 
 ## Credentials and incidents
@@ -743,6 +743,16 @@ Remaining ordered work:
    discovery;
 4. evaluate accumulated matching/shadow evidence before any threshold or policy
    changes;
+
+Repository head note: source/channel language pools are modeled separately from
+opportunity content languages. The migration keeps existing source rows
+unresolved unless an explicit seed/discovery/audit/operator provenance exists,
+conflicting RU/EN discovery evidence is persisted as unresolved until stronger
+evidence resolves it, and existing profiles keep `source_languages = NULL`
+legacy routing until saved. Telegram source-language callbacks carry the
+profile revision that rendered them; stale open/toggle callbacks discard their
+encoded selection mask and refresh the persisted state, while stale save
+callbacks remain blocked by `expected_revision`.
 5. evaluate provider/model strict-schema capability later as a separate gate;
 6. separately review candidate promotion/joining and broader discovery/audit
    rollout;

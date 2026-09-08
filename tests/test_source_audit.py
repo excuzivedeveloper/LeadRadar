@@ -364,6 +364,8 @@ class SourceAuditPipelineTest(unittest.IsolatedAsyncioTestCase):
         repeated = await pipeline.run(target, audited_at=NOW)
 
         self.assertEqual(first.audit.decision, SourceAuditDecision.APPROVED.value)
+        self.assertEqual(first.source.language, "ru")
+        self.assertEqual(first.source.language_origin.value, "audit")
         self.assertEqual(
             first.audit.decision_policy["version"],
             "source-audit-thresholds.v1",
@@ -464,6 +466,27 @@ class SourceAuditPipelineTest(unittest.IsolatedAsyncioTestCase):
         )
         self.assertTrue(review_result.audit.expanded)
         self.assertEqual(len(review_reader.calls), 2)
+
+    async def test_audit_primary_language_does_not_fuzzy_map_unsupported_values(self):
+        source = await self._candidate("unsupported-language")
+        classification = _classification(40, opportunities=3).model_dump()
+        classification["primary_language"] = "de"
+        classification["languages"] = [{"key": "de", "display_name": "German"}]
+        pipeline = SourceAuditPipeline(
+            self.database,
+            SourceAuditSampler(WindowReader(_messages(40))),
+            FixedAuditProvider(
+                SourceAuditClassification.model_validate(classification)
+            ),
+        )
+
+        result = await pipeline.run(
+            SourceAuditTarget(source.id, "telegram", "@unsupported_language"),
+            audited_at=NOW,
+        )
+
+        self.assertIsNone(result.source.language)
+        self.assertIsNone(result.source.language_origin)
 
     async def test_private_audit_never_creates_collector_access_and_override_keeps_history(self):
         source = await self._candidate("private", access_type="private")

@@ -15,13 +15,18 @@ from freelancer_bot.persistence.jobs import JobClaim
 from freelancer_bot.persistence.matches import MatchTraceRepository
 from freelancer_bot.persistence.schema import (
     ai_call_telemetry,
+    collector_accounts,
     durable_jobs,
     match_evaluation_runs,
     opportunities,
     opportunity_analysis_cache,
     opportunity_analysis_links,
+    opportunity_source_messages,
     personalized_deliveries,
+    raw_messages,
+    sources,
 )
+from freelancer_bot.opportunity_dedup import PREFERRED_SOURCE_POLICY_VERSION
 from freelancer_bot.profile_confirmation import ProfileConfirmationService
 from freelancer_bot.profile_rematch import (
     PROFILE_REMATCH_JOB_TYPE,
@@ -283,8 +288,12 @@ class ProfileRematchPostgresTest(unittest.IsolatedAsyncioTestCase):
     ) -> UUID:
         opportunity_id = uuid4()
         cache_id = uuid4()
+        raw_message_id = uuid4()
+        raw_job_id = uuid4()
+        correlation_id = uuid4()
         content = f"Need a Python developer for Telegram automation {opportunity_id}"
         content_hash = _sha256(content)
+        source_key = opportunity_id.hex
         async with self.database.transaction() as connection:
             await connection.execute(
                 opportunity_analysis_cache.insert().values(
@@ -295,6 +304,57 @@ class ProfileRematchPostgresTest(unittest.IsolatedAsyncioTestCase):
                     analyzer_version="profile-rematch-fixture.v1",
                     analysis_schema_version="opportunity_analysis.v1",
                     result={"fixture": "profile-rematch"},
+                )
+            )
+            collector_account_id = await connection.scalar(
+                collector_accounts.insert()
+                .values(
+                    platform="telegram",
+                    external_account_id=f"profile-rematch:{source_key}",
+                    display_name="Profile rematch fixture collector",
+                )
+                .returning(collector_accounts.c.id)
+            )
+            source_id = await connection.scalar(
+                sources.insert()
+                .values(
+                    platform="telegram",
+                    external_id=f"username:profile_rematch_{source_key}",
+                    access_type="public",
+                    lifecycle_status="approved",
+                    display_name="Profile rematch fixture source",
+                    handle=f"@profile_rematch_{source_key[:16]}",
+                    canonical_url=f"https://t.me/profile_rematch_{source_key}",
+                    language="en",
+                    language_origin="seed",
+                )
+                .returning(sources.c.id)
+            )
+            await connection.execute(
+                durable_jobs.insert().values(
+                    id=raw_job_id,
+                    job_type="telegram.raw_message.v1",
+                    idempotency_key=f"profile-rematch-fixture:{source_key}",
+                    correlation_id=correlation_id,
+                )
+            )
+            await connection.execute(
+                raw_messages.insert().values(
+                    id=raw_message_id,
+                    source_id=source_id,
+                    collector_account_id=collector_account_id,
+                    processing_job_id=raw_job_id,
+                    schema_version="telegram.raw_message.v1",
+                    platform="telegram",
+                    external_source_id=f"username:profile_rematch_{source_key}",
+                    external_message_id=42,
+                    message_date=last_seen_at,
+                    observed_at=last_seen_at,
+                    message_url=f"https://t.me/profile_rematch_{source_key}/42",
+                    content=content,
+                    transport_metadata={},
+                    ingestion_origin="live",
+                    correlation_id=correlation_id,
                 )
             )
             await connection.execute(
@@ -322,6 +382,14 @@ class ProfileRematchPostgresTest(unittest.IsolatedAsyncioTestCase):
                     last_seen_at=last_seen_at,
                     lifecycle_status=lifecycle_status,
                     lifecycle_changed_at=last_seen_at,
+                    preferred_raw_message_id=raw_message_id,
+                    preferred_source_policy_version=PREFERRED_SOURCE_POLICY_VERSION,
+                )
+            )
+            await connection.execute(
+                opportunity_source_messages.insert().values(
+                    raw_message_id=raw_message_id,
+                    opportunity_id=opportunity_id,
                 )
             )
             await connection.execute(

@@ -349,6 +349,9 @@ def _collector_source(source_id, handle):
         display_name="G3 dispatch source",
         handle=handle,
         canonical_url=f"https://t.me/{handle.removeprefix('@')}",
+        language=None,
+        language_origin=None,
+        language_conflict=False,
         created_at=NOW,
         updated_at=NOW,
     )

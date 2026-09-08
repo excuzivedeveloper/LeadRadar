@@ -37,7 +37,7 @@ from .search_profiles import (
 )
 
 
-MATCHING_FILTER_VERSION = "matching-hard-filters.v5"
+MATCHING_FILTER_VERSION = "matching-hard-filters.v6"
 STRUCTURED_SCORING_VERSION = "structured-matching-score.v6"
 STRUCTURED_SCORING_POLICY_VERSION = "structured-matching-policy.v6"
 _VERSION_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]{0,99}$")
@@ -81,6 +81,8 @@ class HardFilterCode(str, Enum):
     WORK_TYPE_MISMATCH = "work_type_mismatch"
     EXCLUDED_CATEGORY = "excluded_category"
     LANGUAGE_MISMATCH = "language_mismatch"
+    SOURCE_LANGUAGE_MISMATCH = "source_language_mismatch"
+    SOURCE_LANGUAGE_UNRESOLVED = "source_language_unresolved"
     GEOGRAPHY_MISMATCH = "geography_mismatch"
     WORK_MODE_MISMATCH = "work_mode_mismatch"
     BUDGET_NOT_EXPLICIT = "budget_not_explicit"
@@ -101,6 +103,8 @@ class CandidateExclusionCode(str, Enum):
     NO_STRUCTURED_TARGET_OVERLAP = "no_structured_target_overlap"
     WORK_TYPE_MISMATCH = HardFilterCode.WORK_TYPE_MISMATCH.value
     LANGUAGE_MISMATCH = HardFilterCode.LANGUAGE_MISMATCH.value
+    SOURCE_LANGUAGE_MISMATCH = HardFilterCode.SOURCE_LANGUAGE_MISMATCH.value
+    SOURCE_LANGUAGE_UNRESOLVED = HardFilterCode.SOURCE_LANGUAGE_UNRESOLVED.value
     GEOGRAPHY_MISMATCH = HardFilterCode.GEOGRAPHY_MISMATCH.value
 
 
@@ -308,6 +312,7 @@ def evaluate_hard_filters(
         failure_code=HardFilterCode.LANGUAGE_MISMATCH,
         unknown_field=UnknownMatchField.LANGUAGE,
     )
+    _evaluate_source_language_constraint(failures, opportunity, profile)
     _evaluate_term_constraint(
         failures,
         unknowns,
@@ -380,13 +385,13 @@ def narrow_and_filter_candidates(
         if profile.is_active
         and profile.confirmation_status is SearchProfileConfirmationStatus.CONFIRMED
     )
-    dimensions = _available_narrowing_dimensions(opportunity.analysis)
+    dimensions = _available_narrowing_dimensions(opportunity)
     candidate_profiles: list[SearchProfileRecord] = []
     exclusions: list[CandidateExclusion] = []
 
     if opportunity.lifecycle_status is OpportunityLifecycleStatus.ACTIVE:
         for profile in active_profiles:
-            exclusion = _candidate_exclusion(opportunity.analysis, profile)
+            exclusion = _candidate_exclusion(opportunity, profile)
             if exclusion is None:
                 candidate_profiles.append(profile)
             elif exclusion is CandidateExclusionCode.NO_STRUCTURED_TARGET_OVERLAP:
@@ -1009,9 +1014,17 @@ def _quantize(value: Decimal) -> Decimal:
 
 
 def _candidate_exclusion(
-    analysis: OpportunityAnalysis,
+    opportunity: CanonicalOpportunityRecord,
     profile: SearchProfileRecord,
 ) -> CandidateExclusionCode | None:
+    analysis = opportunity.analysis
+    source_language = _preferred_source_language(opportunity)
+    if profile.preferences.source_languages is not None:
+        if source_language is None:
+            return CandidateExclusionCode.SOURCE_LANGUAGE_UNRESOLVED
+        if source_language not in profile.preferences.source_languages:
+            return CandidateExclusionCode.SOURCE_LANGUAGE_MISMATCH
+
     profile_type = _profile_opportunity_type(analysis.opportunity_type)
     if (
         analysis.opportunity_type is not AnalysisType.UNKNOWN
@@ -1043,8 +1056,9 @@ def _candidate_exclusion(
 
 
 def _available_narrowing_dimensions(
-    analysis: OpportunityAnalysis,
+    opportunity: CanonicalOpportunityRecord,
 ) -> tuple[str, ...]:
+    analysis = opportunity.analysis
     dimensions: list[str] = []
     if _opportunity_targets(analysis):
         dimensions.append("category_role_skills")
@@ -1052,6 +1066,8 @@ def _available_narrowing_dimensions(
         dimensions.append("work_type")
     if _optional_identity(analysis.language) is not None:
         dimensions.append("language")
+    if _preferred_source_language(opportunity) is not None:
+        dimensions.append("source_language")
     if _optional_identity(analysis.work.location) is not None:
         dimensions.append("geography")
     return tuple(dimensions)
@@ -1090,6 +1106,40 @@ def _evaluate_term_constraint(
     accepted = tuple(term.normalized_value for term in profile_values)
     if identity not in accepted:
         failures.append(_failure(failure_code, identity, accepted))
+
+
+def _evaluate_source_language_constraint(
+    failures: list[HardFilterFailure],
+    opportunity: CanonicalOpportunityRecord,
+    profile: SearchProfileRecord,
+) -> None:
+    selected = profile.preferences.source_languages
+    if selected is None:
+        return
+    source_language = _preferred_source_language(opportunity)
+    if source_language is None:
+        failures.append(
+            _failure(
+                HardFilterCode.SOURCE_LANGUAGE_UNRESOLVED,
+                None,
+                selected,
+            )
+        )
+    elif source_language not in selected:
+        failures.append(
+            _failure(
+                HardFilterCode.SOURCE_LANGUAGE_MISMATCH,
+                source_language,
+                selected,
+            )
+        )
+
+
+def _preferred_source_language(opportunity: CanonicalOpportunityRecord) -> str | None:
+    if opportunity.preferred_source is None:
+        return None
+    value = opportunity.preferred_source.source_language
+    return value if value in {"ru", "en"} else None
 
 
 def _known_term_mismatch(

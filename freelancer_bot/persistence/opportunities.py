@@ -156,6 +156,8 @@ class OpportunitySourceObservationRecord:
     source_display_name: str
     source_handle: str | None
     source_canonical_url: str | None
+    source_language: str | None
+    source_language_origin: str | None
     message_url: str
     message_date: datetime
     observed_at: datetime
@@ -1027,6 +1029,8 @@ class CanonicalOpportunityRepository:
                     sources.c.display_name.label("source_display_name"),
                     sources.c.handle.label("source_handle"),
                     sources.c.canonical_url.label("source_canonical_url"),
+                    sources.c.language.label("source_language"),
+                    sources.c.language_origin.label("source_language_origin"),
                 )
                 .join(sources, sources.c.id == raw_messages.c.source_id)
                 .join(
@@ -1266,6 +1270,8 @@ def _source_observation_record(
         source_display_name=str(row["source_display_name"]),
         source_handle=row["source_handle"],
         source_canonical_url=row["source_canonical_url"],
+        source_language=row["source_language"],
+        source_language_origin=row["source_language_origin"],
         message_url=str(row["message_url"]),
         message_date=row["message_date"],
         observed_at=row["observed_at"],

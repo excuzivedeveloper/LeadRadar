@@ -21,6 +21,7 @@ from freelancer_bot.search_profiles import (
     OpportunityType,
     SearchProfileTermOrigin,
     WorkMode,
+    canonical_source_languages,
     empty_search_profile_preferences,
     parse_search_profile_preferences,
 )
@@ -46,9 +47,31 @@ class SearchProfilePreferencesContractTest(unittest.TestCase):
         self.assertEqual(explicit_empty.work_types, ())
         self.assertIsNone(unknown.languages)
         self.assertEqual(explicit_empty.languages, ())
+        self.assertEqual(unknown.source_languages, ("ru", "en"))
+        self.assertIsNone(explicit_empty.source_languages)
         for opportunity_type in OpportunityType:
             self.assertFalse(unknown.accepts_work_type(opportunity_type))
             self.assertFalse(explicit_empty.accepts_work_type(opportunity_type))
+
+    def test_source_language_selection_is_ru_en_only_and_canonical(self):
+        self.assertEqual(canonical_source_languages(("en", "ru")), ("ru", "en"))
+        self.assertEqual(
+            parse_search_profile_preferences(
+                source_languages=("en",)
+            ).source_languages,
+            ("en",),
+        )
+        invalid = (
+            (),
+            ("ru", "ru"),
+            ("de",),
+            "ru",
+        )
+        for values in invalid:
+            with self.subTest(values=values), self.assertRaises(
+                (TypeError, ValueError)
+            ):
+                parse_search_profile_preferences(source_languages=values)
 
     def test_all_supported_work_type_combinations_have_exact_policy_behavior(self):
         supported = tuple(OpportunityType)

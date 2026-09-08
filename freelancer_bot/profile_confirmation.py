@@ -43,6 +43,7 @@ from .search_profiles import (
     SearchProfileTerm,
     SearchProfileTermInput,
     WorkMode,
+    canonical_source_languages,
     parse_search_profile,
     parse_search_profile_preferences,
 )
@@ -512,6 +513,25 @@ class ProfileConfirmationService:
             changes={"work_modes": parsed.work_modes},
         )
 
+    async def set_source_languages(
+        self,
+        *,
+        platform: str,
+        external_user_id: str,
+        profile_id: UUID,
+        source_languages: tuple[str, ...],
+        expected_revision: int,
+    ) -> ProfileConfirmationView:
+        return await self._update_preferences(
+            platform=platform,
+            external_user_id=external_user_id,
+            profile_id=profile_id,
+            expected_revision=expected_revision,
+            changes={
+                "source_languages": canonical_source_languages(source_languages),
+            },
+        )
+
     async def _update_preferences(
         self,
         *,
@@ -573,7 +593,8 @@ def format_profile_summary(view: ProfileConfirmationView) -> str:
         f"Категории: {_format_terms(profile.categories)}",
         f"Типы работы: {_format_work_types(profile.preferences)}",
         f"Бюджет: {_format_budget(profile.preferences)}",
-        f"Языки: {_format_optional_terms(profile.preferences.languages)}",
+        f"Языки заявок: {_format_optional_terms(profile.preferences.languages)}",
+        f"Языки источников: {_format_source_languages(profile.preferences.source_languages)}",
         f"География: {_format_optional_terms(profile.preferences.geographies)}",
         f"Формат: {_format_work_modes(profile.preferences)}",
         "Исключения: "
@@ -662,6 +683,13 @@ def _format_optional_terms(
     if terms is None:
         return "не указано"
     return _format_terms(terms) if terms else "нет"
+
+
+def _format_source_languages(source_languages: tuple[str, ...] | None) -> str:
+    if source_languages is None:
+        return "не настроено"
+    labels = {"ru": "Русский", "en": "English"}
+    return ", ".join(labels[value] for value in source_languages)
 
 
 def _format_work_modes(preferences: SearchProfilePreferences) -> str:

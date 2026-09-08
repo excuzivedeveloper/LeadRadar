@@ -23,7 +23,12 @@ from .persistence.source_audits import (
     SourceAuditWrite,
 )
 from .persistence.source_metrics import SourceHealthStatus, SourceMetricsRepository
-from .persistence.source_repository import SourceRecord, SourceRepository, SourceStatus
+from .persistence.source_repository import (
+    SourceLanguageOrigin,
+    SourceRecord,
+    SourceRepository,
+    SourceStatus,
+)
 from .openai_compat import add_sampling_parameter
 from .source_audit_sampler import SourceAuditSample, SourceAuditSampler, SourceAuditTarget
 from .source_ai_config import (
@@ -673,6 +678,16 @@ class SourceAuditPipeline:
                 dimension="category",
                 terms=[term.model_dump() for term in classification.categories],
             )
+            primary_language = _supported_source_language(
+                classification.primary_language
+            )
+            if primary_language is not None:
+                current = await self._sources.apply_language_evidence(
+                    connection,
+                    target.source_id,
+                    language=primary_language,
+                    language_origin=SourceLanguageOrigin.AUDIT,
+                )
 
             if operational_reaudit:
                 if decision is SourceAuditDecision.APPROVED:
@@ -736,6 +751,13 @@ def _require_source_state(
         raise SourceAuditError(
             f"G2 {mode} does not accept {source.lifecycle_status.value} sources"
         )
+
+
+def _supported_source_language(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip().lower()
+    return normalized if normalized in {"ru", "en"} else None
 
 
 def _audit_write(
