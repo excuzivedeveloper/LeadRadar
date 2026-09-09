@@ -98,6 +98,8 @@ SEARXNG_PORT_RUNTIME_CORRECTED_SEPARATELY=YES
 SEARXNG_PRODUCTION_STATE=DOWN_RECOVERY_REQUIRED
 SEARXNG_REMOVE_CONFIG_STARTUP_FAILURE=YES
 SEARXNG_DISABLED_OVERRIDE_HOTFIX=IMPLEMENTATION_PENDING_REVIEW
+EXACT_PINNED_IMAGE_INIT_VALIDATION=REQUIRED_PRE_MERGE
+READY_FOR_OWNER_MERGE_AUTHORIZATION=NO
 VAULTWARDEN_UNCHANGED_HEALTHY=YES
 RECOVERY_WEB_TELEGRAM_OPENROUTER_CALLS=0
 OA_PROVIDER_ROUTE_SWITCH_AUTHORIZED=NO
@@ -111,13 +113,14 @@ The exact next execution sequence is:
 
 ```text
 independent review of the SearXNG disabled-override hotfix and docs PR
--> Owner authorizes merge
--> merge reviewed PR
--> separately authorize production sync of the exact reviewed merge
+-> exact pinned-image SearXNG startup/init validation
+-> only after PASS: Owner merge authorization
+-> merge exact reviewed head
+-> separate production sync authorization
 -> verify config/searxng/settings.yml arrives in the production checkout
--> separately authorize SearXNG container recreate/restart to consume mounted settings
--> read-only verify SearXNG initializes without KeyError: 'brave'
--> read-only verify brave, duckduckgo and startpage definitions remain present but disabled by default
+-> separate controlled SearXNG recovery/recreate authorization
+-> production startup verification proves SearXNG initializes without KeyError: 'brave'
+-> production effective-settings verification proves brave/duckduckgo/startpage remain present but disabled by default
 -> separately authorize one new bounded Web-only canary
 -> evaluate provider stability and candidate quality
 -> only then decide Telegram freshness validation or candidate notifications
@@ -882,15 +885,19 @@ one-shot Web Discovery bound gates are complete.
 Remaining ordered work:
 
 1. independent review of the SearXNG disabled-override hotfix and documentation PR;
-2. Owner-authorized merge of the reviewed PR;
-3. separately authorize production sync of the exact reviewed merge;
-4. verify `config/searxng/settings.yml` arrives in the production checkout;
-5. separately authorize SearXNG container recreate/restart to consume the
+2. exact pinned-image SearXNG startup/init validation;
+3. only after PASS, Owner-authorized merge of the reviewed PR;
+4. merge exact reviewed head;
+5. separately authorize production sync of the exact reviewed merge;
+6. verify `config/searxng/settings.yml` arrives in the production checkout;
+7. separately authorize controlled SearXNG recovery/recreate to consume the
    read-only mounted settings file;
-6. read-only verify SearXNG initializes without `KeyError: 'brave'`;
-7. read-only verify `brave`, `duckduckgo` and `startpage` definitions remain
+8. production startup verification proves SearXNG initializes without
+   `KeyError: 'brave'`;
+9. production effective-settings verification proves `brave`, `duckduckgo` and
+   `startpage` definitions remain
    present but disabled by default;
-8. separately authorize one new bounded Web-only canary and evaluate provider
+10. separately authorize one new bounded Web-only canary and evaluate provider
    stability plus candidate quality before any Telegram validation or Owner
    notification pass;
 
@@ -903,10 +910,10 @@ legacy routing until saved. Telegram source-language callbacks carry the
 profile revision that rendered them; stale open/toggle callbacks discard their
 encoded selection mask and refresh the persisted state, while stale save
 callbacks remain blocked by `expected_revision`.
-9. evaluate provider/model strict-schema capability later as a separate gate;
-10. separately review candidate promotion/joining and broader discovery/audit
+11. evaluate provider/model strict-schema capability later as a separate gate;
+12. separately review candidate promotion/joining and broader discovery/audit
    rollout;
-11. authorize persistent runtime only after bounded end-to-end Owner MVP
+13. authorize persistent runtime only after bounded end-to-end Owner MVP
    validation and operational safeguards are complete.
 
 The authoritative order is in `docs/ACTIVE_PLAN.md`.

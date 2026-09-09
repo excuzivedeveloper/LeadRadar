@@ -119,6 +119,8 @@ SEARXNG_PORT_RUNTIME_CORRECTED_SEPARATELY=YES
 SEARXNG_PRODUCTION_STATE=DOWN_RECOVERY_REQUIRED
 SEARXNG_REMOVE_CONFIG_STARTUP_FAILURE=YES
 SEARXNG_DISABLED_OVERRIDE_HOTFIX=IMPLEMENTATION_PENDING_REVIEW
+EXACT_PINNED_IMAGE_INIT_VALIDATION=REQUIRED_PRE_MERGE
+READY_FOR_OWNER_MERGE_AUTHORIZATION=NO
 VAULTWARDEN_UNCHANGED_HEALTHY=YES
 RECOVERY_WEB_TELEGRAM_OPENROUTER_CALLS=0
 OA_PROVIDER_ROUTE_SWITCH_AUTHORIZED=NO
@@ -131,24 +133,25 @@ READY_FOR_PERSISTENT_RUNTIME=NO
 Current gate:
 
 ```text
-INDEPENDENT_REVIEW_OF_SEARXNG_DISABLED_OVERRIDE_HOTFIX_AND_DOC_SYNC
+INDEPENDENT_REREVIEW_OF_SEARXNG_DISABLED_OVERRIDE_HOTFIX_GATE_ORDER
 ```
 
 Required execution sequence:
 
 ```text
-1. independent REVIEWER verifies this config+docs hotfix PR
-2. Owner authorizes merge
-3. merge reviewed PR
-4. separately authorize production sync of the exact reviewed merge
-5. verify config/searxng/settings.yml arrives on production checkout
-6. separately authorize SearXNG container recreate/restart required to consume mounted settings
-7. read-only verify SearXNG initializes without KeyError: 'brave'
-8. read-only verify brave, duckduckgo and startpage definitions remain present but disabled by default
-9. separately authorize one new bounded Web-only canary
-10. evaluate provider stability and candidate quality
-11. only then decide Telegram freshness validation / candidate notifications
-12. persistent source discovery remains unauthorized
+1. independent review of PR23
+2. exact pinned-image SearXNG startup/init validation
+3. only after PASS: Owner merge authorization
+4. merge exact reviewed head
+5. separate production sync authorization
+6. verify config arrives
+7. separate controlled SearXNG recovery/recreate authorization
+8. prove SearXNG initializes without KeyError: 'brave'
+9. verify brave/duckduckgo/startpage remain present but disabled by default
+10. separate bounded Web-only canary authorization
+11. evaluate stability/candidate quality
+12. only then Telegram validation/notification decision
+13. persistent runtime remains unauthorized
 ```
 
 ## Step 0 — Pre-AI ingestion/shadow validation
