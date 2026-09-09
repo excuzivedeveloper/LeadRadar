@@ -2,8 +2,8 @@
 
 **Status:** CANONICAL  
 **Snapshot date:** 2026-09-09
-**Deployment code baseline:** `031e489a21fc53de7b1ddacc107ae57aa6d46f98`
-**Repository/server head:** `031e489a21fc53de7b1ddacc107ae57aa6d46f98`
+**Deployment code baseline:** `aab68eb64a2ee29e7c90cae2cbba8a8a31f07f23`
+**Repository/server head:** `aab68eb64a2ee29e7c90cae2cbba8a8a31f07f23`
 
 This document records the current shared-server LeadRadar layout. It contains no
 credential values.
@@ -209,10 +209,39 @@ Safe read-only container introspection must use the discovered runtime
 interpreter, not a guessed `python` executable. For heredoc/stdin diagnostics,
 attach stdin with `docker exec -i`.
 
-The repository SearXNG settings change that removes exact default engines
-`brave`, `duckduckgo` and `startpage` is not production-active until it is
-merged, synced to this checkout, and the SearXNG container is separately
-authorized for recreate/restart.
+PR22 synced a repository SearXNG settings change that removed exact default
+engines `brave`, `duckduckgo` and `startpage`. It is now proven unsafe for the
+pinned image: after the separate runtime-env correction to `SEARXNG_PORT=8888`,
+SearXNG reached startup and exited during `searx.search.initialize()` with
+`KeyError: 'brave'` because retained Brave variants still reference
+`network: brave`.
+
+Current production SearXNG state is down/recovery-required. Vaultwarden remained
+unchanged and healthy throughout: the first failed activation attempt defaulted
+to port 8080 because `SEARXNG_PORT` was missing from the production runtime env,
+and Vaultwarden safely blocked that bind. Do not modify runtime env in the
+repository hotfix; that server action was completed separately.
+
+The recovery config strategy is exact disabled overrides under ordinary default
+inheritance:
+
+```yaml
+use_default_settings: true
+
+engines:
+  - name: brave
+    disabled: true
+  - name: duckduckgo
+    disabled: true
+  - name: startpage
+    disabled: true
+```
+
+This preserves inherited network definitions while excluding those engines from
+normal default selection. The hotfix is not production-active until independent
+review, merge, production sync and separately authorized SearXNG recreate/startup
+validation. No Web, Telegram or OpenRouter calls occurred during the recovery
+diagnostics.
 
 Current OpenRouter implementation state:
 
@@ -273,13 +302,16 @@ READY_FOR_BOUNDED_AI_ANALYSIS=COMPLETE
 LIVE_AI_ANALYSIS_VALIDATED=YES
 PR21_BOUNDED_WEB_ONLY_RUN=COMPLETED
 PR21_PROVIDER_OUTCOME=SEARCH_BACKEND_DEGRADED
-SEARXNG_ENGINE_FILTER_CHANGE=IMPLEMENTATION_PENDING_REVIEW
+SEARXNG_PRODUCTION_STATE=DOWN_RECOVERY_REQUIRED
+SEARXNG_REMOVE_CONFIG_STARTUP_FAILURE=YES
+SEARXNG_DISABLED_OVERRIDE_HOTFIX=IMPLEMENTATION_PENDING_REVIEW
+VAULTWARDEN_UNCHANGED_HEALTHY=YES
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 ```
 
-The next gate is independent review of the SearXNG exact-engine removal and
-documentation sync PR, defined in `docs/ACTIVE_PLAN.md`. The filter is not
-production-active before later merge, sync and SearXNG recreate/restart
+The next gate is independent review of the SearXNG disabled-override hotfix and
+documentation sync PR, defined in `docs/ACTIVE_PLAN.md`. Production recovery is
+not claimed before later merge, sync and controlled SearXNG recreate/startup
 evidence.
 
 ## Evidence references

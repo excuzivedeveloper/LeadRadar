@@ -25,10 +25,24 @@ review and server work. Read it immediately after `docs/DOCUMENTATION_INDEX.md`.
 - **SearXNG default engine inheritance matters.** `use_default_settings: true`
   inherits default engines even when the local settings file has no explicit
   engine list.
-- **Exact SearXNG engine names matter.** Removing `brave`, `duckduckgo` and
-  `startpage` targets only those exact general engines. Variants such as
-  `brave.images`, `brave.videos`, `brave.news` or `duckduckgo images` are
-  separate names and must not be assumed removed.
+- **SearXNG engine removal can break network aliases.** SearXNG engine
+  definitions may be used as shared network definitions by other engines. Before
+  removing an inherited engine, inspect whether retained engines declare
+  `network: <engine-name>`. Removing a base engine can break application
+  initialization even if that engine itself is unwanted.
+- **Prefer disabled SearXNG overrides when network identity must remain.** For
+  an unwanted default engine that is also a network provider for retained
+  variants, use an exact local override such as `name: <engine>` plus
+  `disabled: true` rather than deleting the definition.
+- **SearXNG config-schema validity is not runtime-init validity.** A YAML parse
+  or settings-loader merge passing does not prove `searx.search.initialize()`
+  will succeed. Image-specific startup/init validation is required for SearXNG
+  config changes affecting engine topology.
+- **Production runtime env must preserve Compose interpolation.** A Compose file
+  using `${SEARXNG_PORT:-8080}` silently falls back to 8080 if the production
+  runtime env variable is absent. The verified LeadRadar production port is
+  `SEARXNG_PORT=8888`; do not infer required runtime interpolation from a
+  running container alone.
 - **Container runtime must be discovered, not guessed.** The verified SearXNG
   runtime interpreter is `/usr/local/searxng/.venv/bin/python3`; generic
   `docker exec ... python` is not reliable for this runtime environment.

@@ -2,7 +2,7 @@
 
 **Status:** CANONICAL / ACTIVE  
 **Last verified:** 2026-09-09
-**Implementation baseline:** `031e489a21fc53de7b1ddacc107ae57aa6d46f98`
+**Implementation baseline:** `aab68eb64a2ee29e7c90cae2cbba8a8a31f07f23`
 
 This file defines execution order. A later capability being implemented in code
 does not mean it may be enabled before earlier gates pass.
@@ -113,7 +113,14 @@ PR21_BOUNDED_WEB_ONLY_RUN=COMPLETED
 PR21_BOUND_CONTRACT=PASS
 PR21_PROVIDER_OUTCOME=SEARCH_BACKEND_DEGRADED
 PR21_PROVIDER_STATE=BACKOFF
-SEARXNG_ENGINE_FILTER_CHANGE=IMPLEMENTATION_PENDING_REVIEW
+PR22_SEARXNG_REMOVE_CONFIG_MERGED=YES
+PR22_PRODUCTION_SYNCED=YES
+SEARXNG_PORT_RUNTIME_CORRECTED_SEPARATELY=YES
+SEARXNG_PRODUCTION_STATE=DOWN_RECOVERY_REQUIRED
+SEARXNG_REMOVE_CONFIG_STARTUP_FAILURE=YES
+SEARXNG_DISABLED_OVERRIDE_HOTFIX=IMPLEMENTATION_PENDING_REVIEW
+VAULTWARDEN_UNCHANGED_HEALTHY=YES
+RECOVERY_WEB_TELEGRAM_OPENROUTER_CALLS=0
 OA_PROVIDER_ROUTE_SWITCH_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 SECOND_BOUNDED_WEB_RUN_AUTHORIZED=NO
@@ -124,23 +131,24 @@ READY_FOR_PERSISTENT_RUNTIME=NO
 Current gate:
 
 ```text
-INDEPENDENT_REVIEW_OF_SEARXNG_ENGINE_FILTER_AND_DOC_SYNC
+INDEPENDENT_REVIEW_OF_SEARXNG_DISABLED_OVERRIDE_HOTFIX_AND_DOC_SYNC
 ```
 
 Required execution sequence:
 
 ```text
-1. independent REVIEWER verifies this config+docs PR
+1. independent REVIEWER verifies this config+docs hotfix PR
 2. Owner authorizes merge
 3. merge reviewed PR
 4. separately authorize production sync of the exact reviewed merge
 5. verify config/searxng/settings.yml arrives on production checkout
 6. separately authorize SearXNG container recreate/restart required to consume mounted settings
-7. read-only verify effective settings no longer contain exact names brave, duckduckgo or startpage
-8. separately authorize one new bounded Web-only canary
-9. evaluate provider stability and candidate quality
-10. only then decide Telegram freshness validation / candidate notifications
-11. persistent source discovery remains unauthorized
+7. read-only verify SearXNG initializes without KeyError: 'brave'
+8. read-only verify brave, duckduckgo and startpage definitions remain present but disabled by default
+9. separately authorize one new bounded Web-only canary
+10. evaluate provider stability and candidate quality
+11. only then decide Telegram freshness validation / candidate notifications
+12. persistent source discovery remains unauthorized
 ```
 
 ## Step 0 — Pre-AI ingestion/shadow validation
@@ -650,11 +658,21 @@ attempt5 buyer_habitat failed captcha results=0 provider_state_after=BACKOFF
 SECOND_RUN_EXECUTED=NO
 ```
 
-The next narrow repair is repository config only: remove the exact inherited
-SearXNG default engines `brave`, `duckduckgo` and `startpage`. Do not remove
-engine variants, change query strategy, change matching, enable persistent
-runtime, execute a second run, probe Telegram candidates, notify the Owner, or
-claim production activation before later merge/sync/restart evidence.
+PR22 made the next narrow repair as repository config only, using exact inherited
+SearXNG engine removal for `brave`, `duckduckgo` and `startpage`. Production
+activation proved that destructive removal is unsafe for the pinned SearXNG
+image: retained variants such as `brave.images`, `brave.videos` and
+`brave.news` still reference `network: brave`, so startup failed during
+`searx.search.initialize()` with `KeyError: 'brave'`.
+
+The current narrow hotfix remains repository config only: use
+`use_default_settings: true` plus exact local `disabled: true` overrides for
+`brave`, `duckduckgo` and `startpage`. This preserves shared network definitions
+while excluding those engines from normal default selection. Do not add
+`inactive: true`, remove engine variants, change query strategy, change
+matching, enable persistent runtime, execute a second run, probe Telegram
+candidates, notify the Owner, or claim production recovery before later
+review/merge/sync/recreate evidence.
 
 ## Step 7A — Owner candidate notification one-shot
 

@@ -593,9 +593,18 @@ The local SearXNG settings file is mounted read-only into the SearXNG container.
 `use_default_settings: true` inherits upstream default engines; the exact
 general engine names `brave`, `duckduckgo` and `startpage` are distinct from
 variants such as `brave.images`, `brave.videos`, `brave.news` and
-`duckduckgo images`. Repository-side engine removals must therefore target exact
-engine names and require a later production sync plus SearXNG recreate/restart
-before they are runtime-active.
+`duckduckgo images`.
+
+PR22 proved that exact inherited engine removal is not safe for the pinned
+SearXNG image because retained variants can share the removed engine's network
+identity. Removing the base `brave` definition caused startup failure during
+`searx.search.initialize()` when variants still referenced `network: brave`.
+For unwanted default engines that act as network providers for retained
+variants, keep ordinary default inheritance and add exact local engine overrides
+with `disabled: true`. Do not use `inactive: true` or dependent-variant removal
+as a substitute without a separate reviewed topology change. Repository-side
+settings changes still require later production sync plus SearXNG
+recreate/restart before they are runtime-active.
 
 ## Persistent runtime
 
