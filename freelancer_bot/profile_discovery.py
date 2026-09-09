@@ -704,7 +704,7 @@ class ProfileDiscoveryService:
                 evaluated_at=requested_at,
                 persist_relevance=persist_relevance,
             )
-        observability = provider.observability
+        observability = _effective_provider_observability(execution, provider)
         result_source_ids = {result.source_id for result in execution.results}
         known = sum(
             1
@@ -834,6 +834,16 @@ def _lineages_for_intent(
             continue
         selected.append(lineage)
     return tuple(selected)
+
+
+def _effective_provider_observability(
+    execution: DiscoveryExecution,
+    provider: WebDiscoveryProvider,
+) -> dict[str, Any]:
+    persisted = execution.run.request.get("observability")
+    if isinstance(persisted, Mapping):
+        return dict(persisted)
+    return dict(provider.observability)
 
 
 def build_profile_discovery_intent(

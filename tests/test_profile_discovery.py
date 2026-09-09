@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 import sqlalchemy as sa
 
+from freelancer_bot import operator_cli
 from freelancer_bot.discovery import DiscoveryRequest
 from freelancer_bot.persistence.database import Database
 from freelancer_bot.persistence.schema import (
@@ -24,6 +25,7 @@ from freelancer_bot.profile_discovery import (
     build_profile_discovery_intent,
     evaluation_profile_specs,
     evaluate_source_relevance,
+    _effective_provider_observability,
     web_strategy_for_intent,
 )
 from freelancer_bot.profile_confirmation import ProfileConfirmationService
@@ -38,6 +40,25 @@ NOW = datetime(2026, 8, 16, 12, 0, tzinfo=timezone.utc)
 
 
 class ProfileDiscoveryIntentTest(unittest.TestCase):
+    def test_effective_provider_observability_falls_back_when_run_lacks_observability(self):
+        execution = SimpleNamespace(run=SimpleNamespace(request={}))
+        provider = SimpleNamespace(
+            observability={
+                "queries_executable": 4,
+                "queries_selected": 4,
+                "query_limit": None,
+            }
+        )
+
+        self.assertEqual(
+            _effective_provider_observability(execution, provider),
+            {
+                "queries_executable": 4,
+                "queries_selected": 4,
+                "query_limit": None,
+            },
+        )
+
     def test_ten_evaluation_intents_are_deterministic_and_materially_distinct(self):
         specs = evaluation_profile_specs()
         intents = [build_evaluation_intent(spec) for spec in specs]
@@ -312,6 +333,11 @@ class ProfileDiscoveryPostgresIntegrationTest(unittest.IsolatedAsyncioTestCase):
                     == "profile-discovery-bounded-integration-v1"
                 )
             )
+            run = await DiscoveryRunRepository().get_by_key(
+                connection,
+                provider="web_search",
+                run_key="profile-discovery-bounded-integration-v1",
+            )
 
         self.assertEqual(intent_count, 1)
         self.assertEqual(relevance_count, 1)
@@ -321,12 +347,56 @@ class ProfileDiscoveryPostgresIntegrationTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(second.unique_candidates, 1)
         self.assertLessEqual(len(backend.calls), 12)
         self.assertEqual(len(backend.calls), 12)
+        self.assertIn("observability", run.request)
+        self.assertEqual(run.request["observability"]["queries_executable"], 34)
+        self.assertEqual(run.request["observability"]["queries_selected"], 12)
+        self.assertEqual(run.request["observability"]["queries_executed"], 12)
+        self.assertEqual(run.request["observability"]["query_limit"], 12)
+        self.assertEqual(first.provider_observability["queries_executable"], 34)
         self.assertEqual(first.provider_observability["queries_selected"], 12)
+        self.assertEqual(first.provider_observability["queries_executed"], 12)
         self.assertEqual(first.provider_observability["query_limit"], 12)
+        self.assertEqual(
+            first.provider_observability["query_angle_counts"]["selected"],
+            {"direct": 4, "buyer_habitat": 4, "adjacent": 4},
+        )
+        self.assertEqual(
+            second.provider_observability["queries_executable"],
+            first.provider_observability["queries_executable"],
+        )
+        self.assertEqual(
+            second.provider_observability["queries_selected"],
+            first.provider_observability["queries_selected"],
+        )
+        self.assertEqual(
+            second.provider_observability["queries_executed"],
+            first.provider_observability["queries_executed"],
+        )
+        self.assertEqual(second.provider_observability["query_limit"], 12)
         self.assertGreaterEqual(
             first.provider_observability["queries_executable"],
             first.provider_observability["queries_selected"],
         )
+        fresh_payload = operator_cli._profile_execution_payload(first)
+        reused_payload = operator_cli._profile_execution_payload(second)
+        self.assertEqual(reused_payload["generated_query_count"], 36)
+        self.assertEqual(reused_payload["executable_query_count"], 34)
+        self.assertEqual(reused_payload["selected_query_count"], 12)
+        self.assertEqual(reused_payload["executed_query_count"], 12)
+        self.assertEqual(reused_payload["query_limit"], 12)
+        self.assertEqual(
+            reused_payload["selected_query_angle_counts"],
+            {"direct": 4, "buyer_habitat": 4, "adjacent": 4},
+        )
+        for field in (
+            "executable_query_count",
+            "selected_query_count",
+            "executed_query_count",
+            "query_limit",
+            "executable_query_angle_counts",
+            "selected_query_angle_counts",
+        ):
+            self.assertEqual(reused_payload[field], fresh_payload[field])
 
     async def test_profile_web_discovery_run_key_includes_explicit_query_bound(self):
         confirmation = ProfileConfirmationService(self.database)
@@ -417,7 +487,7 @@ class ProfileDiscoveryPostgresIntegrationTest(unittest.IsolatedAsyncioTestCase):
             )
         self.assertEqual(len(backend.calls), calls_after_first)
 
-        await service.discover_profile(
+        unbounded_first = await service.discover_profile(
             profile,
             requested_at=NOW,
             run_key="profile-discovery-unbounded-request-v1",
@@ -436,7 +506,7 @@ class ProfileDiscoveryPostgresIntegrationTest(unittest.IsolatedAsyncioTestCase):
             unbounded.request["parameters"]["profile_discovery"],
         )
 
-        await service.discover_profile(
+        unbounded_second = await service.discover_profile(
             profile,
             requested_at=NOW,
             run_key="profile-discovery-unbounded-request-v1",
@@ -444,6 +514,15 @@ class ProfileDiscoveryPostgresIntegrationTest(unittest.IsolatedAsyncioTestCase):
             max_queries=None,
         )
         self.assertEqual(len(backend.calls), calls_after_unbounded)
+        self.assertIsNone(unbounded_second.provider_observability["query_limit"])
+        self.assertEqual(
+            unbounded_second.provider_observability["queries_executable"],
+            unbounded_first.provider_observability["queries_executable"],
+        )
+        self.assertEqual(
+            unbounded_second.provider_observability["queries_selected"],
+            unbounded_first.provider_observability["queries_selected"],
+        )
 
         with self.assertRaises(DiscoveryRunConflict):
             await service.discover_profile(

@@ -591,7 +591,9 @@ plan counts alongside the selected and actually executed counts. Operator
 payloads expose these as separate top-level `executable_query_count`,
 `selected_query_count`, `executed_query_count`, `query_limit` and
 `selected_query_angle_counts` fields while retaining the legacy generated-plan
-counts.
+counts. Idempotent run reuse reports the persisted execution observability from
+the original discovery run, so operator payloads do not substitute constructor
+counters from a provider that was not re-executed.
 
 ## Persistent runtime
 
