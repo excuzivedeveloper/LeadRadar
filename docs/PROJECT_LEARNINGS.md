@@ -38,6 +38,11 @@ review and server work. Read it immediately after `docs/DOCUMENTATION_INDEX.md`.
 - **Read-only diagnostics do not authorize repair.** Inspecting server state,
   container settings, database rows or provider evidence does not grant
   permission to restart, recreate, write, retry or repair.
+- **Failed read-only checkpoints are hard-stop gates.** If an authorized
+  read-only continuity or diagnostic checkpoint fails or mismatches, stop
+  immediately. Do not improvise repairs, alternate commands or paths, retries,
+  or substitute diagnostics unless a new reviewed and authorized task explicitly
+  permits them.
 - **SearXNG and the LeadRadar persistent runtime are separate services.** A
   SearXNG config/restart gate does not authorize the LeadRadar app/bot/collector
   persistent runtime, and a LeadRadar runtime gate does not imply SearXNG config
