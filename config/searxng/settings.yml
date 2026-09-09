@@ -1,4 +1,9 @@
-use_default_settings: true
+use_default_settings:
+  engines:
+    remove:
+      - brave
+      - duckduckgo
+      - startpage
 
 server:
   bind_address: 0.0.0.0

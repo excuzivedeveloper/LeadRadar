@@ -1,8 +1,8 @@
 # LeadRadar — Known Limitations and Validation Gaps
 
 **Status:** CANONICAL  
-**Last verified:** 2026-09-04
-**Implementation baseline:** `359dc17fbf4632e84b0a74f01ac201a426cf4556`
+**Last verified:** 2026-09-09
+**Implementation baseline:** `031e489a21fc53de7b1ddacc107ae57aa6d46f98`
 
 This document distinguishes code that exists from behavior that has actually
 been validated in the current deployment.
@@ -51,9 +51,12 @@ READY_FOR_PERSISTENT_RUNTIME=NO
 PR14_EVIDENCE_RUNTIME_INSTRUMENTATION_IMPLEMENTED=YES
 SHADOW_RUNTIME_WIRED=YES
 SHADOW_DURABLE_PERSISTENCE=YES
-SHADOW_LIVE_VALIDATED=NO
+SHADOW_LIVE_VALIDATED=YES
 PRODUCTION_MATCH_POLICY_CHANGED=NO
 DELIVERY_POLICY_CHANGED=NO
+PR21_BOUNDED_WEB_ONLY_RUN=COMPLETED
+PR21_PROVIDER_OUTCOME=SEARCH_BACKEND_DEGRADED
+SEARXNG_ENGINE_FILTER_CHANGE=IMPLEMENTATION_PENDING_REVIEW
 ```
 
 The next limitation/gate is useful owner delivery from relevant live
@@ -119,6 +122,24 @@ Opportunity evidence, not ingestion or first-provider configuration.
     not current matching or delivery policy.
 18. **P2 — Persistent runtime is intentionally absent.** No LeadRadar daemon is
     authorized, so unattended continuity/restart behavior is not yet proven.
+19. **P2 — PR21 Web-only provider evidence is a single sample.** The run ended
+    after 5 of 12 selected queries due captcha/backoff, considered 12 search
+    results, produced one weak new candidate, and is not enough to judge
+    long-term source quality or novelty.
+20. **P2 — SearXNG engine removal is not production-validated yet.** The
+    repository config removes exact inherited engines `brave`, `duckduckgo` and
+    `startpage`, but this is not active until merge, server sync and SearXNG
+    recreate/restart evidence prove effective settings changed.
+21. **P2 — Removing those engines is not a guarantee against captcha/backoff.**
+    It narrows known noisy default engines, but provider stability still depends
+    on SearXNG defaults, upstream search behavior and local rate conditions.
+22. **P2 — PR21 one-shot query bounds do not bound autonomous discovery.**
+    `--max-queries` bounds an explicit operator run; persistent Web discovery
+    remains unauthorized and separately unproven.
+23. **P2 — Candidate notification automation is not authorized.** The explicit
+    Owner candidate notification one-shot exists, but no recurring schedule,
+    Telegram freshness validation run or Owner notification pass is currently
+    implemented/authorized by this gate.
 
 ## What the membership investigation changed
 
@@ -174,5 +195,5 @@ important.
 `PUBLIC_RELEASE_AUDIT.md` and `legacy-collector-migration.md` describe older
 snapshots/intermediate gates and contain statements that are no longer current.
 
-Use `docs/DOCUMENTATION_INDEX.md`, `docs/CURRENT_STATE.md` and
-`docs/ACTIVE_PLAN.md` as current authority.
+Use `docs/DOCUMENTATION_INDEX.md`, `docs/PROJECT_LEARNINGS.md`,
+`docs/CURRENT_STATE.md` and `docs/ACTIVE_PLAN.md` as current authority.

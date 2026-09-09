@@ -1,8 +1,8 @@
 # LeadRadar Documentation Index
 
 **Status:** CANONICAL  
-**Last verified:** 2026-08-30
-**Implementation baseline:** `d92b0446be19f391bb8f479387b27d914c081e35`
+**Last verified:** 2026-09-09
+**Implementation baseline:** `031e489a21fc53de7b1ddacc107ae57aa6d46f98`
 
 This index defines which documents describe the current project and which are
 historical/reference material.
@@ -14,19 +14,21 @@ index directly, read [`../AGENTS.md`](../AGENTS.md) first.
 
 After `AGENTS.md`, continue in this exact order:
 
-1. [`CURRENT_STATE.md`](CURRENT_STATE.md) — exact current implementation and
+1. [`PROJECT_LEARNINGS.md`](PROJECT_LEARNINGS.md) — operational lessons that
+   prevent repeated false assumptions.
+2. [`CURRENT_STATE.md`](CURRENT_STATE.md) — exact current implementation and
    deployment stage.
-2. [`ARCHITECTURE.md`](ARCHITECTURE.md) — runtime identities, modes, data flow,
+3. [`ARCHITECTURE.md`](ARCHITECTURE.md) — runtime identities, modes, data flow,
    persistence and security boundaries.
-3. [`ACTIVE_PLAN.md`](ACTIVE_PLAN.md) — ordered next work and gates.
-4. [`DEPLOYMENT.md`](DEPLOYMENT.md) — current server topology and operational
+4. [`ACTIVE_PLAN.md`](ACTIVE_PLAN.md) — ordered next work and gates.
+5. [`DEPLOYMENT.md`](DEPLOYMENT.md) — current server topology and operational
    constraints.
-5. [`DECISIONS.md`](DECISIONS.md) — architectural decisions that must not be
+6. [`DECISIONS.md`](DECISIONS.md) — architectural decisions that must not be
    casually reversed.
-6. [`../SECURITY.md`](../SECURITY.md) — credentials, sessions, allowlist and
+7. [`../SECURITY.md`](../SECURITY.md) — credentials, sessions, allowlist and
    incident response.
-7. [`COST_SAFETY.md`](COST_SAFETY.md) — AI/network spend and bounded-work rules.
-8. [`KNOWN_LIMITATIONS.md`](KNOWN_LIMITATIONS.md) — what is still unverified or
+8. [`COST_SAFETY.md`](COST_SAFETY.md) — AI/network spend and bounded-work rules.
+9. [`KNOWN_LIMITATIONS.md`](KNOWN_LIMITATIONS.md) — what is still unverified or
    incomplete.
 
 After that, inspect code and tests for the task at hand.
@@ -37,6 +39,7 @@ After that, inspect code and tests for the task at hand.
 | --- | --- |
 | `AGENTS.md` | Agent entry point, source-of-truth precedence, execution rules |
 | `README.md` | Public project overview and safe setup |
+| `docs/PROJECT_LEARNINGS.md` | Operational lessons learned from bounded gates and server evidence |
 | `docs/CURRENT_STATE.md` | Current implementation/deployment snapshot |
 | `docs/ARCHITECTURE.md` | Current system architecture and data flow |
 | `docs/ACTIVE_PLAN.md` | Exact ordered execution plan |
@@ -86,7 +89,6 @@ baseline where appropriate. If a code-changing commit lands after that baseline:
 2. determine which canonical docs are affected;
 3. update them before treating documentation as fully synchronized.
 
-PR #6 was a code-changing OpenRouter Opportunity Analysis implementation and
-server sync. This documentation sync realigns the canonical implementation
-baseline to that merged code. Later docs-only commits may again move repository
-`HEAD` without changing application behavior.
+PR #21 was code-changing profile Web Discovery bound work and has been merged,
+production-synced and bounded-run validated. Later docs-only or config-only
+commits may again move repository `HEAD` without changing application behavior.
