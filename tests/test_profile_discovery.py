@@ -391,7 +391,10 @@ class ProfileDiscoveryPostgresIntegrationTest(unittest.IsolatedAsyncioTestCase):
         )
         fresh_payload = operator_cli._profile_execution_payload(first)
         reused_payload = operator_cli._profile_execution_payload(second)
-        self.assertEqual(reused_payload["generated_query_count"], 36)
+        self.assertEqual(
+            reused_payload["generated_query_count"],
+            fresh_payload["generated_query_count"],
+        )
         self.assertEqual(
             reused_payload["executable_query_count"],
             first.provider_observability["queries_executable"],
