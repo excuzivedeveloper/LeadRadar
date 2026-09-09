@@ -565,6 +565,36 @@ separate later-stage capabilities and remain disabled in deployment.
 
 Their existence does not authorize execution.
 
+Profile-driven Web Discovery supports an explicit executable-query bound for
+separately authorized one-shot runs:
+
+```bash
+python -m freelancer_bot.operator_cli profile-discovery run --max-queries 12
+```
+
+When the flag is omitted, legacy unbounded behavior is preserved. When provided,
+the bound is applied after full strategy query generation, exact deduplication
+and near-duplicate collapse, but before any Web backend call. Selection is
+deterministic round-robin by discovery angle in priority order
+`direct`, `buyer_habitat`, `adjacent`, followed by unknown future angles in
+first-seen order.
+
+For bounded profile-discovery runs, the explicit `max_queries` value is part of
+the persisted semantic discovery request. Reusing the same run key with a
+different explicit bound, or mixing bounded and unbounded request forms, is a
+request conflict rather than a silent result reuse. Historical unbounded request
+payloads remain compatible because omitted `--max-queries` does not add a new
+semantic key.
+
+Provider and operator observability preserve the full generated and executable
+plan counts alongside the selected and actually executed counts. Operator
+payloads expose these as separate top-level `executable_query_count`,
+`selected_query_count`, `executed_query_count`, `query_limit` and
+`selected_query_angle_counts` fields while retaining the legacy generated-plan
+counts. Idempotent run reuse reports the persisted execution observability from
+the original discovery run, so operator payloads do not substitute constructor
+counters from a provider that was not re-executed.
+
 ## Persistent runtime
 
 Supporting runtime code exists, but no persistent LeadRadar service is currently

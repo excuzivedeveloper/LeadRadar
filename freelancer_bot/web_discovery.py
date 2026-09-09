@@ -189,6 +189,59 @@ class WebQueryCollapseResult:
     executable_by_angle: Mapping[str, int]
 
 
+_DISCOVERY_ANGLE_PRIORITY = ("direct", "buyer_habitat", "adjacent")
+
+
+def select_bounded_web_queries(
+    queries: Sequence[WebDiscoveryQuery],
+    *,
+    max_queries: int | None,
+) -> tuple[WebDiscoveryQuery, ...]:
+    if max_queries is None:
+        return tuple(queries)
+    if max_queries <= 0:
+        raise ValueError("max_queries must be positive")
+    if max_queries >= len(queries):
+        return tuple(queries)
+
+    buckets: dict[str, list[WebDiscoveryQuery]] = {}
+    unknown_angles: list[str] = []
+    for query in queries:
+        if query.angle not in buckets and query.angle not in _DISCOVERY_ANGLE_PRIORITY:
+            unknown_angles.append(query.angle)
+        buckets.setdefault(query.angle, []).append(query)
+
+    angle_order = tuple(
+        angle
+        for angle in (*_DISCOVERY_ANGLE_PRIORITY, *unknown_angles)
+        if angle in buckets
+    )
+    selected: list[WebDiscoveryQuery] = []
+    offsets = {angle: 0 for angle in angle_order}
+    while len(selected) < max_queries:
+        progressed = False
+        for angle in angle_order:
+            offset = offsets[angle]
+            bucket = buckets[angle]
+            if offset >= len(bucket):
+                continue
+            selected.append(bucket[offset])
+            offsets[angle] = offset + 1
+            progressed = True
+            if len(selected) >= max_queries:
+                break
+        if not progressed:
+            break
+    return tuple(selected)
+
+
+def _angle_counts(queries: Sequence[WebDiscoveryQuery]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for query in queries:
+        counts[query.angle] = counts.get(query.angle, 0) + 1
+    return counts
+
+
 def collapse_near_duplicate_queries(
     queries: Sequence[WebDiscoveryQuery],
 ) -> WebQueryCollapseResult:
@@ -969,7 +1022,10 @@ class WebDiscoveryProvider:
         strategy: WebDiscoveryStrategy | None = None,
         governor: WebDiscoveryGovernor | None = None,
         queries: Sequence[WebDiscoveryQuery] | None = None,
+        max_queries: int | None = None,
     ) -> None:
+        if max_queries is not None and max_queries <= 0:
+            raise ValueError("max_queries must be positive")
         if isinstance(backend, Sequence) and not isinstance(backend, (str, bytes)):
             backends = tuple(backend)
         else:
@@ -980,12 +1036,19 @@ class WebDiscoveryProvider:
         self._strategy = strategy or WebDiscoveryStrategy.default()
         self._governor = governor
         self._queries = None if queries is None else tuple(queries)
+        self._max_queries = max_queries
         self._observability: dict[str, object] = {
             "queries_generated": 0,
             "queries_deduplicated": 0,
             "queries_near_deduplicated": 0,
             "queries_executable": 0,
-            "query_angle_counts": {},
+            "queries_selected": 0,
+            "query_limit": max_queries,
+            "query_angle_counts": {
+                "generated": {},
+                "executable": {},
+                "selected": {},
+            },
             "queries_executed": 0,
             "backend_attempts": 0,
             "queries_reused": 0,
@@ -1014,17 +1077,24 @@ class WebDiscoveryProvider:
             else self._strategy.build_queries(request)
         )
         collapsed = collapse_near_duplicate_queries(generated_queries)
-        queries = collapsed.queries
+        executable_queries = collapsed.queries
+        queries = select_bounded_web_queries(
+            executable_queries,
+            max_queries=self._max_queries,
+        )
         self._observability = {
             "queries_generated": collapsed.generated_count,
             "queries_deduplicated": (
                 collapsed.exact_duplicates + collapsed.near_duplicates
             ),
             "queries_near_deduplicated": collapsed.near_duplicates,
-            "queries_executable": len(queries),
+            "queries_executable": len(executable_queries),
+            "queries_selected": len(queries),
+            "query_limit": self._max_queries,
             "query_angle_counts": {
                 "generated": dict(collapsed.generated_by_angle),
                 "executable": dict(collapsed.executable_by_angle),
+                "selected": _angle_counts(queries),
             },
             "queries_executed": 0,
             "backend_attempts": 0,

@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 import sqlalchemy as sa
 
+from freelancer_bot import operator_cli
 from freelancer_bot.discovery import DiscoveryRequest
 from freelancer_bot.persistence.database import Database
 from freelancer_bot.persistence.schema import (
@@ -14,12 +15,17 @@ from freelancer_bot.persistence.schema import (
     source_profile_relevance,
     sources,
 )
+from freelancer_bot.persistence.discovery import (
+    DiscoveryRunConflict,
+    DiscoveryRunRepository,
+)
 from freelancer_bot.profile_discovery import (
     ProfileDiscoveryService,
     build_evaluation_intent,
     build_profile_discovery_intent,
     evaluation_profile_specs,
     evaluate_source_relevance,
+    _effective_provider_observability,
     web_strategy_for_intent,
 )
 from freelancer_bot.profile_confirmation import ProfileConfirmationService
@@ -34,6 +40,25 @@ NOW = datetime(2026, 8, 16, 12, 0, tzinfo=timezone.utc)
 
 
 class ProfileDiscoveryIntentTest(unittest.TestCase):
+    def test_effective_provider_observability_falls_back_when_run_lacks_observability(self):
+        execution = SimpleNamespace(run=SimpleNamespace(request={}))
+        provider = SimpleNamespace(
+            observability={
+                "queries_executable": 4,
+                "queries_selected": 4,
+                "query_limit": None,
+            }
+        )
+
+        self.assertEqual(
+            _effective_provider_observability(execution, provider),
+            {
+                "queries_executable": 4,
+                "queries_selected": 4,
+                "query_limit": None,
+            },
+        )
+
     def test_ten_evaluation_intents_are_deterministic_and_materially_distinct(self):
         specs = evaluation_profile_specs()
         intents = [build_evaluation_intent(spec) for spec in specs]
@@ -235,6 +260,297 @@ class ProfileDiscoveryPostgresIntegrationTest(unittest.IsolatedAsyncioTestCase):
             backend.calls,
             len(collapse_near_duplicate_queries(queries).queries),
         )
+
+    async def test_profile_web_discovery_persists_with_bounded_query_execution(self):
+        confirmation = ProfileConfirmationService(self.database)
+        draft = await confirmation.create_manual_draft(
+            platform="telegram",
+            external_user_id="profile-discovery-owner",
+            semantic_text="Python Telegram automation",
+            roles=("Python developer",),
+            skills=("Telethon", "PostgreSQL"),
+            categories=("Telegram bots",),
+        )
+        confirmed = await confirmation.confirm(
+            platform="telegram",
+            external_user_id="profile-discovery-owner",
+            profile_id=draft.profile.id,
+            expected_revision=draft.profile.revision,
+        )
+        activated = await confirmation.activate(
+            platform="telegram",
+            external_user_id="profile-discovery-owner",
+            profile_id=draft.profile.id,
+            expected_revision=confirmed.profile.revision,
+        )
+
+        class Backend:
+            def __init__(self):
+                self.calls = []
+
+            async def search(self, query, *, language, limit):
+                self.calls.append((query, language, limit))
+                return (
+                    WebSearchResult(
+                        "https://t.me/python_bounded_buyers/1",
+                        "Python Telegram Automation Buyers",
+                        "Need a Telethon implementation partner",
+                    ),
+                )
+
+        backend = Backend()
+        service = ProfileDiscoveryService(self.database)
+        first = await service.discover_profile(
+            activated.profile.profile,
+            requested_at=NOW,
+            run_key="profile-discovery-bounded-integration-v1",
+            backend=backend,
+            max_queries=12,
+        )
+        second = await service.discover_profile(
+            activated.profile.profile,
+            requested_at=NOW,
+            run_key="profile-discovery-bounded-integration-v1",
+            backend=backend,
+            max_queries=12,
+        )
+
+        async with self.database.connect() as connection:
+            intent_count = await connection.scalar(
+                sa.select(sa.func.count()).select_from(profile_discovery_intents)
+            )
+            relevance_count = await connection.scalar(
+                sa.select(sa.func.count()).select_from(source_profile_relevance)
+            )
+            source_count = await connection.scalar(
+                sa.select(sa.func.count()).select_from(sources)
+            )
+            run_count = await connection.scalar(
+                sa.select(sa.func.count())
+                .select_from(discovery_runs)
+                .where(
+                    discovery_runs.c.run_key
+                    == "profile-discovery-bounded-integration-v1"
+                )
+            )
+            run = await DiscoveryRunRepository().get_by_key(
+                connection,
+                provider="web_search",
+                run_key="profile-discovery-bounded-integration-v1",
+            )
+
+        self.assertEqual(intent_count, 1)
+        self.assertEqual(relevance_count, 1)
+        self.assertEqual(source_count, 1)
+        self.assertEqual(run_count, 1)
+        self.assertEqual(first.new_candidates, 1)
+        self.assertEqual(second.unique_candidates, 1)
+        self.assertLessEqual(len(backend.calls), 12)
+        self.assertEqual(len(backend.calls), 12)
+        self.assertIn("observability", run.request)
+        self.assertEqual(
+            run.request["observability"]["queries_executable"],
+            first.provider_observability["queries_executable"],
+        )
+        self.assertEqual(
+            run.request["observability"]["queries_selected"],
+            first.provider_observability["queries_selected"],
+        )
+        self.assertEqual(
+            run.request["observability"]["queries_executed"],
+            first.provider_observability["queries_executed"],
+        )
+        self.assertEqual(
+            run.request["observability"]["query_limit"],
+            first.provider_observability["query_limit"],
+        )
+        self.assertGreaterEqual(first.provider_observability["queries_executable"], 12)
+        self.assertEqual(first.provider_observability["queries_selected"], 12)
+        self.assertEqual(first.provider_observability["queries_executed"], 12)
+        self.assertEqual(first.provider_observability["query_limit"], 12)
+        self.assertEqual(
+            sum(first.provider_observability["query_angle_counts"]["selected"].values()),
+            12,
+        )
+        self.assertEqual(
+            second.provider_observability["queries_executable"],
+            first.provider_observability["queries_executable"],
+        )
+        self.assertEqual(
+            second.provider_observability["queries_selected"],
+            first.provider_observability["queries_selected"],
+        )
+        self.assertEqual(
+            second.provider_observability["queries_executed"],
+            first.provider_observability["queries_executed"],
+        )
+        self.assertEqual(second.provider_observability["query_limit"], 12)
+        self.assertGreaterEqual(
+            first.provider_observability["queries_executable"],
+            first.provider_observability["queries_selected"],
+        )
+        fresh_payload = operator_cli._profile_execution_payload(first)
+        reused_payload = operator_cli._profile_execution_payload(second)
+        self.assertEqual(
+            reused_payload["generated_query_count"],
+            fresh_payload["generated_query_count"],
+        )
+        self.assertEqual(
+            reused_payload["executable_query_count"],
+            first.provider_observability["queries_executable"],
+        )
+        self.assertEqual(reused_payload["selected_query_count"], 12)
+        self.assertEqual(reused_payload["executed_query_count"], 12)
+        self.assertEqual(reused_payload["query_limit"], 12)
+        self.assertEqual(
+            reused_payload["selected_query_angle_counts"],
+            fresh_payload["selected_query_angle_counts"],
+        )
+        for field in (
+            "executable_query_count",
+            "selected_query_count",
+            "executed_query_count",
+            "query_limit",
+            "executable_query_angle_counts",
+            "selected_query_angle_counts",
+        ):
+            self.assertEqual(reused_payload[field], fresh_payload[field])
+
+    async def test_profile_web_discovery_run_key_includes_explicit_query_bound(self):
+        confirmation = ProfileConfirmationService(self.database)
+        draft = await confirmation.create_manual_draft(
+            platform="telegram",
+            external_user_id="profile-discovery-owner",
+            semantic_text="Python Telegram automation",
+            roles=("Python developer",),
+            skills=("Telethon", "PostgreSQL"),
+            categories=("Telegram bots",),
+        )
+        confirmed = await confirmation.confirm(
+            platform="telegram",
+            external_user_id="profile-discovery-owner",
+            profile_id=draft.profile.id,
+            expected_revision=draft.profile.revision,
+        )
+        activated = await confirmation.activate(
+            platform="telegram",
+            external_user_id="profile-discovery-owner",
+            profile_id=draft.profile.id,
+            expected_revision=confirmed.profile.revision,
+        )
+        profile = activated.profile.profile
+
+        class Backend:
+            def __init__(self):
+                self.calls = []
+
+            async def search(self, query, *, language, limit):
+                self.calls.append(query)
+                return (
+                    WebSearchResult(
+                        "https://t.me/python_run_key_buyers/1",
+                        "Python Telegram Automation Buyers",
+                        "Need a Telethon implementation partner",
+                    ),
+                )
+
+        backend = Backend()
+        service = ProfileDiscoveryService(self.database)
+        await service.discover_profile(
+            profile,
+            requested_at=NOW,
+            run_key="profile-discovery-bound-request-v1",
+            backend=backend,
+            max_queries=12,
+        )
+        calls_after_first = len(backend.calls)
+        self.assertEqual(calls_after_first, 12)
+        async with self.database.connect() as connection:
+            run = await DiscoveryRunRepository().get_by_key(
+                connection,
+                provider="web_search",
+                run_key="profile-discovery-bound-request-v1",
+            )
+        self.assertEqual(
+            run.request["parameters"]["profile_discovery"]["max_queries"],
+            12,
+        )
+
+        await service.discover_profile(
+            profile,
+            requested_at=NOW,
+            run_key="profile-discovery-bound-request-v1",
+            backend=backend,
+            max_queries=12,
+        )
+        self.assertEqual(len(backend.calls), calls_after_first)
+
+        with self.assertRaises(DiscoveryRunConflict):
+            await service.discover_profile(
+                profile,
+                requested_at=NOW,
+                run_key="profile-discovery-bound-request-v1",
+                backend=backend,
+                max_queries=6,
+            )
+        self.assertEqual(len(backend.calls), calls_after_first)
+
+        with self.assertRaises(DiscoveryRunConflict):
+            await service.discover_profile(
+                profile,
+                requested_at=NOW,
+                run_key="profile-discovery-bound-request-v1",
+                backend=backend,
+                max_queries=None,
+            )
+        self.assertEqual(len(backend.calls), calls_after_first)
+
+        unbounded_first = await service.discover_profile(
+            profile,
+            requested_at=NOW,
+            run_key="profile-discovery-unbounded-request-v1",
+            backend=backend,
+            max_queries=None,
+        )
+        calls_after_unbounded = len(backend.calls)
+        async with self.database.connect() as connection:
+            unbounded = await DiscoveryRunRepository().get_by_key(
+                connection,
+                provider="web_search",
+                run_key="profile-discovery-unbounded-request-v1",
+            )
+        self.assertNotIn(
+            "max_queries",
+            unbounded.request["parameters"]["profile_discovery"],
+        )
+
+        unbounded_second = await service.discover_profile(
+            profile,
+            requested_at=NOW,
+            run_key="profile-discovery-unbounded-request-v1",
+            backend=backend,
+            max_queries=None,
+        )
+        self.assertEqual(len(backend.calls), calls_after_unbounded)
+        self.assertIsNone(unbounded_second.provider_observability["query_limit"])
+        self.assertEqual(
+            unbounded_second.provider_observability["queries_executable"],
+            unbounded_first.provider_observability["queries_executable"],
+        )
+        self.assertEqual(
+            unbounded_second.provider_observability["queries_selected"],
+            unbounded_first.provider_observability["queries_selected"],
+        )
+
+        with self.assertRaises(DiscoveryRunConflict):
+            await service.discover_profile(
+                profile,
+                requested_at=NOW,
+                run_key="profile-discovery-unbounded-request-v1",
+                backend=backend,
+                max_queries=12,
+            )
+        self.assertEqual(len(backend.calls), calls_after_unbounded)
 
 
 if __name__ == "__main__":

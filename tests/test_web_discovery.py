@@ -25,6 +25,7 @@ from freelancer_bot.web_discovery import (
     WebDiscoveryStrategy,
     WebDiscoveryTopic,
     collapse_near_duplicate_queries,
+    select_bounded_web_queries,
     WebSearchBackend,
     WebSearchBackendError,
     WebSearchResult,
@@ -41,6 +42,17 @@ from pydantic import SecretStr
 
 NOW = datetime(2026, 8, 9, 15, 0, tzinfo=timezone.utc)
 SOURCES_PATH = ROOT / "config" / "sources.json"
+
+
+def _web_query(angle: str, index: int) -> WebDiscoveryQuery:
+    return WebDiscoveryQuery(
+        WebDiscoveryQueryKind.COMMUNITY,
+        CommunityCategory.PROFESSION,
+        "en",
+        f"{angle} q{index}",
+        f'site:t.me "{angle} q{index}" community',
+        angle=angle,
+    )
 
 
 class RecordingSearchBackend:
@@ -182,6 +194,91 @@ class WebDiscoveryStrategyTest(unittest.IsolatedAsyncioTestCase):
             {"direct", "buyer_habitat"},
         )
         self.assertIn("startup marketers", {query.topic for query in collapsed.queries})
+
+    def test_bounded_query_selector_preserves_unbounded_order(self):
+        queries = (
+            _web_query("direct", 1),
+            _web_query("buyer_habitat", 1),
+            _web_query("adjacent", 1),
+        )
+
+        self.assertEqual(
+            select_bounded_web_queries(queries, max_queries=None),
+            queries,
+        )
+        self.assertEqual(
+            select_bounded_web_queries(queries, max_queries=3),
+            queries,
+        )
+        self.assertEqual(
+            select_bounded_web_queries(queries, max_queries=10),
+            queries,
+        )
+
+    def test_bounded_query_selector_balances_production_rollout_shape(self):
+        queries = (
+            *(_web_query("direct", index) for index in range(16)),
+            *(_web_query("buyer_habitat", index) for index in range(10)),
+            *(_web_query("adjacent", index) for index in range(8)),
+        )
+
+        selected = select_bounded_web_queries(queries, max_queries=12)
+
+        self.assertEqual(len(selected), 12)
+        self.assertEqual(sum(query.angle == "direct" for query in selected), 4)
+        self.assertEqual(sum(query.angle == "buyer_habitat" for query in selected), 4)
+        self.assertEqual(sum(query.angle == "adjacent" for query in selected), 4)
+
+    def test_bounded_query_selector_continues_after_bucket_exhausts(self):
+        queries = (
+            _web_query("direct", 0),
+            *(_web_query("buyer_habitat", index) for index in range(5)),
+            *(_web_query("adjacent", index) for index in range(5)),
+        )
+
+        selected = select_bounded_web_queries(queries, max_queries=6)
+
+        self.assertEqual(len(selected), 6)
+        self.assertEqual(sum(query.angle == "direct" for query in selected), 1)
+        self.assertEqual(sum(query.angle == "buyer_habitat" for query in selected), 3)
+        self.assertEqual(sum(query.angle == "adjacent" for query in selected), 2)
+
+    def test_bounded_query_selector_preserves_order_within_each_angle(self):
+        queries = (
+            _web_query("direct", 0),
+            _web_query("direct", 1),
+            _web_query("buyer_habitat", 0),
+            _web_query("buyer_habitat", 1),
+            _web_query("adjacent", 0),
+            _web_query("adjacent", 1),
+        )
+
+        selected = select_bounded_web_queries(queries, max_queries=6)
+
+        for angle in ("direct", "buyer_habitat", "adjacent"):
+            self.assertEqual(
+                [query.topic for query in selected if query.angle == angle],
+                [f"{angle} q0", f"{angle} q1"],
+            )
+
+    def test_bounded_query_selector_keeps_unknown_angles_after_known_priority(self):
+        queries = (
+            _web_query("direct", 0),
+            _web_query("future_angle", 0),
+            _web_query("future_angle", 1),
+        )
+
+        selected = select_bounded_web_queries(queries, max_queries=3)
+
+        self.assertEqual(tuple(query.angle for query in selected), (
+            "direct",
+            "future_angle",
+            "future_angle",
+        ))
+
+    def test_bounded_query_selector_rejects_non_positive_limit(self):
+        with self.assertRaises(ValueError):
+            select_bounded_web_queries((_web_query("direct", 0),), max_queries=0)
 
 
 class SearxngSearchBackendTest(unittest.IsolatedAsyncioTestCase):
@@ -360,6 +457,55 @@ class WebDiscoveryGovernorTest(unittest.IsolatedAsyncioTestCase):
             provider.observability["query_attempts"][1]["provider_backend"],
             "healthy",
         )
+
+    async def test_provider_applies_post_dedup_query_bound_with_full_plan_observability(self):
+        backend = RecordingSearchBackend()
+        executable_queries = (
+            *(_web_query("direct", index) for index in range(16)),
+            *(_web_query("buyer_habitat", index) for index in range(10)),
+            *(_web_query("adjacent", index) for index in range(8)),
+        )
+        queries = (
+            *executable_queries,
+            executable_queries[0],
+            executable_queries[16],
+        )
+        provider = WebDiscoveryProvider(
+            backend,
+            queries=queries,
+            max_queries=12,
+        )
+
+        await provider.discover(DiscoveryRequest(parameters={}, requested_at=NOW))
+
+        self.assertLessEqual(len(backend.calls), 12)
+        self.assertEqual(provider.observability["queries_generated"], 36)
+        self.assertEqual(provider.observability["queries_deduplicated"], 2)
+        self.assertEqual(provider.observability["queries_executable"], 34)
+        self.assertEqual(provider.observability["queries_selected"], 12)
+        self.assertEqual(provider.observability["queries_executed"], 12)
+        self.assertEqual(provider.observability["query_limit"], 12)
+        angle_counts = provider.observability["query_angle_counts"]
+        self.assertEqual(
+            angle_counts["selected"],
+            {"direct": 4, "buyer_habitat": 4, "adjacent": 4},
+        )
+        self.assertEqual(
+            angle_counts["executable"],
+            {"direct": 16, "buyer_habitat": 10, "adjacent": 8},
+        )
+
+    async def test_provider_unbounded_execution_remains_legacy_compatible(self):
+        backend = RecordingSearchBackend()
+        queries = tuple(_web_query("direct", index) for index in range(4))
+        provider = WebDiscoveryProvider(backend, queries=queries)
+
+        await provider.discover(DiscoveryRequest(parameters={}, requested_at=NOW))
+
+        self.assertEqual(len(backend.calls), 4)
+        self.assertEqual(provider.observability["queries_executable"], 4)
+        self.assertEqual(provider.observability["queries_selected"], 4)
+        self.assertIsNone(provider.observability["query_limit"])
 
 
 @unittest.skipUnless(TEST_DATABASE_URL, "TEST_DATABASE_URL is not configured")

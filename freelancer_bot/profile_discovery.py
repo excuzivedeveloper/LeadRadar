@@ -422,6 +422,7 @@ class ProfileDiscoveryService:
         searxng_url: str | None = None,
         results_per_query: int = 10,
         max_candidates: int = 100,
+        max_queries: int | None = None,
     ) -> ProfileDiscoveryExecution:
         _aware(requested_at, "requested_at")
         outcome = await self.ensure_intent(profile)
@@ -434,6 +435,7 @@ class ProfileDiscoveryService:
             searxng_url=searxng_url,
             results_per_query=results_per_query,
             max_candidates=max_candidates,
+            max_queries=max_queries,
             persist_relevance=True,
         )
 
@@ -577,6 +579,7 @@ class ProfileDiscoveryService:
             searxng_url=searxng_url,
             results_per_query=results_per_query,
             max_candidates=max_candidates,
+            max_queries=None,
             persist_relevance=False,
             previous_source_ids=previous_source_ids,
         )
@@ -650,6 +653,7 @@ class ProfileDiscoveryService:
         searxng_url: str | None,
         results_per_query: int,
         max_candidates: int,
+        max_queries: int | None,
         persist_relevance: bool,
         previous_source_ids: set[int] | None = None,
     ) -> ProfileDiscoveryExecution:
@@ -666,18 +670,22 @@ class ProfileDiscoveryService:
             backend,
             strategy=strategy,
             governor=self._web_governor,
+            max_queries=max_queries,
         )
+        profile_discovery_payload: dict[str, Any] = {
+            "intent_id": str(intent.id),
+            "profile_revision": intent.profile_revision,
+            "intent_version": intent.version,
+        }
+        if max_queries is not None:
+            profile_discovery_payload["max_queries"] = max_queries
         execution = await self._runner.run(
             provider,
             run_key=run_key,
             request=DiscoveryRequest(
                 parameters={
                     "trigger": "profile_discovery",
-                    "profile_discovery": {
-                        "intent_id": str(intent.id),
-                        "profile_revision": intent.profile_revision,
-                        "intent_version": intent.version,
-                    },
+                    "profile_discovery": profile_discovery_payload,
                 },
                 requested_at=requested_at,
             ),
@@ -696,7 +704,7 @@ class ProfileDiscoveryService:
                 evaluated_at=requested_at,
                 persist_relevance=persist_relevance,
             )
-        observability = provider.observability
+        observability = _effective_provider_observability(execution, provider)
         result_source_ids = {result.source_id for result in execution.results}
         known = sum(
             1
@@ -826,6 +834,16 @@ def _lineages_for_intent(
             continue
         selected.append(lineage)
     return tuple(selected)
+
+
+def _effective_provider_observability(
+    execution: DiscoveryExecution,
+    provider: WebDiscoveryProvider,
+) -> dict[str, Any]:
+    persisted = execution.run.request.get("observability")
+    if isinstance(persisted, Mapping):
+        return dict(persisted)
+    return dict(provider.observability)
 
 
 def build_profile_discovery_intent(
