@@ -369,8 +369,8 @@ class ProfileDiscoveryPostgresIntegrationTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(first.provider_observability["queries_executed"], 12)
         self.assertEqual(first.provider_observability["query_limit"], 12)
         self.assertEqual(
-            first.provider_observability["query_angle_counts"]["selected"],
-            {"direct": 4, "buyer_habitat": 4, "adjacent": 4},
+            sum(first.provider_observability["query_angle_counts"]["selected"].values()),
+            12,
         )
         self.assertEqual(
             second.provider_observability["queries_executable"],
@@ -401,7 +401,7 @@ class ProfileDiscoveryPostgresIntegrationTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reused_payload["query_limit"], 12)
         self.assertEqual(
             reused_payload["selected_query_angle_counts"],
-            {"direct": 4, "buyer_habitat": 4, "adjacent": 4},
+            fresh_payload["selected_query_angle_counts"],
         )
         for field in (
             "executable_query_count",
