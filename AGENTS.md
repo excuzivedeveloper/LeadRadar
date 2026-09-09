@@ -1,8 +1,8 @@
 # LeadRadar — Agent Entry Point
 
 **Status:** CANONICAL  
-**Last verified:** 2026-08-31
-**Implementation baseline:** `d92b0446be19f391bb8f479387b27d914c081e35`
+**Last verified:** 2026-09-09
+**Implementation baseline:** `031e489a21fc53de7b1ddacc107ae57aa6d46f98`
 
 This file is the entry point for ChatGPT, Codex, Claude, DeepSeek, or any other
 engineer/agent that receives repository access without prior conversation
@@ -14,14 +14,15 @@ After reading this file, continue in this exact order before proposing
 implementation or server work:
 
 1. `docs/DOCUMENTATION_INDEX.md`
-2. `docs/CURRENT_STATE.md`
-3. `docs/ARCHITECTURE.md`
-4. `docs/ACTIVE_PLAN.md`
-5. `docs/DEPLOYMENT.md`
-6. `docs/DECISIONS.md`
-7. `SECURITY.md`
-8. `docs/COST_SAFETY.md`
-9. `docs/KNOWN_LIMITATIONS.md`
+2. `docs/PROJECT_LEARNINGS.md`
+3. `docs/CURRENT_STATE.md`
+4. `docs/ARCHITECTURE.md`
+5. `docs/ACTIVE_PLAN.md`
+6. `docs/DEPLOYMENT.md`
+7. `docs/DECISIONS.md`
+8. `SECURITY.md`
+9. `docs/COST_SAFETY.md`
+10. `docs/KNOWN_LIMITATIONS.md`
 
 Then inspect the code that is relevant to the requested task.
 

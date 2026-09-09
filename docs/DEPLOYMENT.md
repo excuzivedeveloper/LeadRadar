@@ -1,9 +1,9 @@
 # LeadRadar — Current Deployment
 
 **Status:** CANONICAL  
-**Snapshot date:** 2026-08-31
-**Deployment code baseline:** `d92b0446be19f391bb8f479387b27d914c081e35`
-**Repository/server head:** `d92b0446be19f391bb8f479387b27d914c081e35`
+**Snapshot date:** 2026-09-09
+**Deployment code baseline:** `031e489a21fc53de7b1ddacc107ae57aa6d46f98`
+**Repository/server head:** `031e489a21fc53de7b1ddacc107ae57aa6d46f98`
 
 This document records the current shared-server LeadRadar layout. It contains no
 credential values.
@@ -57,7 +57,7 @@ Expected state:
 
 ```text
 POSTGRES_HEALTH=healthy
-ALEMBIC_CURRENT=20260825_0037
+ALEMBIC_CURRENT=20260908_0042
 ```
 
 Never print PostgreSQL credentials or the full credentialed `DATABASE_URL`.
@@ -187,6 +187,33 @@ TOKENROUTER_API_KEY=not configured
 OPENROUTER_API_KEY=configured
 ```
 
+Current SearXNG Web backend topology:
+
+```text
+endpoint=http://127.0.0.1:8888
+container=freelancer-lead-bot-searxng-1
+image=searxng/searxng@sha256:892cf809341915a4b7710d3c9045005b4c377d51335a089b6d4da0b28750788d
+host_settings=config/searxng/settings.yml
+container_settings=/etc/searxng/settings.yml
+settings_mount=read-only
+working_dir=/usr/local/searxng
+entrypoint=["/usr/local/searxng/entrypoint.sh"]
+pid1_exe=/usr/bin/python3.14
+pid1_cmdline=searxng
+runtime_interpreter=/usr/local/searxng/.venv/bin/python3
+settings_loader=/usr/local/searxng/searx/settings_loader.py
+DEFAULT_SETTINGS_FILE=/usr/local/searxng/searx/settings.yml
+```
+
+Safe read-only container introspection must use the discovered runtime
+interpreter, not a guessed `python` executable. For heredoc/stdin diagnostics,
+attach stdin with `docker exec -i`.
+
+The repository SearXNG settings change that removes exact default engines
+`brave`, `duckduckgo` and `startpage` is not production-active until it is
+merged, synced to this checkout, and the SearXNG container is separately
+authorized for recreate/restart.
+
 Current OpenRouter implementation state:
 
 ```text
@@ -236,19 +263,24 @@ live cheap prefilter=YES
 live legacy shadow=YES
 shadow schema match=YES
 shadow filter SHA match=YES
-AI provider calls=0
-live Opportunities=0
+bounded AI provider validation=PASS
+live Opportunities=validated in bounded one-shot path
 live deliveries=0
 OPENROUTER_IMPLEMENTATION_READY=YES
 OPENROUTER_RUNTIME_CONFIGURED=YES
 READY_FOR_OPENROUTER_CONFIGURATION=COMPLETE
-READY_FOR_BOUNDED_AI_ANALYSIS=YES
-LIVE_AI_ANALYSIS_VALIDATED=NO
+READY_FOR_BOUNDED_AI_ANALYSIS=COMPLETE
+LIVE_AI_ANALYSIS_VALIDATED=YES
+PR21_BOUNDED_WEB_ONLY_RUN=COMPLETED
+PR21_PROVIDER_OUTCOME=SEARCH_BACKEND_DEGRADED
+SEARXNG_ENGINE_FILTER_CHANGE=IMPLEMENTATION_PENDING_REVIEW
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 ```
 
-The next gate is bounded one-shot OpenRouter Opportunity Analysis, defined in
-`docs/ACTIVE_PLAN.md`. No live provider response has been validated yet.
+The next gate is independent review of the SearXNG exact-engine removal and
+documentation sync PR, defined in `docs/ACTIVE_PLAN.md`. The filter is not
+production-active before later merge, sync and SearXNG recreate/restart
+evidence.
 
 ## Evidence references
 

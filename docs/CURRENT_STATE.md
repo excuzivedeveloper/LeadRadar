@@ -1,24 +1,27 @@
 # LeadRadar — Current State
 
 **Status:** CANONICAL  
-**Snapshot date:** 2026-09-05
-**Implementation baseline:** `e3d2628bc3511a3b61c65378e633d752107d4cd4`
-**Current deployed repository head:** `e3d2628bc3511a3b61c65378e633d752107d4cd4`
+**Snapshot date:** 2026-09-09
+**Implementation baseline:** `031e489a21fc53de7b1ddacc107ae57aa6d46f98`
+**Current deployed repository head:** `031e489a21fc53de7b1ddacc107ae57aa6d46f98`
 
 ## Executive status
 
 LeadRadar has completed the pre-AI live ingestion/shadow gate, OpenRouter
 configuration and bounded Opportunity Analysis validation, PR13 matching repair,
-and the PR15 production shadow-instrumentation rollout plus live shadow canary.
+PR15 production shadow instrumentation, PR17 OpenRouter reliability repair, and
+PR21 profile Web Discovery query-bound rollout.
 
-PR15 is now merged, production-synced and live-validated. The current product
-gate is useful owner-only delivery from a relevant fresh natural Opportunity.
-A separately bounded Owner Delivery Canary is the active/next gate; its final
-verdict must not be inferred until its runtime and DB evidence are complete.
+PR21 is merged, production-synced and bounded-run validated. The completed
+Web-only run proved the explicit one-shot `--max-queries` bound and surfaced
+SearXNG provider degradation from inherited default engines. This branch
+implements the reviewed repository-side SearXNG default-engine filter, but that
+filter is not production-active until a later merge/sync/recreate gate proves
+it.
 
-Bounded WEB_ONLY candidate-source discovery is permitted as a separate
-development-maintenance task. Persistent discovery, Telegram discovery, Source
-Audit, auto-approval and auto-joining remain disabled.
+Persistent discovery, Telegram discovery, Source Audit, auto-approval,
+auto-joining, candidate notification automation and persistent LeadRadar runtime
+remain disabled.
 
 Current gate status:
 
@@ -47,8 +50,8 @@ PR15_PRODUCTION_SYNCED=YES
 PR15_MIGRATION_APPLIED_PRODUCTION=YES
 PR15_SHADOW_LIVE_VALIDATED=YES
 PR15_BOUNDED_RUNTIME_SHADOW_CANARY=PASS
-ALEMBIC_CURRENT=20260904_0039
-ALEMBIC_HEADS=20260904_0039
+ALEMBIC_CURRENT=20260908_0042
+ALEMBIC_HEADS=20260908_0042
 PRODUCTION_MATCH_POLICY_CHANGED=NO
 DELIVERY_POLICY_CHANGED=NO
 
@@ -77,28 +80,43 @@ PR17_ALEMBIC=20260905_0040
 PR17_PRODUCTION_SYNC_VERIFIED=YES
 PR17_PRODUCTION_SYNC_EVIDENCE_SHA256=0f868835279da07a9b45624facc7a0c24163828481dda7a875b5f57594548b5c
 PR17_RUNTIME_STOPPED=YES
+PR21_MERGED=YES
+PR21_PRODUCTION_SYNCED=YES
+PR21_PRODUCTION_BASELINE=031e489a21fc53de7b1ddacc107ae57aa6d46f98
+PR21_ALEMBIC=20260908_0042
+PR21_STAGE_A=PASS
+PR21_BOUNDED_WEB_ONLY_RUN=COMPLETED
+PR21_BOUND_CONTRACT=PASS
+PR21_RUN_KEY=owner-profile-web-pr21-bounded-20260909-v1
+PR21_DISCOVERY_RUN_ID=3951cae0-3c45-4d81-ab41-38a37edf0614
+PR21_PROVIDER_OUTCOME=SEARCH_BACKEND_DEGRADED
+PR21_PROVIDER_STATE=BACKOFF
+SEARXNG_ENGINE_FILTER_CHANGE=IMPLEMENTATION_PENDING_REVIEW
 OA_PROVIDER_ROUTE_SWITCH_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
+SECOND_BOUNDED_WEB_RUN_AUTHORIZED=NO
+TELEGRAM_CANDIDATE_VALIDATION_AUTHORIZED=NO
 READY_FOR_PERSISTENT_RUNTIME=NO
 ```
 
 The exact next execution sequence is:
 
 ```text
-obtain separate Owner authorization for a repeat bounded Owner Delivery Canary
--> reverify production head e3d2628bc3511a3b61c65378e633d752107d4cd4
--> reverify Alembic current=head=20260905_0040
--> keep discovery/catch-up/AI reply/fallback disabled
--> keep provider/model route unchanged for the first post-PR17 canary
--> run only the separately authorized bounded owner-only canary
--> prove runtime stopped
--> inspect body-free OA/matching/delivery/retry evidence
--> publish exact evidence separately
+independent review of the SearXNG engine-filter and docs PR
+-> Owner authorizes merge
+-> merge reviewed PR
+-> separately authorize production sync of the exact reviewed merge
+-> verify config/searxng/settings.yml arrives in the production checkout
+-> separately authorize SearXNG container recreate/restart to consume mounted settings
+-> read-only verify exact effective default engines no longer contain brave, duckduckgo or startpage
+-> separately authorize one new bounded Web-only canary
+-> evaluate provider stability and candidate quality
+-> only then decide Telegram freshness validation or candidate notifications
 -> persistent runtime remains unauthorized
 ```
 
-Migration `20260904_0039` is applied and PR15 live shadow validation has passed.
-The current production matcher and delivery policy remain unchanged.
+Production Alembic current is `20260908_0042`. The current production matcher
+and delivery policy remain unchanged.
 
 Full-runtime discovery, catch-up, legacy delivery and persistent runtime remain
 disabled. Separately bounded WEB_ONLY candidate discovery is allowed during
@@ -109,13 +127,13 @@ development. A useful real owner delivery is not yet proven at this snapshot.
 Production implementation baseline:
 
 ```text
-e3d2628bc3511a3b61c65378e633d752107d4cd4
+031e489a21fc53de7b1ddacc107ae57aa6d46f98
 ```
 
 Current server repository head:
 
 ```text
-e3d2628bc3511a3b61c65378e633d752107d4cd4
+031e489a21fc53de7b1ddacc107ae57aa6d46f98
 ```
 
 Runtime/tooling baseline:
@@ -124,8 +142,8 @@ Runtime/tooling baseline:
 Python=3.14.7
 uv=0.12.2
 PostgreSQL=18.x
-Production Alembic current=20260905_0040
-Repository Alembic head=20260905_0040
+Production Alembic current=20260908_0042
+Repository Alembic head=20260908_0042
 ```
 
 The current migration set includes:
@@ -261,7 +279,89 @@ provider reports full generated/executable counts separately from selected and
 executed query counts, and the operator payload surfaces those counts at top
 level. A bounded run's explicit `max_queries` is part of the persisted semantic
 request, so the same run key cannot silently reuse results for a different
-bound. No live Web validation is implied by this repository state.
+bound.
+
+PR21 was later merged, production-synced and validated by one bounded Web-only
+owner-profile run:
+
+```text
+RUN_KEY=owner-profile-web-pr21-bounded-20260909-v1
+DISCOVERY_RUN_ID=3951cae0-3c45-4d81-ab41-38a37edf0614
+LIVE_RUN_ATTEMPTS=1
+LIVE_RUN_RESULT=SUCCESS
+RUN_STATUS=completed
+generated=36
+executable=34
+selected=12
+executed=5
+search_results_considered=12
+telegram_like_candidates=10
+unique_candidates=6
+known_candidates=5
+new_candidates=1
+candidate_queue_high=5
+candidate_queue_medium=0
+candidate_queue_low=1
+provider_outcome=SEARCH_BACKEND_DEGRADED
+provider_state=BACKOFF
+backend_failures=1
+backend_failure_classes_captcha=1
+```
+
+Attempt evidence:
+
+```text
+attempt1 direct success results=3
+attempt2 buyer_habitat success results=3
+attempt3 adjacent success results=3
+attempt4 direct success results=3
+attempt5 buyer_habitat failed captcha results=0 provider_state_after=BACKOFF
+SECOND_RUN_EXECUTED=NO
+```
+
+Stage A production shape before execution was:
+
+```text
+generated=36
+near_duplicates=2
+executable=34
+selected=12
+selected_direct=4
+selected_buyer_habitat=4
+selected_adjacent=4
+```
+
+The run validates the one-shot bound contract. It does not authorize persistent
+discovery, a second run, Telegram candidate validation or candidate
+notifications.
+
+### SearXNG Web backend state
+
+Current production SearXNG topology:
+
+```text
+endpoint=http://127.0.0.1:8888
+container=freelancer-lead-bot-searxng-1
+image=searxng/searxng@sha256:892cf809341915a4b7710d3c9045005b4c377d51335a089b6d4da0b28750788d
+host_settings=config/searxng/settings.yml
+container_settings=/etc/searxng/settings.yml
+settings_mount=read-only
+working_dir=/usr/local/searxng
+entrypoint=["/usr/local/searxng/entrypoint.sh"]
+pid1_exe=/usr/bin/python3.14
+pid1_cmdline=searxng
+runtime_interpreter=/usr/local/searxng/.venv/bin/python3
+settings_loader=/usr/local/searxng/searx/settings_loader.py
+DEFAULT_SETTINGS_FILE=/usr/local/searxng/searx/settings.yml
+```
+
+Before this config PR, repository settings used `use_default_settings: true`
+with no local engine removals. Effective defaults therefore inherited the exact
+general engines `brave`, `duckduckgo` and `startpage`, and those exact names
+were present in persisted `unresponsive_engines` evidence. Removing those exact
+general engine names from inherited defaults is implementation-pending-review;
+production activation requires later merge, sync and SearXNG recreate/restart
+evidence.
 
 ### Bot and owner-only access
 
@@ -745,24 +845,22 @@ continuing. Historical values are invalid and must not be reused.
 ## What remains
 
 The ingestion/shadow, bounded OpenRouter Opportunity Analysis, PR13 matching,
-PR15 production shadow instrumentation, and PR15 live shadow validation gates
-are complete.
+PR15 production shadow instrumentation, PR17 reliability repair, and PR21
+one-shot Web Discovery bound gates are complete.
 
 Remaining ordered work:
 
-1. obtain separate Owner authorization for a repeat bounded Owner Delivery
-   Canary on production head `e3d2628bc3511a3b61c65378e633d752107d4cd4`
-   and Alembic `20260905_0040`;
-2. use that canary to validate the corrected OA retry/telemetry behavior and
-   prove a real fresh owner-only sent delivery if a relevant natural lead arrives;
-3. continue separate bounded WEB_ONLY candidate discovery during development
-   when useful, explicitly bounding profile Web query execution with
-   `--max-queries 12` for the next rollout, without auto-approval, joining,
-   Source Audit or Telegram discovery;
-4. separately authorize and run the bounded Owner candidate notification
-   one-shot if manual review of fresh candidate channels is desired;
-5. evaluate accumulated matching/shadow evidence before any threshold or policy
-   changes;
+1. independent review of the SearXNG exact-engine removal and documentation PR;
+2. Owner-authorized merge of the reviewed PR;
+3. separately authorize production sync of the exact reviewed merge;
+4. verify `config/searxng/settings.yml` arrives in the production checkout;
+5. separately authorize SearXNG container recreate/restart to consume the
+   read-only mounted settings file;
+6. read-only verify effective settings no longer contain the exact engines
+   `brave`, `duckduckgo` or `startpage`;
+7. separately authorize one new bounded Web-only canary and evaluate provider
+   stability plus candidate quality before any Telegram validation or Owner
+   notification pass;
 
 Repository head note: source/channel language pools are modeled separately from
 opportunity content languages. The migration keeps existing source rows
@@ -773,10 +871,10 @@ legacy routing until saved. Telegram source-language callbacks carry the
 profile revision that rendered them; stale open/toggle callbacks discard their
 encoded selection mask and refresh the persisted state, while stale save
 callbacks remain blocked by `expected_revision`.
-6. evaluate provider/model strict-schema capability later as a separate gate;
-7. separately review candidate promotion/joining and broader discovery/audit
+8. evaluate provider/model strict-schema capability later as a separate gate;
+9. separately review candidate promotion/joining and broader discovery/audit
    rollout;
-8. authorize persistent runtime only after bounded end-to-end Owner MVP
+10. authorize persistent runtime only after bounded end-to-end Owner MVP
    validation and operational safeguards are complete.
 
 The authoritative order is in `docs/ACTIVE_PLAN.md`.

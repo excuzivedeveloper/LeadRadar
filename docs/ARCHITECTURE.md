@@ -1,8 +1,8 @@
 # LeadRadar — Current Architecture
 
 **Status:** CANONICAL  
-**Last verified:** 2026-08-31
-**Implementation baseline:** `359dc17fbf4632e84b0a74f01ac201a426cf4556`
+**Last verified:** 2026-09-09
+**Implementation baseline:** `031e489a21fc53de7b1ddacc107ae57aa6d46f98`
 
 ## Purpose
 
@@ -111,22 +111,11 @@ PostgreSQL is V2 source of truth for collector/source state, raw messages,
 prefilter/shadow evidence, durable jobs, AI telemetry/cache, Opportunities,
 SearchProfiles, matching, deliveries, feedback and entitlement state.
 
-Alembic is the V2 schema path. The current production deployment remains at:
+Alembic is the V2 schema path. The current production deployment is at:
 
 ```text
-PRODUCTION_ALEMBIC_CURRENT=20260902_0038
+PRODUCTION_ALEMBIC_CURRENT=20260908_0042
 ```
-
-PR #15 introduces the next repository migration head:
-
-```text
-PR15_REPOSITORY_ALEMBIC_HEAD=20260904_0039
-```
-
-PR #15 is not yet merged or deployed. Before any bounded runtime shadow canary,
-production must first sync the reviewed PR #15 code, apply Alembic
-`20260904_0039`, and verify
-`ALEMBIC_CURRENT=ALEMBIC_HEADS=20260904_0039`.
 
 SQLite remains legacy compatibility only. `LEGACY_DELIVERY_ENABLED=false` in the
 current deployment.
@@ -594,6 +583,19 @@ payloads expose these as separate top-level `executable_query_count`,
 counts. Idempotent run reuse reports the persisted execution observability from
 the original discovery run, so operator payloads do not substitute constructor
 counters from a provider that was not re-executed.
+
+The PR21 production run completed one bounded Web-only pass and stopped after
+5 of 12 selected queries because SearXNG entered provider backoff after captcha
+evidence. Backoff evidence is diagnostic state, not permission to immediately
+retry or run a second canary.
+
+The local SearXNG settings file is mounted read-only into the SearXNG container.
+`use_default_settings: true` inherits upstream default engines; the exact
+general engine names `brave`, `duckduckgo` and `startpage` are distinct from
+variants such as `brave.images`, `brave.videos`, `brave.news` and
+`duckduckgo images`. Repository-side engine removals must therefore target exact
+engine names and require a later production sync plus SearXNG recreate/restart
+before they are runtime-active.
 
 ## Persistent runtime
 

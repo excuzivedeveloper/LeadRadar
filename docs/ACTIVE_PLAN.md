@@ -1,8 +1,8 @@
 # LeadRadar — Active Plan
 
 **Status:** CANONICAL / ACTIVE  
-**Last verified:** 2026-09-05
-**Implementation baseline:** `e3d2628bc3511a3b61c65378e633d752107d4cd4`
+**Last verified:** 2026-09-09
+**Implementation baseline:** `031e489a21fc53de7b1ddacc107ae57aa6d46f98`
 
 This file defines execution order. A later capability being implemented in code
 does not mean it may be enabled before earlier gates pass.
@@ -28,6 +28,9 @@ BOUNDED_WEB_ONLY_OWNER_PROFILE_SOURCE_DISCOVERY
 PR15_REVIEW_MERGE_AND_PRODUCTION_SYNC
 PR15_ALEMBIC_20260904_0039
 PR15_BOUNDED_RUNTIME_SHADOW_CANARY
+PR17_OPENROUTER_RELIABILITY_FIX
+PR21_PROFILE_DISCOVERY_MAX_QUERIES_BOUND
+PR21_PRODUCTION_SYNC_AND_BOUNDED_WEB_ONLY_CANARY
 ```
 
 The collector membership hypothesis is now experimentally confirmed:
@@ -67,8 +70,8 @@ PR14_PRODUCTION_MATCH_POLICY_CHANGED=NO
 PR15_MERGED=YES
 PR15_PRODUCTION_SYNCED=YES
 PR15_MIGRATION_APPLIED_PRODUCTION=YES
-ALEMBIC_CURRENT=20260905_0040
-ALEMBIC_HEADS=20260905_0040
+ALEMBIC_CURRENT=20260908_0042
+ALEMBIC_HEADS=20260908_0042
 SHADOW_RUNTIME_WIRED=YES
 SHADOW_DURABLE_PERSISTENCE=YES
 SHADOW_LIVE_VALIDATED=YES
@@ -101,30 +104,43 @@ PR17_ALEMBIC=20260905_0040
 PR17_PRODUCTION_SYNC_VERIFIED=YES
 PR17_PRODUCTION_SYNC_EVIDENCE_SHA256=0f868835279da07a9b45624facc7a0c24163828481dda7a875b5f57594548b5c
 PR17_RUNTIME_STOPPED=YES
+PR21_MERGED=YES
+PR21_PRODUCTION_SYNCED=YES
+PR21_PRODUCTION_BASELINE=031e489a21fc53de7b1ddacc107ae57aa6d46f98
+PR21_ALEMBIC=20260908_0042
+PR21_STAGE_A=PASS
+PR21_BOUNDED_WEB_ONLY_RUN=COMPLETED
+PR21_BOUND_CONTRACT=PASS
+PR21_PROVIDER_OUTCOME=SEARCH_BACKEND_DEGRADED
+PR21_PROVIDER_STATE=BACKOFF
+SEARXNG_ENGINE_FILTER_CHANGE=IMPLEMENTATION_PENDING_REVIEW
 OA_PROVIDER_ROUTE_SWITCH_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
+SECOND_BOUNDED_WEB_RUN_AUTHORIZED=NO
+TELEGRAM_CANDIDATE_VALIDATION_AUTHORIZED=NO
 READY_FOR_PERSISTENT_RUNTIME=NO
 ```
 
 Current gate:
 
 ```text
-OWNER_AUTHORIZATION_FOR_REPEAT_BOUNDED_OWNER_DELIVERY_CANARY
+INDEPENDENT_REVIEW_OF_SEARXNG_ENGINE_FILTER_AND_DOC_SYNC
 ```
 
 Required execution sequence:
 
 ```text
-1. obtain separate Owner authorization for a repeat bounded Owner Delivery Canary
-2. reverify production head e3d2628bc3511a3b61c65378e633d752107d4cd4 and Alembic 20260905_0040
-3. keep discovery/catch-up/AI reply/fallback disabled
-4. keep provider/model route unchanged for the first post-PR17 canary
-5. allow only owner-recipient delivery within the bounded canary authorization
-6. prove runtime stopped after the bounded window
-7. inspect body-free OA/matching/delivery evidence and durable retry telemetry
-8. publish exact evidence separately before final verdict
-9. continue bounded WEB_ONLY candidate discovery separately when useful
-10. keep persistent runtime unauthorized
+1. independent REVIEWER verifies this config+docs PR
+2. Owner authorizes merge
+3. merge reviewed PR
+4. separately authorize production sync of the exact reviewed merge
+5. verify config/searxng/settings.yml arrives on production checkout
+6. separately authorize SearXNG container recreate/restart required to consume mounted settings
+7. read-only verify effective settings no longer contain exact names brave, duckduckgo or startpage
+8. separately authorize one new bounded Web-only canary
+9. evaluate provider stability and candidate quality
+10. only then decide Telegram freshness validation / candidate notifications
+11. persistent source discovery remains unauthorized
 ```
 
 ## Step 0 — Pre-AI ingestion/shadow validation
@@ -598,6 +614,47 @@ discovery, and persistent discovery each remain separate reviewed/authorized
 gates.
 
 Do not combine a bounded discovery pass with a delivery, AI, or matching canary.
+
+PR21 production evidence on 2026-09-09:
+
+```text
+RUN_KEY=owner-profile-web-pr21-bounded-20260909-v1
+DISCOVERY_RUN_ID=3951cae0-3c45-4d81-ab41-38a37edf0614
+LIVE_RUN_ATTEMPTS=1
+LIVE_RUN_RESULT=SUCCESS
+RUN_STATUS=completed
+generated=36
+executable=34
+selected=12
+executed=5
+search_results_considered=12
+telegram_like_candidates=10
+unique_candidates=6
+known_candidates=5
+new_candidates=1
+candidate_queue=high:5 medium:0 low:1
+provider_outcome=SEARCH_BACKEND_DEGRADED
+provider_state=BACKOFF
+backend_failures=1
+backend_failure_classes=captcha:1
+```
+
+Attempt sequence:
+
+```text
+attempt1 direct success results=3
+attempt2 buyer_habitat success results=3
+attempt3 adjacent success results=3
+attempt4 direct success results=3
+attempt5 buyer_habitat failed captcha results=0 provider_state_after=BACKOFF
+SECOND_RUN_EXECUTED=NO
+```
+
+The next narrow repair is repository config only: remove the exact inherited
+SearXNG default engines `brave`, `duckduckgo` and `startpage`. Do not remove
+engine variants, change query strategy, change matching, enable persistent
+runtime, execute a second run, probe Telegram candidates, notify the Owner, or
+claim production activation before later merge/sync/restart evidence.
 
 ## Step 7A — Owner candidate notification one-shot
 
