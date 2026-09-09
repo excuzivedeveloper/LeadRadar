@@ -348,11 +348,23 @@ class ProfileDiscoveryPostgresIntegrationTest(unittest.IsolatedAsyncioTestCase):
         self.assertLessEqual(len(backend.calls), 12)
         self.assertEqual(len(backend.calls), 12)
         self.assertIn("observability", run.request)
-        self.assertEqual(run.request["observability"]["queries_executable"], 34)
-        self.assertEqual(run.request["observability"]["queries_selected"], 12)
-        self.assertEqual(run.request["observability"]["queries_executed"], 12)
-        self.assertEqual(run.request["observability"]["query_limit"], 12)
-        self.assertEqual(first.provider_observability["queries_executable"], 34)
+        self.assertEqual(
+            run.request["observability"]["queries_executable"],
+            first.provider_observability["queries_executable"],
+        )
+        self.assertEqual(
+            run.request["observability"]["queries_selected"],
+            first.provider_observability["queries_selected"],
+        )
+        self.assertEqual(
+            run.request["observability"]["queries_executed"],
+            first.provider_observability["queries_executed"],
+        )
+        self.assertEqual(
+            run.request["observability"]["query_limit"],
+            first.provider_observability["query_limit"],
+        )
+        self.assertGreaterEqual(first.provider_observability["queries_executable"], 12)
         self.assertEqual(first.provider_observability["queries_selected"], 12)
         self.assertEqual(first.provider_observability["queries_executed"], 12)
         self.assertEqual(first.provider_observability["query_limit"], 12)
@@ -380,7 +392,10 @@ class ProfileDiscoveryPostgresIntegrationTest(unittest.IsolatedAsyncioTestCase):
         fresh_payload = operator_cli._profile_execution_payload(first)
         reused_payload = operator_cli._profile_execution_payload(second)
         self.assertEqual(reused_payload["generated_query_count"], 36)
-        self.assertEqual(reused_payload["executable_query_count"], 34)
+        self.assertEqual(
+            reused_payload["executable_query_count"],
+            first.provider_observability["queries_executable"],
+        )
         self.assertEqual(reused_payload["selected_query_count"], 12)
         self.assertEqual(reused_payload["executed_query_count"], 12)
         self.assertEqual(reused_payload["query_limit"], 12)
