@@ -111,6 +111,8 @@ Before any live run, verify the command contract with:
   profile-discovery run --help
 ```
 
+For one-attempt canaries, also validate the exact future argv through the parser without dispatch before Owner authorization. Parser acceptance proves only the argparse contract; profile state, run-key freshness, provider health and other operational conditions remain separate checks.
+
 ## 5. Operator CLI command catalog
 
 The following command families exist in `freelancer_bot.operator_cli`. Presence does not imply production authorization.
@@ -339,7 +341,28 @@ Vaultwarden unchanged
 required safety flags unchanged
 ```
 
-Read-only evidence does not authorize repair.
+For a bounded profile Web canary, PRELIVE must additionally verify:
+
+```text
+exact operator CLI --help
+parser-only acceptance of the exact future argv without dispatch
+profile exists, active, confirmed and at the expected revision
+fresh run key absent from persisted discovery runs
+baseline counters captured
+effective persisted Web provider health is not blocking
+```
+
+Provider-health gating must follow the same semantics as `WebDiscoveryGovernor.restore()`:
+
+```text
+UNAVAILABLE -> BLOCK
+BACKOFF with backoff_until > now -> BLOCK
+BACKOFF with backoff_until <= now -> not a blocker; effective state becomes DEGRADED
+DEGRADED -> not a blocker by itself
+READY -> PASS
+```
+
+Read-only evidence does not authorize repair or the live invocation itself.
 
 ## 10. Run-key and one-attempt rules
 
@@ -404,23 +427,34 @@ PR24_PRODUCTION_SYNCED=YES
 PR24_POST_SYNC_VERIFICATION=PASS
 PR24_STAGE_A_OFFLINE=PASS
 PR24_LIVE_YIELD_IMPROVEMENT_PROVEN=NO
+PR25_REVIEWED=PASS
+PR25_MERGED=YES
+PR25_PRODUCTION_DOCS_SYNC=DEFERRED
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 TELEGRAM_CANDIDATE_VALIDATION_AUTHORIZED=NO
+NEW_PR24_WEB_CANARY_AUTHORIZED=NO
 ```
+
+PR25 is docs-only. Its production docs sync is intentionally deferred and should be combined with the next meaningful production update; no separate docs-only server sync is required now.
 
 The first attempted PR24 live canary did not reach Web Discovery because the wrong CLI namespace was invoked. That attempt is not evidence about SearXNG/provider quality or PR24 candidate yield.
 
 Before another live PR24 canary:
 
 ```text
-1. merge/review this canonical operations documentation;
-2. derive the exact command from this document and the current operator CLI;
-3. use a fresh run key;
-4. obtain a fresh Owner authorization;
-5. execute one bounded Web-only invocation;
-6. compare non-direct yield and candidate novelty against the PR23 baseline;
-7. only then decide whether Telegram validation is justified.
+1. run a separate read-only PRELIVE at the exact production HEAD;
+2. verify production continuity, exact operator CLI --help and parser-only exact future argv;
+3. verify profile active/confirmed/revision=8 and fresh run key absence;
+4. verify effective persisted provider health using runtime backoff semantics;
+5. capture baseline counters;
+6. only if PRELIVE=PASS, obtain a fresh Owner authorization;
+7. execute exactly one bounded Web-only invocation with the fresh run key;
+8. do not retry under the same authorization;
+9. compare non-direct yield and candidate novelty against the PR23 baseline;
+10. only then decide whether Telegram validation is justified.
 ```
+
+The separate PRELIVE task must not issue the live discovery invocation. Telegram, AI, persistent runtime, restart/recreate and repair remain outside that gate.
 
 ## 14. Documentation precedence for operations
 
