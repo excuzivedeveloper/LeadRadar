@@ -37,6 +37,11 @@ from freelancer_bot.web_provider_chain import (
     build_web_search_backends,
     web_discovery_readiness,
 )
+from freelancer_bot.profile_discovery import (
+    build_evaluation_intent,
+    evaluation_profile_specs,
+    web_strategy_for_intent,
+)
 from pydantic import SecretStr
 
 
@@ -93,6 +98,166 @@ class WebDiscoveryStrategyTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(all(query.buyer_intent_seeds for query in buyer_queries))
         self.assertTrue(all("site:t.me" in query.text for query in queries))
         self.assertTrue(all('"Europe"' in query.text for query in queries))
+
+    def test_direct_queries_keep_precise_site_restricted_shape(self):
+        strategy = WebDiscoveryStrategy(
+            topics=(
+                WebDiscoveryTopic("profession", "Python developer", "en", "direct"),
+            ),
+            buyer_intent_seeds=(BuyerIntentSeed("need a contractor", "en"),),
+        )
+
+        queries = strategy.build_queries(
+            DiscoveryRequest(parameters={}, requested_at=NOW)
+        )
+
+        self.assertEqual(
+            queries[0].text,
+            'site:t.me "Python developer" '
+            "(community OR chat OR group OR сообщество OR чат)",
+        )
+        self.assertEqual(
+            queries[1].text,
+            'site:t.me "Python developer" ("need a contractor")',
+        )
+        self.assertTrue(all(query.text.startswith("site:t.me ") for query in queries))
+        self.assertEqual({query.angle for query in queries}, {"direct"})
+
+    def test_unknown_angle_fallback_keeps_community_context_non_duplicative(self):
+        strategy = WebDiscoveryStrategy(
+            topics=(
+                WebDiscoveryTopic(
+                    "profession",
+                    "Python developer",
+                    "en",
+                    "experimental",
+                ),
+            ),
+            buyer_intent_seeds=(BuyerIntentSeed("need a contractor", "en"),),
+        )
+
+        community, buyer_intent = strategy.build_queries(
+            DiscoveryRequest(parameters={}, requested_at=NOW)
+        )
+
+        community_expression = "(community OR chat OR group OR сообщество OR чат)"
+        self.assertTrue(community.text.startswith("site:t.me "))
+        self.assertTrue(buyer_intent.text.startswith("site:t.me "))
+        self.assertIn('"Python developer"', community.text)
+        self.assertIn('"Python developer"', buyer_intent.text)
+        self.assertEqual(community.text.count(community_expression), 1)
+        self.assertNotIn(
+            f"{community_expression} {community_expression}",
+            community.text,
+        )
+        self.assertIn("need a contractor", buyer_intent.text)
+        self.assertNotIn(community_expression, buyer_intent.text)
+        self.assertEqual(
+            {query.angle for query in (community, buyer_intent)},
+            {"experimental"},
+        )
+
+    def test_buyer_habitat_queries_use_core_concept_not_full_synthetic_phrase(self):
+        strategy = WebDiscoveryStrategy(
+            topics=(
+                WebDiscoveryTopic(
+                    "profession",
+                    "Python developer hiring communities",
+                    "en",
+                    "buyer_habitat",
+                ),
+            ),
+            buyer_intent_seeds=(BuyerIntentSeed("need a contractor", "en"),),
+        )
+
+        community, buyer_intent = strategy.build_queries(
+            DiscoveryRequest(parameters={}, requested_at=NOW)
+        )
+
+        for query in (community, buyer_intent):
+            self.assertTrue(query.text.startswith("site:t.me "))
+            self.assertIn('"Python developer"', query.text)
+            self.assertNotIn('"Python developer hiring communities"', query.text)
+            self.assertIn("hiring", query.text)
+        self.assertIn("community", community.text)
+        self.assertIn("need a contractor", buyer_intent.text)
+
+    def test_adjacent_queries_use_core_concept_plus_adjacent_signal(self):
+        strategy = WebDiscoveryStrategy(
+            topics=(
+                WebDiscoveryTopic(
+                    "profession",
+                    "Python developer hiring",
+                    "en",
+                    "adjacent",
+                ),
+            ),
+            buyer_intent_seeds=(BuyerIntentSeed("recommend a provider", "en"),),
+        )
+
+        community, buyer_intent = strategy.build_queries(
+            DiscoveryRequest(parameters={}, requested_at=NOW)
+        )
+
+        for query in (community, buyer_intent):
+            self.assertTrue(query.text.startswith("site:t.me "))
+            self.assertIn('"Python developer"', query.text)
+            self.assertNotIn('"Python developer hiring"', query.text)
+            self.assertIn("hiring", query.text)
+        self.assertIn("jobs", community.text)
+        self.assertIn("recommend a provider", buyer_intent.text)
+
+    def test_ru_non_direct_queries_include_russian_context_terms(self):
+        strategy = WebDiscoveryStrategy(
+            topics=(
+                WebDiscoveryTopic(
+                    "profession",
+                    "Python developer hiring communities",
+                    "ru",
+                    "buyer_habitat",
+                ),
+            ),
+            buyer_intent_seeds=(BuyerIntentSeed("нужен подрядчик", "ru"),),
+        )
+
+        community, buyer_intent = strategy.build_queries(
+            DiscoveryRequest(parameters={}, requested_at=NOW)
+        )
+
+        for query in (community, buyer_intent):
+            self.assertIn("site:t.me", query.text)
+            self.assertIn('"Python developer"', query.text)
+            self.assertNotIn('"Python developer hiring communities"', query.text)
+            self.assertIn("сообщество", query.text)
+            self.assertIn("найм", query.text)
+        self.assertIn("нужен подрядчик", buyer_intent.text)
+
+    def test_representative_profile_queries_are_angle_specific_and_bounded(self):
+        intent = build_evaluation_intent(evaluation_profile_specs()[0])
+        queries = web_strategy_for_intent(intent).build_queries(
+            DiscoveryRequest(parameters={}, requested_at=NOW)
+        )
+        collapsed = collapse_near_duplicate_queries(queries)
+        selected = select_bounded_web_queries(collapsed.queries, max_queries=12)
+
+        direct = next(query for query in queries if query.angle == "direct")
+        buyer = next(query for query in queries if query.angle == "buyer_habitat")
+        adjacent = next(query for query in queries if query.angle == "adjacent")
+
+        self.assertIn('"Python developer"', direct.text)
+        self.assertIn("(community OR chat OR group", direct.text)
+        self.assertIn('"Python developer"', buyer.text)
+        self.assertNotIn('"Python developer hiring communities"', buyer.text)
+        self.assertIn("recommendations", buyer.text)
+        self.assertIn('"Python developer"', adjacent.text)
+        self.assertNotIn('"Python developer hiring"', adjacent.text)
+        self.assertIn("hiring", adjacent.text)
+        self.assertEqual(len(queries), 36)
+        self.assertEqual(len(collapsed.queries), 34)
+        self.assertEqual(len(selected), 12)
+        self.assertEqual(sum(query.angle == "direct" for query in selected), 4)
+        self.assertEqual(sum(query.angle == "buyer_habitat" for query in selected), 4)
+        self.assertEqual(sum(query.angle == "adjacent" for query in selected), 4)
 
     async def test_provider_normalizes_deduplicates_and_keeps_query_provenance(self):
         backend = RecordingSearchBackend(
@@ -372,10 +537,10 @@ class WebDiscoveryGovernorTest(unittest.IsolatedAsyncioTestCase):
         second = WebDiscoveryProvider(backend, strategy=strategy, governor=governor)
         await second.discover(DiscoveryRequest(parameters={}, requested_at=NOW))
 
-        self.assertEqual(len(backend.calls), 2)
+        self.assertEqual(len(backend.calls), 4)
         self.assertEqual(first.observability["queries_deduplicated"], 0)
         self.assertEqual(first.observability["queries_executable"], 4)
-        self.assertEqual(first.observability["queries_reused"], 2)
+        self.assertEqual(first.observability["queries_reused"], 0)
         self.assertEqual(second.observability["queries_reused"], 4)
         self.assertEqual(governor.health.state, WebProviderState.READY)
 
