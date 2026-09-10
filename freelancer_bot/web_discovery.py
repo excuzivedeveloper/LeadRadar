@@ -144,10 +144,7 @@ class WebDiscoveryStrategy:
 
         for topic in self.topics:
             suffix = f' "{location}"' if location else ""
-            community_text = (
-                f'site:t.me "{topic.phrase}" '
-                f'(community OR chat OR group OR сообщество OR чат){suffix}'
-            )
+            community_text = _community_query_text(topic, suffix)
             queries.append(
                 WebDiscoveryQuery(
                     kind=WebDiscoveryQueryKind.COMMUNITY,
@@ -169,9 +166,7 @@ class WebDiscoveryStrategy:
                     category=topic.category,
                     language=topic.language,
                     topic=topic.phrase,
-                    text=(
-                        f'site:t.me "{topic.phrase}" ({seed_expression}){suffix}'
-                    ),
+                    text=_buyer_intent_query_text(topic, seed_expression, suffix),
                     buyer_intent_seeds=seeds,
                     angle=topic.angle,
                 )
@@ -190,6 +185,173 @@ class WebQueryCollapseResult:
 
 
 _DISCOVERY_ANGLE_PRIORITY = ("direct", "buyer_habitat", "adjacent")
+
+_COMMUNITY_CONTEXT_BY_LANGUAGE = MappingProxyType(
+    {
+        "default": "(community OR chat OR group OR сообщество OR чат)",
+        "en": "(community OR chat OR group OR сообщество OR чат)",
+        "ru": "(сообщество OR чат OR группа OR канал OR community OR chat OR group)",
+    }
+)
+
+_BUYER_HABITAT_SUFFIXES: tuple[tuple[str, Mapping[str, str]], ...] = (
+    (
+        "hiring communities",
+        MappingProxyType(
+            {
+                "en": "(hiring OR recruiting OR recommendations OR community)",
+                "ru": "(найм OR вакансии OR рекомендации OR сообщество)",
+            }
+        ),
+    ),
+    (
+        "operator communities",
+        MappingProxyType(
+            {
+                "en": "(operators OR founders OR implementation OR community)",
+                "ru": "(операторы OR основатели OR внедрение OR сообщество)",
+            }
+        ),
+    ),
+    (
+        "buyer discussions",
+        MappingProxyType(
+            {
+                "en": "(buyers OR clients OR recommendations OR discussions)",
+                "ru": "(заказчики OR клиенты OR рекомендации OR обсуждения)",
+            }
+        ),
+    ),
+    (
+        "communities",
+        MappingProxyType(
+            {
+                "en": "(buyers OR operators OR recommendations OR community)",
+                "ru": "(заказчики OR операторы OR рекомендации OR сообщество)",
+            }
+        ),
+    ),
+    (
+        "discussions",
+        MappingProxyType(
+            {
+                "en": "(buyers OR clients OR recommendations OR discussions)",
+                "ru": "(заказчики OR клиенты OR рекомендации OR обсуждения)",
+            }
+        ),
+    ),
+)
+
+_ADJACENT_SUFFIXES: tuple[tuple[str, Mapping[str, str]], ...] = (
+    (
+        "hiring",
+        MappingProxyType(
+            {
+                "en": "(hiring OR recruiting OR jobs)",
+                "ru": "(найм OR вакансии OR ищут)",
+            }
+        ),
+    ),
+    (
+        "agency",
+        MappingProxyType(
+            {
+                "en": "(agency OR studio OR contractor)",
+                "ru": "(агентство OR студия OR подрядчик)",
+            }
+        ),
+    ),
+    (
+        "implementation",
+        MappingProxyType(
+            {
+                "en": "(implementation OR integration OR setup)",
+                "ru": "(внедрение OR интеграция OR настройка)",
+            }
+        ),
+    ),
+)
+
+
+def _community_query_text(topic: WebDiscoveryTopic, suffix: str) -> str:
+    if topic.angle == "direct":
+        return (
+            f'site:t.me "{topic.phrase}" '
+            f"(community OR chat OR group OR сообщество OR чат){suffix}"
+        )
+    core, context = _rendered_topic(topic)
+    return (
+        f'site:t.me "{core}" '
+        f"{_community_expression(topic.language)} {context}{suffix}"
+    )
+
+
+def _buyer_intent_query_text(
+    topic: WebDiscoveryTopic,
+    seed_expression: str,
+    suffix: str,
+) -> str:
+    if topic.angle == "direct":
+        return f'site:t.me "{topic.phrase}" ({seed_expression}){suffix}'
+    core, context = _rendered_topic(topic)
+    return f'site:t.me "{core}" ({seed_expression}) {context}{suffix}'
+
+
+def _community_expression(language: str) -> str:
+    return _COMMUNITY_CONTEXT_BY_LANGUAGE.get(
+        language.casefold(),
+        _COMMUNITY_CONTEXT_BY_LANGUAGE["default"],
+    )
+
+
+def _rendered_topic(topic: WebDiscoveryTopic) -> tuple[str, str]:
+    if topic.angle == "buyer_habitat":
+        return _split_synthetic_topic(
+            topic.phrase,
+            topic.language,
+            _BUYER_HABITAT_SUFFIXES,
+            default_context=MappingProxyType(
+                {
+                    "en": "(buyers OR operators OR recommendations)",
+                    "ru": "(заказчики OR операторы OR рекомендации)",
+                }
+            ),
+        )
+    if topic.angle == "adjacent":
+        return _split_synthetic_topic(
+            topic.phrase,
+            topic.language,
+            _ADJACENT_SUFFIXES,
+            default_context=MappingProxyType(
+                {
+                    "en": "(hiring OR agency OR implementation)",
+                    "ru": "(найм OR агентство OR внедрение)",
+                }
+            ),
+        )
+    return topic.phrase, _community_expression(topic.language)
+
+
+def _split_synthetic_topic(
+    phrase: str,
+    language: str,
+    suffixes: Sequence[tuple[str, Mapping[str, str]]],
+    *,
+    default_context: Mapping[str, str],
+) -> tuple[str, str]:
+    normalized = re.sub(r"\s+", " ", phrase).strip()
+    lowered = normalized.casefold()
+    for suffix, contexts in suffixes:
+        marker = f" {suffix}"
+        if lowered.endswith(marker):
+            core = normalized[: -len(marker)].strip()
+            if core:
+                return core, _localized_context(contexts, language)
+    return normalized, _localized_context(default_context, language)
+
+
+def _localized_context(contexts: Mapping[str, str], language: str) -> str:
+    return contexts.get(language.casefold(), contexts.get("en", next(iter(contexts.values()))))
 
 
 def select_bounded_web_queries(

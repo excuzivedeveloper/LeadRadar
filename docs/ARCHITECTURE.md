@@ -584,6 +584,17 @@ counts. Idempotent run reuse reports the persisted execution observability from
 the original discovery run, so operator payloads do not substitute constructor
 counters from a provider that was not re-executed.
 
+Profile-driven Web Discovery keeps the bounded/discrete angle model, but query
+rendering is angle-aware. `direct` queries remain the high-precision baseline:
+they search `site:t.me` with the core topic quoted and community/buyer-intent
+families preserved. `buyer_habitat` and `adjacent` queries do not require
+synthetic generated phrases such as `<role> hiring communities` or
+`<term> implementation` as one exact quoted string. They render the core concept
+as the quoted anchor plus language-aware buyer/community or adjacent context
+terms. This improves non-direct recall without changing `max_queries`,
+selection balance, provider pacing/backoff, candidate deduplication, lifecycle
+state, Telegram validation separation, matching, or owner notification behavior.
+
 The PR21 production run completed one bounded Web-only pass and stopped after
 5 of 12 selected queries because SearXNG entered provider backoff after captcha
 evidence. Backoff evidence is diagnostic state, not permission to immediately

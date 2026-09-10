@@ -672,10 +672,19 @@ The current narrow hotfix remains repository config only: use
 `use_default_settings: true` plus exact local `disabled: true` overrides for
 `brave`, `duckduckgo` and `startpage`. This preserves shared network definitions
 while excluding those engines from normal default selection. Do not add
-`inactive: true`, remove engine variants, change query strategy, change
-matching, enable persistent runtime, execute a second run, probe Telegram
-candidates, notify the Owner, or claim production recovery before later
-review/merge/sync/recreate evidence.
+`inactive: true`, remove engine variants, change matching, enable persistent
+runtime, execute a second run, probe Telegram candidates, notify the Owner, or
+claim production recovery before later review/merge/sync/recreate evidence.
+
+PR24 is a separate offline query-rendering improvement for profile-driven Web
+Discovery after the SearXNG infrastructure path is healthy. It keeps the
+bounded selector contract, run-key idempotency, provider pacing/backoff,
+candidate deduplication, source lifecycle, Telegram validation separation,
+matching policy, and owner notification behavior unchanged. The intended change
+is narrow: preserve `direct` as the quoted high-precision baseline, while
+rendering `buyer_habitat` and `adjacent` queries as quoted core concepts plus
+language-aware buyer/community or adjacent context instead of requiring synthetic
+non-direct phrases as one exact quoted string.
 
 ## Step 7A — Owner candidate notification one-shot
 
