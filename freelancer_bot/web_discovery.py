@@ -280,6 +280,8 @@ def _community_query_text(topic: WebDiscoveryTopic, suffix: str) -> str:
             f"(community OR chat OR group OR сообщество OR чат){suffix}"
         )
     core, context = _rendered_topic(topic)
+    if not context:
+        return f'site:t.me "{core}" {_community_expression(topic.language)}{suffix}'
     return (
         f'site:t.me "{core}" '
         f"{_community_expression(topic.language)} {context}{suffix}"
@@ -294,6 +296,8 @@ def _buyer_intent_query_text(
     if topic.angle == "direct":
         return f'site:t.me "{topic.phrase}" ({seed_expression}){suffix}'
     core, context = _rendered_topic(topic)
+    if not context:
+        return f'site:t.me "{core}" ({seed_expression}){suffix}'
     return f'site:t.me "{core}" ({seed_expression}) {context}{suffix}'
 
 
@@ -329,7 +333,7 @@ def _rendered_topic(topic: WebDiscoveryTopic) -> tuple[str, str]:
                 }
             ),
         )
-    return topic.phrase, _community_expression(topic.language)
+    return re.sub(r"\s+", " ", topic.phrase).strip(), ""
 
 
 def _split_synthetic_topic(

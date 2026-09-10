@@ -1,8 +1,8 @@
 # LeadRadar — Active Plan
 
 **Status:** CANONICAL / ACTIVE  
-**Last verified:** 2026-09-09
-**Implementation baseline:** `aab68eb64a2ee29e7c90cae2cbba8a8a31f07f23`
+**Last verified:** 2026-09-10
+**Implementation baseline:** `049b41e0dd49c59ec899abd0598a04793163edb2`
 
 This file defines execution order. A later capability being implemented in code
 does not mean it may be enabled before earlier gates pass.
@@ -116,16 +116,58 @@ PR21_PROVIDER_STATE=BACKOFF
 PR22_SEARXNG_REMOVE_CONFIG_MERGED=YES
 PR22_PRODUCTION_SYNCED=YES
 SEARXNG_PORT_RUNTIME_CORRECTED_SEPARATELY=YES
-SEARXNG_PRODUCTION_STATE=DOWN_RECOVERY_REQUIRED
 SEARXNG_REMOVE_CONFIG_STARTUP_FAILURE=YES
-SEARXNG_DISABLED_OVERRIDE_HOTFIX=IMPLEMENTATION_PENDING_REVIEW
-EXACT_PINNED_IMAGE_INIT_VALIDATION=REQUIRED_PRE_MERGE
-READY_FOR_OWNER_MERGE_AUTHORIZATION=NO
 VAULTWARDEN_UNCHANGED_HEALTHY=YES
+PR23_MERGED=YES
+PR23_PRODUCTION_SYNCED=YES
+PR23_SEARXNG_PRODUCTION_RECOVERY=PASS
+PRODUCTION_HEAD=049b41e0dd49c59ec899abd0598a04793163edb2
+SEARXNG_RUNNING=YES
+SEARXNG_LOOPBACK_PORT=127.0.0.1:8888->8080/tcp
+KEYERROR_BRAVE_PRESENT=NO
+BRAVE_PRESENT=YES
+BRAVE_DISABLED=YES
+DUCKDUCKGO_PRESENT=YES
+DUCKDUCKGO_DISABLED=YES
+STARTPAGE_PRESENT=YES
+STARTPAGE_DISABLED=YES
+BRAVE_NETWORK_ALIAS_USER_COUNT=3
+STAGE_A_SAFETY_FLAGS_ENV_CORRECTION=PASS
+FULL_BOUNDED_STAGE_A_OFFLINE=PASS
+READY_FOR_BOUNDED_WEB_DISCOVERY=YES
+PRE_PR24_WEB_CANARY=RECORDED
+RUN_KEY=owner-profile-web-pr23-bounded-20260910-v1
+DISCOVERY_RUN_ID=50de44e5-1b17-4f08-9a12-86b6d899f4ab
+GENERATED=36
+EXECUTABLE=34
+SELECTED=12
+EXECUTED=12
+SELECTED_DIRECT=4
+SELECTED_BUYER_HABITAT=4
+SELECTED_ADJACENT=4
+SEARCH_RESULTS_CONSIDERED=7
+TELEGRAM_LIKE_RESULTS=6
+UNIQUE_CANDIDATES=4
+KNOWN_CANDIDATES=4
+NEW_CANDIDATES=0
+PROVIDER_DEGRADED=NO
+PROVIDER_BACKOFF=NO
+BACKEND_FAILURES=0
+PR23_INFRASTRUCTURE_RECOVERY_PROVEN=YES
+PR24_LIVE_YIELD_IMPROVEMENT_PROVEN=NO
+PRE_PR24_NEW_CANDIDATES=0
+PRE_PR24_USEFUL_YIELD_ANGLE=direct_only
+PR24_IMPLEMENTED=YES
+PR24_INITIAL_INDEPENDENT_REVIEW=CHANGES_REQUIRED
+PR24_BLOCKER_COUNT=0
+PR24_HIGH_COUNT=0
+PR24_MEDIUM_COUNT=1
+PR24_LOW_COUNT=1
+PR24_REVIEW_FIX_IN_PROGRESS=YES
 RECOVERY_WEB_TELEGRAM_OPENROUTER_CALLS=0
 OA_PROVIDER_ROUTE_SWITCH_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
-SECOND_BOUNDED_WEB_RUN_AUTHORIZED=NO
+NEXT_BOUNDED_WEB_CANARY_AUTHORIZED=NO
 TELEGRAM_CANDIDATE_VALIDATION_AUTHORIZED=NO
 READY_FOR_PERSISTENT_RUNTIME=NO
 ```
@@ -133,25 +175,23 @@ READY_FOR_PERSISTENT_RUNTIME=NO
 Current gate:
 
 ```text
-INDEPENDENT_REREVIEW_OF_SEARXNG_DISABLED_OVERRIDE_HOTFIX_GATE_ORDER
+PR24_CODER_REVIEW_FIX
+NEXT_GATE=PR24_INDEPENDENT_REREVIEW
 ```
 
 Required execution sequence:
 
 ```text
-1. independent review of PR23
-2. exact pinned-image SearXNG startup/init validation
-3. only after PASS: Owner merge authorization
+1. CODER fixes PR24 review findings
+2. independent rereview exact new PR24 head
+3. only if PASS: Owner merge authorization
 4. merge exact reviewed head
-5. separate production sync authorization
-6. verify config arrives
-7. separate controlled SearXNG recovery/recreate authorization
-8. prove SearXNG initializes without KeyError: 'brave'
-9. verify brave/duckduckgo/startpage remain present but disabled by default
-10. separate bounded Web-only canary authorization
-11. evaluate stability/candidate quality
-12. only then Telegram validation/notification decision
-13. persistent runtime remains unauthorized
+5. separate production sync
+6. full bounded Stage A offline from start
+7. separate Owner authorization for exactly one new bounded Web-only canary
+8. compare non-direct yield / novelty against pre-PR24 evidence
+9. only then decide whether Telegram validation is justified
+10. persistent runtime remains unauthorized
 ```
 
 ## Step 0 — Pre-AI ingestion/shadow validation
@@ -668,23 +708,26 @@ image: retained variants such as `brave.images`, `brave.videos` and
 `brave.news` still reference `network: brave`, so startup failed during
 `searx.search.initialize()` with `KeyError: 'brave'`.
 
-The current narrow hotfix remains repository config only: use
+PR23 resolved the SearXNG recovery path as repository config only:
 `use_default_settings: true` plus exact local `disabled: true` overrides for
-`brave`, `duckduckgo` and `startpage`. This preserves shared network definitions
-while excluding those engines from normal default selection. Do not add
-`inactive: true`, remove engine variants, change matching, enable persistent
-runtime, execute a second run, probe Telegram candidates, notify the Owner, or
-claim production recovery before later review/merge/sync/recreate evidence.
+`brave`, `duckduckgo` and `startpage`. Production recovery evidence showed
+SearXNG running on `127.0.0.1:8888->8080/tcp`, no `KeyError: 'brave'`, the
+three default engines present but disabled, and three retained users of the
+shared `brave` network alias. The pre-PR24 bounded Web canary then completed
+without provider degradation or backoff, but produced zero new candidates and
+useful yield from the direct angle only.
 
 PR24 is a separate offline query-rendering improvement for profile-driven Web
-Discovery after the SearXNG infrastructure path is healthy. It keeps the
-bounded selector contract, run-key idempotency, provider pacing/backoff,
-candidate deduplication, source lifecycle, Telegram validation separation,
-matching policy, and owner notification behavior unchanged. The intended change
-is narrow: preserve `direct` as the quoted high-precision baseline, while
-rendering `buyer_habitat` and `adjacent` queries as quoted core concepts plus
-language-aware buyer/community or adjacent context instead of requiring synthetic
-non-direct phrases as one exact quoted string.
+Discovery. It keeps the bounded selector contract, run-key idempotency,
+provider pacing/backoff, candidate deduplication, source lifecycle, Telegram
+validation separation, matching policy, and owner notification behavior
+unchanged. The intended change is narrow: preserve `direct` as the quoted
+high-precision baseline, while rendering `buyer_habitat` and `adjacent` queries
+as quoted core concepts plus language-aware buyer/community or adjacent context
+instead of requiring synthetic non-direct phrases as one exact quoted string.
+PR24 is implemented but its first independent review required this follow-up;
+it is not merged, synced, live-yield-proven, or an authorization for Telegram
+validation or persistent runtime.
 
 ## Step 7A — Owner candidate notification one-shot
 

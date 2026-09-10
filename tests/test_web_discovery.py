@@ -123,6 +123,40 @@ class WebDiscoveryStrategyTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(all(query.text.startswith("site:t.me ") for query in queries))
         self.assertEqual({query.angle for query in queries}, {"direct"})
 
+    def test_unknown_angle_fallback_keeps_community_context_non_duplicative(self):
+        strategy = WebDiscoveryStrategy(
+            topics=(
+                WebDiscoveryTopic(
+                    "profession",
+                    "Python developer",
+                    "en",
+                    "experimental",
+                ),
+            ),
+            buyer_intent_seeds=(BuyerIntentSeed("need a contractor", "en"),),
+        )
+
+        community, buyer_intent = strategy.build_queries(
+            DiscoveryRequest(parameters={}, requested_at=NOW)
+        )
+
+        community_expression = "(community OR chat OR group OR сообщество OR чат)"
+        self.assertTrue(community.text.startswith("site:t.me "))
+        self.assertTrue(buyer_intent.text.startswith("site:t.me "))
+        self.assertIn('"Python developer"', community.text)
+        self.assertIn('"Python developer"', buyer_intent.text)
+        self.assertEqual(community.text.count(community_expression), 1)
+        self.assertNotIn(
+            f"{community_expression} {community_expression}",
+            community.text,
+        )
+        self.assertIn("need a contractor", buyer_intent.text)
+        self.assertNotIn(community_expression, buyer_intent.text)
+        self.assertEqual(
+            {query.angle for query in (community, buyer_intent)},
+            {"experimental"},
+        )
+
     def test_buyer_habitat_queries_use_core_concept_not_full_synthetic_phrase(self):
         strategy = WebDiscoveryStrategy(
             topics=(
