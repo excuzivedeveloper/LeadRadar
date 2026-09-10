@@ -1,150 +1,90 @@
 # LeadRadar — Active Plan
 
 **Status:** CANONICAL / ACTIVE  
-**Last verified:** 2026-09-10
-**Implementation baseline:** `049b41e0dd49c59ec899abd0598a04793163edb2`
+**Last verified:** 2026-09-10  
+**Implementation baseline:** `1299e64f28886dffe3b4bb0ddc201952aa8a2a28`
 
-This file defines execution order. A later capability being implemented in code
-does not mean it may be enabled before earlier gates pass.
+This file defines execution order. Implemented capability does not imply authorization to activate it.
 
-## Current position
-
-Completed through:
+## Current production baseline
 
 ```text
-SERVER_PROMOTION_AND_OWNER_ALLOWLIST_CONFIGURATION
-BOUNDED_FULL_RUNTIME_SAFETY_CANARY
-SOURCE_ACTIVITY_AND_COLLECTOR_ROUTING_INVESTIGATION
-CONTROLLED_COLLECTOR_MEMBERSHIP_PILOT
-APPROVED_SOURCE_MEMBERSHIP_ROLLOUT_13_OF_13
-CANONICAL_DOC_SYNC_FOR_LIVE_EVIDENCE_AND_MEMBERSHIP
-OPENROUTER_FIRST_CLASS_OPPORTUNITY_IMPLEMENTATION
-OPENROUTER_IMPLEMENTATION_SERVER_SYNC
-OPENROUTER_MINIMAX_CONFIGURATION_ONLY
-BOUNDED_ONE_SHOT_OPENROUTER_OPPORTUNITY_ANALYSIS
-PR13_RU_EN_OWNER_CANARY_REPAIR
-PR13_REPEAT_BOUNDED_OWNER_MVP_CANARY
-BOUNDED_WEB_ONLY_OWNER_PROFILE_SOURCE_DISCOVERY
-PR15_REVIEW_MERGE_AND_PRODUCTION_SYNC
-PR15_ALEMBIC_20260904_0039
-PR15_BOUNDED_RUNTIME_SHADOW_CANARY
-PR17_OPENROUTER_RELIABILITY_FIX
-PR21_PROFILE_DISCOVERY_MAX_QUERIES_BOUND
-PR21_PRODUCTION_SYNC_AND_BOUNDED_WEB_ONLY_CANARY
-```
-
-The collector membership hypothesis is now experimentally confirmed:
-
-```text
-membership
--> natural Telegram NewMessage
--> raw_messages
--> cheap V2 prefilter
--> legacy-filter shadow telemetry
-```
-
-Current authorization state:
-
-```text
-SHADOW_LIVE_EVIDENCE=YES
-COLLECTOR_MEMBERSHIP_READY=YES
-OPENROUTER_IMPLEMENTATION_READY=YES
-OPENROUTER_RUNTIME_CONFIGURED=YES
-OPENROUTER_API_KEY_CONFIGURED=YES
-OPPORTUNITY_ANALYSIS_PROVIDER=openrouter
-OPPORTUNITY_ANALYSIS_MODEL=minimax/minimax-m3:free
-LIVE_AI_ANALYSIS_VALIDATED=YES
-READY_FOR_OPENROUTER_CONFIGURATION=COMPLETE
-READY_FOR_BOUNDED_AI_ANALYSIS=COMPLETE
-
-PR13_REVIEWED=YES
-PR13_MERGED=YES
-PR13_REPEAT_BOUNDED_CANARY=COMPLETED
-MATCHING_PIPELINE=PASS
-PR13_RU_EN_WEB_REPAIR_RESULT=INCONCLUSIVE_NO_RELEVANT_RU_EN_WEB_SAMPLE
-
-PR14_IMPLEMENTED_IN_SHADOW=YES
-PR14_EVIDENCE_RUNTIME_INSTRUMENTATION_IMPLEMENTED=YES
-PR14_PRODUCTION_MATCH_POLICY_CHANGED=NO
-
-PR15_MERGED=YES
-PR15_PRODUCTION_SYNCED=YES
-PR15_MIGRATION_APPLIED_PRODUCTION=YES
+PRODUCTION_HEAD=1299e64f28886dffe3b4bb0ddc201952aa8a2a28
+BRANCH=main
+TRACKED_WORKTREE=CLEAN
 ALEMBIC_CURRENT=20260908_0042
-ALEMBIC_HEADS=20260908_0042
-SHADOW_RUNTIME_WIRED=YES
-SHADOW_DURABLE_PERSISTENCE=YES
-SHADOW_LIVE_VALIDATED=YES
-PR15_BOUNDED_RUNTIME_SHADOW_CANARY=PASS
-PRODUCTION_MATCH_POLICY_CHANGED=NO
-DELIVERY_POLICY_CHANGED=NO
+PERSISTENT_RUNTIME=STOPPED
+```
 
-BOUNDED_WEB_ONLY_DISCOVERY_DURING_DEVELOPMENT=ALLOWED_AS_SEPARATE_TASK
-PERSISTENT_SOURCE_DISCOVERY_AUTHORIZED=NO
-TELEGRAM_DISCOVERY_AUTHORIZED=NO
-SOURCE_AUDIT_AUTHORIZED=NO
-AUTO_APPROVE_AUTHORIZED=NO
-AUTO_JOIN_AUTHORIZED=NO
+Verified service state:
 
-OWNER_DELIVERY_CANARY=COMPLETED
-OWNER_DELIVERY_CANARY_VERDICT=INCONCLUSIVE_NO_FRESH_RELEVANT_OWNER_DELIVERY
-OWNER_ONLY_DELIVERY_SAFETY=PASS
-REAL_OWNER_DELIVERY_PROVEN=NO
-USEFUL_DELIVERY_PROVEN=NO
-OA_OPENROUTER_RELIABILITY_FINDING=YES
-OA_OPENROUTER_RELIABILITY_REVIEW=COMPLETE
-OA_OPENROUTER_RELIABILITY_VERDICT=E_MIXED
-OA_CODE_FIX_REQUIRED=YES
-PR17_MERGED=YES
-PR17_MERGE_COMMIT=e3d2628bc3511a3b61c65378e633d752107d4cd4
-PR17_REVIEWED_HEAD=85a33864c50cd690e1b2f4fc967b6365ffeba937
-PR17_PRODUCTION_SYNCED=YES
-PR17_ALEMBIC_APPLIED=YES
-PR17_ALEMBIC=20260905_0040
-PR17_PRODUCTION_SYNC_VERIFIED=YES
-PR17_PRODUCTION_SYNC_EVIDENCE_SHA256=0f868835279da07a9b45624facc7a0c24163828481dda7a875b5f57594548b5c
-PR17_RUNTIME_STOPPED=YES
-PR21_MERGED=YES
-PR21_PRODUCTION_SYNCED=YES
-PR21_PRODUCTION_BASELINE=031e489a21fc53de7b1ddacc107ae57aa6d46f98
-PR21_ALEMBIC=20260908_0042
-PR21_STAGE_A=PASS
-PR21_BOUNDED_WEB_ONLY_RUN=COMPLETED
-PR21_BOUND_CONTRACT=PASS
-PR21_PROVIDER_OUTCOME=SEARCH_BACKEND_DEGRADED
-PR21_PROVIDER_STATE=BACKOFF
-PR22_SEARXNG_REMOVE_CONFIG_MERGED=YES
-PR22_PRODUCTION_SYNCED=YES
-SEARXNG_PORT_RUNTIME_CORRECTED_SEPARATELY=YES
-SEARXNG_REMOVE_CONFIG_STARTUP_FAILURE=YES
-VAULTWARDEN_UNCHANGED_HEALTHY=YES
+```text
+POSTGRES=running healthy on 127.0.0.1:55432
+SEARXNG=running on 127.0.0.1:8888
+VAULTWARDEN=running healthy on 127.0.0.1:8080 and NO-TOUCH
+```
+
+Verified safety state:
+
+```text
+SOURCE_DISCOVERY_ENABLED=false
+SOURCE_AUDIT_ENABLED=false
+TELEGRAM_GLOBAL_DISCOVERY_ENABLED=false
+SOURCE_GRAPH_DISCOVERY_ENABLED=false
+AI_REPLY_ENABLED=false
+PERSISTENT_RUNTIME_AUTHORIZED=NO
+TELEGRAM_CANDIDATE_VALIDATION_AUTHORIZED=NO
+```
+
+## Completed current chain
+
+```text
 PR23_MERGED=YES
 PR23_PRODUCTION_SYNCED=YES
-PR23_SEARXNG_PRODUCTION_RECOVERY=PASS
-PRODUCTION_HEAD=049b41e0dd49c59ec899abd0598a04793163edb2
-SEARXNG_RUNNING=YES
-SEARXNG_LOOPBACK_PORT=127.0.0.1:8888->8080/tcp
-KEYERROR_BRAVE_PRESENT=NO
-BRAVE_PRESENT=YES
-BRAVE_DISABLED=YES
-DUCKDUCKGO_PRESENT=YES
-DUCKDUCKGO_DISABLED=YES
-STARTPAGE_PRESENT=YES
-STARTPAGE_DISABLED=YES
-BRAVE_NETWORK_ALIAS_USER_COUNT=3
-STAGE_A_SAFETY_FLAGS_ENV_CORRECTION=PASS
-FULL_BOUNDED_STAGE_A_OFFLINE=PASS
-READY_FOR_BOUNDED_WEB_DISCOVERY=YES
-PRE_PR24_WEB_CANARY=RECORDED
+PR23_SEARXNG_RECOVERY=PASS
+PR23_BOUNDED_WEB_CANARY=PASS
+
+PR24_MERGED=YES
+PR24_REVIEWED_HEAD=6280c569516fdd586dd467ec2c507b816bbde844
+PR24_MERGE_COMMIT=1299e64f28886dffe3b4bb0ddc201952aa8a2a28
+PR24_PRODUCTION_SYNC=PASS
+PR24_POST_SYNC_VERIFICATION=PASS
+PR24_FULL_BOUNDED_STAGE_A_OFFLINE=PASS
+```
+
+PR24 preserved the bounded planner contract:
+
+```text
+GENERATED=36
+EXACT_DUPLICATES=0
+NEAR_DUPLICATES=2
+EXECUTABLE=34
+SELECTED=12
+SELECTED_DIRECT=4
+SELECTED_BUYER_HABITAT=4
+SELECTED_ADJACENT=4
+```
+
+PR24 angle-aware query rendering is active offline:
+
+```text
+DIRECT_QUERY_PRECISION_SHAPE=PASS
+BUYER_HABITAT_RELAXED_SHAPE=PASS
+ADJACENT_RELAXED_SHAPE=PASS
+RU_BUYER_HABITAT_CONTEXT=PASS
+RU_ADJACENT_CONTEXT=PASS
+SITE_T_ME_RESTRICTION_PRESERVED=YES
+```
+
+## Pre-PR24 live comparison baseline
+
+```text
 RUN_KEY=owner-profile-web-pr23-bounded-20260910-v1
 DISCOVERY_RUN_ID=50de44e5-1b17-4f08-9a12-86b6d899f4ab
 GENERATED=36
 EXECUTABLE=34
 SELECTED=12
 EXECUTED=12
-SELECTED_DIRECT=4
-SELECTED_BUYER_HABITAT=4
-SELECTED_ADJACENT=4
 SEARCH_RESULTS_CONSIDERED=7
 TELEGRAM_LIKE_RESULTS=6
 UNIQUE_CANDIDATES=4
@@ -153,662 +93,112 @@ NEW_CANDIDATES=0
 PROVIDER_DEGRADED=NO
 PROVIDER_BACKOFF=NO
 BACKEND_FAILURES=0
-PR23_INFRASTRUCTURE_RECOVERY_PROVEN=YES
-PR24_LIVE_YIELD_IMPROVEMENT_PROVEN=NO
-PRE_PR24_NEW_CANDIDATES=0
-PRE_PR24_USEFUL_YIELD_ANGLE=direct_only
-PR24_IMPLEMENTED=YES
-PR24_INITIAL_INDEPENDENT_REVIEW=CHANGES_REQUIRED
-PR24_BLOCKER_COUNT=0
-PR24_HIGH_COUNT=0
-PR24_MEDIUM_COUNT=1
-PR24_LOW_COUNT=1
-PR24_REVIEW_FIX_IN_PROGRESS=YES
-RECOVERY_WEB_TELEGRAM_OPENROUTER_CALLS=0
-OA_PROVIDER_ROUTE_SWITCH_AUTHORIZED=NO
-PERSISTENT_RUNTIME_AUTHORIZED=NO
-NEXT_BOUNDED_WEB_CANARY_AUTHORIZED=NO
-TELEGRAM_CANDIDATE_VALIDATION_AUTHORIZED=NO
-READY_FOR_PERSISTENT_RUNTIME=NO
+USEFUL_YIELD_ANGLE=direct_only
 ```
 
-Current gate:
+## Failed PR24 live attempt classification
+
+A later PR24 canary authorization was consumed by an invocation that used the wrong CLI namespace:
 
 ```text
-PR24_CODER_REVIEW_FIX
-NEXT_GATE=PR24_INDEPENDENT_REREVIEW
+WRONG=./.venv/bin/python -m freelancer_bot profile-discovery run ...
+CORRECT_NAMESPACE=./.venv/bin/python -m freelancer_bot.operator_cli ...
 ```
 
-Required execution sequence:
+Observed outcome:
 
 ```text
-1. CODER fixes PR24 review findings
-2. independent rereview exact new PR24 head
+WORKFLOW_STATUS=CLI_ARGUMENT_REJECTED
+ACTUAL_WEB_DISCOVERY_EXECUTION=NO
+DISCOVERY_RUN_ID=NONE
+SEARCH_RESULTS_CONSIDERED=0
+LIVE_TELEGRAM_CALLS=0
+LIVE_AI_CALLS=0
+```
+
+This event is not evidence about SearXNG/provider stability or PR24 live yield.
+
+## Operational contract gate
+
+A full read-only production operational inventory has now passed and established:
+
+```text
+PRODUCTION_PYTHON=./.venv/bin/python
+PYTHON_VERSION=3.14.7
+BARE_PYTHON=ABSENT
+APPLICATION_CLI=./.venv/bin/python -m freelancer_bot
+OPERATOR_CLI=./.venv/bin/python -m freelancer_bot.operator_cli
+PROFILE_DISCOVERY_RUN_PRESENT=YES
+DB_CONNECTION_LAYER=SQLALCHEMY_ASYNC
+DB_QUERY_API=execute+scalar
+SOURCES_LIFECYCLE_COLUMN=lifecycle_status
+SOURCE_CANDIDATE_VALUE=candidate
+ALEMBIC_REQUIRES_CANONICAL_ENV_LOADED=YES
+OPERATIONAL_CONTRACT_DISCOVERY=PASS
+```
+
+The canonical command/runbook surface is being recorded in `docs/OPERATIONS.md` before any new live canary.
+
+## Current gate
+
+```text
+CURRENT_GATE=CANONICAL_OPERATIONS_DOCUMENTATION
+NEXT_GATE=INDEPENDENT_REVIEW_CANONICAL_OPERATIONS_DOCS
+```
+
+## Required sequence from here
+
+```text
+1. complete docs-only canonical operations PR
+2. independent review of exact docs PR head
 3. only if PASS: Owner merge authorization
-4. merge exact reviewed head
-5. separate production sync
-6. full bounded Stage A offline from start
-7. separate Owner authorization for exactly one new bounded Web-only canary
-8. compare non-direct yield / novelty against pre-PR24 evidence
-9. only then decide whether Telegram validation is justified
-10. persistent runtime remains unauthorized
+4. merge exact reviewed docs head
+5. sync docs-only merge to production checkout separately if needed
+6. derive next canary command from docs/OPERATIONS.md and exact operator CLI --help
+7. create fresh Owner authorization with a fresh run key
+8. execute exactly one bounded PR24 Web-only canary
+9. compare buyer_habitat/adjacent yield and candidate novelty against PR23 baseline
+10. only if useful/new Web candidates justify it, design a separate Telegram validation gate
+11. persistent unattended runtime remains unauthorized until useful end-to-end behavior is proven
 ```
 
-## Step 0 — Pre-AI ingestion/shadow validation
+## Next PR24 live canary requirements
 
-**Status: COMPLETE.**
+Do not create or execute this canary until the docs gate above is complete.
 
-Evidence established:
-
-- natural source traffic existed during the earlier 3600-second observation;
-- zero raw ingestion was traced to the dedicated collector being a participant
-  in 0/13 approved channels;
-- filter strictness did not cause zero raw messages;
-- after joining three approved sources, one natural live message produced one
-  raw row, one cheap-prefilter row and one valid shadow row;
-- shadow schema and exact filter SHA matched;
-- no AI calls, Opportunities or deliveries occurred;
-- the remaining approved sources were joined successfully;
-- final dedicated collector membership is 13/13 approved public sources.
-
-Membership is therefore a deployment prerequisite, not currently an evidenced
-application-code defect.
-
-## Step 1 — OpenRouter + MiniMax configuration-only
-
-**Status: COMPLETE.**
-
-Goal: make the selected Opportunity Analysis route ready without making the
-first live provider/model call in the same configuration step.
-
-Selected initial route:
+The next canary must use the operator CLI namespace:
 
 ```text
-OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
-OPPORTUNITY_ANALYSIS_PROVIDER=openrouter
-OPPORTUNITY_ANALYSIS_MODEL=minimax/minimax-m3:free
-OPPORTUNITY_ANALYSIS_TEMPERATURE=0
-OPPORTUNITY_ANALYSIS_MAX_OUTPUT_ATTEMPTS=1
-OPPORTUNITY_ANALYSIS_FALLBACK_ENABLED=false
+./.venv/bin/python -m freelancer_bot.operator_cli profile-discovery run ...
 ```
 
-This is the chosen route for the first bounded Opportunity Analysis validation,
-not a permanent provider lock-in.
-
-Required before any live provider call:
-
-- reverify current `minimax/minimax-m3:free` availability and pricing from
-  authoritative provider information;
-- define low provider-side spend/rate limits where available;
-- preserve repository daily/monthly budget guards;
-- keep fallback disabled;
-- enter the API key only through hidden server input;
-- never print or commit the key;
-- validate configuration without exposing the key;
-- keep source discovery/audit/catch-up disabled;
-- keep personalized delivery disabled;
-- do not authorize persistent runtime.
-
-Configuration readiness and the first live AI analysis call are separate gates.
-Do not start full `python -m freelancer_bot --run` after inserting the key in
-this configuration-only task.
-
-Reason: the current implementation has no separate
-`OPPORTUNITY_ANALYSIS_ENABLED` switch. Once the matching Opportunity Analysis
-key is configured, full `--run` can construct the analyzer, activate the
-`opportunity.analysis.v1` handler, claim existing pending jobs and make provider
-calls. `AI_REPLY_ENABLED=false` controls reply drafting only and does not
-disable Opportunity Analysis.
-
-Pass should produce:
+It must use:
 
 ```text
-OPENROUTER_API_KEY_CONFIGURED=YES
-OPPORTUNITY_ANALYSIS_PROVIDER=openrouter
-OPPORTUNITY_ANALYSIS_MODEL=minimax/minimax-m3:free
-AI_SECRET_REPRINTED=NO
-AI_JOB_PROCESSING_OCCURRED=NO
-READY_FOR_BOUNDED_AI_ANALYSIS=YES
-LIVE_AI_ANALYSIS_VALIDATED=NO
-PERSISTENT_RUNTIME_AUTHORIZED=NO
+PROFILE_ID=e3f2a0d1-3a46-4506-8a79-f4ed47400279
+PROFILE_REVISION=8
+MAX_QUERIES=12
+RESULTS_PER_QUERY=3
+MAX_CANDIDATES=10
+SEARXNG_URL=http://127.0.0.1:8888
+FRESH_RUN_KEY=REQUIRED
+RUN_COMMAND_ATTEMPTS_MAX=1
+CANARY_RETRY_ALLOWED=NO
 ```
 
-## Step 2 — Bounded first live OpenRouter Opportunity analysis
+A new Owner authorization is required. The previous authorization is consumed and must not be reused.
 
-**Status: COMPLETE.**
+## Later product target
 
-Use one narrowly bounded Opportunity Analysis validation with OpenRouter and
-`minimax/minimax-m3:free`.
-
-Required operator mechanism:
-
-```bash
-python -m freelancer_bot --opportunity-analysis-job-id <UUID>
-```
-
-The UUID must be an explicit `opportunity.analysis.v1` durable job selected from
-fresh preflight evidence. Do not choose an arbitrary queued job automatically.
-With `OPPORTUNITY_ANALYSIS_MAX_OUTPUT_ATTEMPTS=1` and
-`OPPORTUNITY_ANALYSIS_FALLBACK_ENABLED=false`, one invocation is bounded to at
-most one provider request and exits after one selected-job processing attempt.
-
-Goals:
-
-- prove `opportunity.analysis.v1` jobs are claimed correctly;
-- make only explicitly bounded provider calls;
-- confirm telemetry includes `provider=openrouter`;
-- confirm requested model is `minimax/minimax-m3:free`;
-- validate strict schema output;
-- validate grounding;
-- verify cache/dedup semantics;
-- prove budget guards;
-- materialize canonical Opportunities only from valid classifier output.
-
-Do not enable personalized delivery, discovery, catch-up or persistent runtime
-in the same first AI canary.
-
-Observed result:
+Once search quality and Telegram validation are proven, the intended unattended candidate-notification behavior remains:
 
 ```text
-OA_PIPELINE=PASS
-OUTSTANDING_JOBS=0
-RUNTIME_STOPPED=YES
+every 3 hours
+one pass
+max 5 new cards
+silence if none
+durable at-most-once
+never notify the same candidate twice
 ```
 
-## Step 3 — Owner SearchProfile/onboarding validation
-
-Validate the owner-facing V2 SearchProfile path with the selected onboarding AI
-route or an explicitly validated manual path.
-
-Goals:
-
-- owner-only bot gate remains enforced;
-- draft profile creation;
-- confirmation/activation;
-- ownership isolation;
-- dedicated Telegram controls distinguish `Языки заявок` from
-  `Языки источников`;
-- active profile state suitable for matching.
-
-Do not add additional users.
-
-## Step 4 — Bounded matching and owner-only delivery
-
-**Status: PARTIAL.**
-
-PR13 was reviewed, merged and repeat-canaried. A fresh natural C++/HFT lead
-exercised the Opportunity Analysis and matching pipelines successfully, but it
-did not provide a relevant RU/EN web sample. Therefore:
-
-```text
-PR13_REPEAT_BOUNDED_CANARY=COMPLETED
-FRESH_NATURAL_LEAD=1
-FRESH_SAMPLE=C++/HFT
-MATCHING_PIPELINE=PASS
-PR13_RU_EN_WEB_REPAIR_RESULT=INCONCLUSIVE_NO_RELEVANT_RU_EN_WEB_SAMPLE
-USEFUL_DELIVERY_PROVEN=NO
-READY_FOR_PERSISTENT_RUNTIME=NO
-```
-
-With valid live Opportunities and an active owner SearchProfile:
-
-- run deterministic matching;
-- inspect decision/trace evidence;
-- validate per-profile `source_languages` routing separately from
-  `OpportunityAnalysis.language` content-language routing;
-- confirm entitlement behavior;
-- allow personalized delivery only to the single owner allowlist entry;
-- verify delivery action callbacks;
-- verify no retry storm and no non-owner send.
-
-This stage still must prove the intended user-facing useful lead-card flow end
-to end before persistent runtime is considered.
-
-## Step 5 — Bounded runtime evidence-shadow canary
-
-**Status: COMPLETE / PASS.**
-
-PR15 is merged and production-synced at:
-
-```text
-PRODUCTION_HEAD=a48b125bb486ad2b5f138840c8f8398a66f73088
-ALEMBIC_CURRENT=20260904_0039
-ALEMBIC_HEADS=20260904_0039
-```
-
-The separately authorized bounded runtime shadow canary passed on fresh natural
-traffic. Independent GitHub evidence established:
-
-```text
-FRESH_NATURAL_TRAFFIC_COUNT=2
-RAW_MESSAGES_DELTA=2
-OPPORTUNITIES_DELTA=1
-MATCH_EVALUATION_RUNS_DELTA=1
-MATCH_TRACES_DELTA=1
-SHADOW_TRACE_DELTA=1
-FRESH_CANARY_SHADOW_TRACE_COUNT=1
-FRESH_CANARY_SHADOW_TIED_TO_LIVE_RAW=YES
-FRESH_CANARY_SHADOW_INGESTION_ORIGIN=live
-RAW_CONTENT_SHA256_VERIFIED=YES
-RAW_MESSAGE_BODY_DUPLICATED_IN_SHADOW=NO
-CURRENT_DECISION_PRESERVED=YES
-SHADOW_DECISION_RECORDED=YES
-SHADOW_LIVE_VALIDATED=YES
-VERDICT=PASS
-```
-
-The current matcher remained authoritative; the validated sample was not
-delivery-eligible, so this PR15 gate did not itself prove useful owner delivery.
-
-The evidence report was independently read from temporary GitHub evidence branch
-`evidence/pr15-shadow-canary-20260905`. Persistent runtime remains unauthorized.
-
-## Step 5a — Bounded Owner Delivery Canary
-
-**Status: COMPLETE / INCONCLUSIVE.**
-
-The separately authorized 3600-second Owner Delivery Canary completed at
-production head `a48b125bb486ad2b5f138840c8f8398a66f73088` and Alembic
-`20260904_0039`.
-
-Independent GitHub evidence established:
-
-```text
-FRESH_LIVE_RAW_COUNT=4
-FRESH_LIVE_OPPORTUNITY_COUNT=2
-FRESH_LIVE_MATCH_TRACE_COUNT=2
-FRESH_LIVE_ELIGIBLE_MATCH_COUNT=0
-
-NEW_PERSONALIZED_DELIVERY_COUNT=0
-NEW_NON_OWNER_DELIVERY_COUNT=0
-FRESH_OWNER_SENT_DELIVERY_COUNT=0
-
-OWNER_ONLY_DELIVERY_SAFETY=PASS
-REAL_OWNER_DELIVERY_PROVEN=NO
-
-RUNNING_DURABLE_JOB_COUNT_AFTER_CANARY=0
-QUEUED_DURABLE_JOB_COUNT_AFTER_CANARY=0
-
-VERDICT=INCONCLUSIVE_NO_FRESH_RELEVANT_OWNER_DELIVERY
-```
-
-This is not a delivery-system failure: fresh natural traffic and two canonical
-Opportunities reached matching, but neither produced an eligible match. No
-non-owner delivery occurred, no synthetic traffic was used, and matcher policy
-and thresholds were unchanged.
-
-The exact report was independently read from temporary GitHub evidence branch
-`evidence/owner-delivery-canary-20260905`, commit
-`273ec1fb83b3726b8c086f6bd80fc8487ebcb530`, with report SHA-256
-`3997b167b7a96f1718343f623406f7332a3af47e7642a81e42838b7e64caa7c8`.
-
-A separate technical finding was observed during the same bounded runtime:
-server evidence reported two completed `opportunity.analysis.v1` jobs and two
-failed jobs with `OpportunityAnalysisOutputError`. The observed failure path
-included invalid/ungrounded model output and a provider HTTP 429 during retry
-processing. This does not change the formal delivery-canary verdict, but it is
-the next engineering diagnosis gate before another Owner Delivery Canary.
-
-## Step 5b — OA / OpenRouter reliability diagnosis
-
-**Status: COMPLETE / E — MIXED.**
-
-The narrow read-only/offline review after the Owner Delivery Canary found a
-real reliability issue that warrants a narrow code/retry-policy remediation.
-
-Confirmed current envelope:
-
-```text
-OA durable max_attempts=3
-OPPORTUNITY_ANALYSIS_MAX_OUTPUT_ATTEMPTS=1
-fallback routes=0
-CURRENT_MAX_PROVIDER_CALLS_PER_OA_JOB=3
-```
-
-The key confirmed design issue is that
-`OpportunityAnalysisOutputError` inherits `retryable=True`. Therefore an
-exhausted invalid-output or grounding failure can be replayed by the generic
-durable worker even after the configured output-attempt budget is exhausted.
-
-The review also confirmed:
-
-```text
-HTTP_429_RETRYABLE=YES
-GENERIC_WORKER_RETRY_PACING=FLAT
-RETRY_AFTER_USED=NO
-OPENROUTER_OUTPUT_CONTRACT=json_object_plus_schema_in_prompt
-STRICT_NATIVE_JSON_SCHEMA=NO_FOR_CURRENT_OPENROUTER_PATH
-FAIL_CLOSED_DOWNSTREAM=YES
-GROUNDING_SHOULD_BE_WEAKENED=NO
-IMMEDIATE_PROVIDER_MODEL_SWITCH_JUSTIFIED=NO
-```
-
-Decision:
-
-```text
-VERDICT=E_MIXED
-SEVERITY=MEDIUM
-A_CODE_FIX_REQUIRED=YES
-B_RETRY_POLICY_CHANGE_REQUIRED=YES
-C_PROVIDER_MODEL_ROUTE_SHOULD_BE_EVALUATED_LATER=YES
-IMMEDIATE_PROVIDER_MODEL_SWITCH_JUSTIFIED=NO
-PRODUCTION_CHANGE_AUTHORIZED=NO
-```
-
-The next gate is a narrow offline implementation + independent review. The fix
-must not change matching thresholds, matching policy, grounding strictness,
-fallback state, discovery, delivery policy or persistent-runtime authorization.
-
-### PR17 first narrow review
-
-PR #17 first independent narrow review on head
-`18943124732166fb51807cd4d8ff531c6542504b` returned
-`CHANGES_REQUESTED` with exactly one MEDIUM finding.
-
-The OA/OpenRouter-specific remediation itself passed review. The remaining issue
-is at the shared `DurableWorker` boundary: arbitrary exception
-`retry_after_seconds` values were accepted without generic finite/negative/upper-bound
-validation before `timedelta` construction.
-
-Required narrow correction:
-
-```text
-invalid/negative/non-finite retry hint -> existing worker retry_delay fallback
-valid hint -> bounded by explicit generic worker cap
-non-retryable failure -> hint cannot affect/abort terminal failure recording
-no attribute -> preserve existing worker semantics
-```
-
-A generic non-OA worker regression test is required. No OA/provider/matcher/
-migration redesign is requested by this finding.
-
-### PR17 narrow re-review approval
-
-The single MEDIUM from the first PR17 review was fixed on follow-up head
-`85a33864c50cd690e1b2f4fc967b6365ffeba937`.
-
-Independent narrow re-review result:
-
-```text
-PREVIOUS_MEDIUM_RESOLVED=YES
-GENERIC_WORKER_RETRY_HINT_SAFETY=PASS
-WORKER_RETRY_HINT_GENERIC_CAP_SECONDS=3600.0
-OA_BEHAVIOR_CHANGED=NO
-MIGRATION_CHANGED=NO
-FINAL_VERDICT=APPROVE
-```
-
-The follow-up was exactly one commit changing only
-`freelancer_bot/worker.py` and `tests/test_worker.py`, with CI green on the
-exact reviewed head.
-
-PR #17 was subsequently merged, production-synced, migrated to `20260905_0040`,
-and independently verified with runtime remaining stopped.
-
-### PR17 production sync + migration
-
-**Status: COMPLETE / PASS.**
-
-PR #17 is merged and production-synced at:
-
-```text
-PRODUCTION_HEAD=e3d2628bc3511a3b61c65378e633d752107d4cd4
-ORIGIN_MAIN=e3d2628bc3511a3b61c65378e633d752107d4cd4
-ALEMBIC_CURRENT=20260905_0040
-ALEMBIC_HEADS=20260905_0040
-```
-
-Offline production verification confirmed:
-
-```text
-WORKER_RETRY_HINT_GENERIC_CAP_SECONDS=3600.0
-OA_DURABLE_MAX_ATTEMPTS=3
-OA_429_FALLBACK_SECONDS=60
-OA_429_CAP_SECONDS=300
-AI_TELEMETRY_DURABLE_COLUMNS_PRESENT=YES
-AI_TELEMETRY_DURABLE_CONSTRAINTS_PRESENT=YES
-CHECK_CONFIG=PASS
-ALEMBIC_CHECK_HEADS=PASS
-SAFETY_FLAGS_GATE=PASS
-RUNTIME_STOPPED=YES
-LIVE_PROVIDER_CALLS=0
-TELEGRAM_CALLS=0
-RUNTIME_STARTS=0
-FINAL_VERDICT=PASS
-```
-
-The production-sync evidence was independently read from
-`evidence/pr17-production-sync-20260905`, commit
-`14dc4171085c498fd193bcde41d1ffb202c5fccf`, with report SHA-256
-`0f868835279da07a9b45624facc7a0c24163828481dda7a875b5f57594548b5c`.
-The evidence commit has one parent, the production/main head, and only one
-evidence file. The evidence branch remains unmerged and main remains unchanged.
-
-A new bounded Owner Delivery Canary is **not** authorized by this production
-sync gate and requires separate Owner authorization.
-
-## Step 6 — Evaluate accumulated legacy-filter and evidence-shadow data
-
-The legacy matcher is already live-observed in shadow, but one sample is not
-enough to justify redesign.
-
-PR14 OpportunityAnalysisV2 evidence-aware matching shadow is wired for runtime
-observation by PR15, but it still does not change production matching
-thresholds, rank, delivery policy, provider configuration, discovery, catch-up
-or persistent runtime.
-
-Collect enough natural evidence before deciding whether to change:
-
-- `min_score`;
-- keyword weights;
-- stop words;
-- substring matching behavior.
-
-Known candidate issue: substring stop-word matching can reject legitimate text.
-Any change must be narrow, evidence-backed and independently reviewed. Do not
-weaken the filter merely to manufacture output.
-
-## Step 7 — Source discovery during development
-
-**Status: BOUNDED WEB_ONLY CANDIDATE DISCOVERY ALLOWED; persistent discovery disabled.**
-
-A separate bounded owner-profile discovery pass was already run on
-2026-09-02 using local SearXNG in WEB_ONLY mode:
-
-```text
-RUN_KEY=owner-web-candidate-canary-20260902-v1
-MODE=WEB_ONLY_CANDIDATE_ONLY
-SOURCES_BEFORE=15
-SOURCES_AFTER=20
-CANDIDATES_BEFORE=2
-CANDIDATES_AFTER=7
-NEW_CANDIDATES=5
-```
-
-That run persisted candidate sources only. It did not approve or join them and
-made no Telegram discovery calls.
-
-During development, further **separately bounded WEB_ONLY** discovery tasks may
-be used to grow the candidate pool without waiting for the entire Owner MVP to
-finish. They must remain isolated from live delivery canaries.
-
-For profile-driven Web Discovery, `profile-discovery run` supports an explicit
-`--max-queries` executable-query bound. The production rollout preflight that
-observed 36 generated / 34 executable queries should pass `--max-queries 12`
-explicitly. The bound is applied only after exact and near-duplicate collapse,
-then selects queries by deterministic round-robin across `direct`,
-`buyer_habitat` and `adjacent` discovery angles. Omitting the flag preserves
-legacy unbounded execution. Reusing a run key with a different explicit bound,
-or between bounded and unbounded forms, is a discovery request conflict. The
-operator payload distinguishes generated, executable, selected and executed
-query counts so a bounded run does not look as though only the selected queries
-ever existed.
-
-Required development-mode boundaries:
-
-```text
-WEB_ONLY=YES
-CANDIDATE_PERSISTENCE=YES
-AUTO_APPROVE=NO
-AUTO_JOIN=NO
-COLLECTION_FROM_NEW_CANDIDATES=NO
-SOURCE_AUDIT=NO
-SOURCE_GRAPH_DISCOVERY=NO
-TELEGRAM_GLOBAL_DISCOVERY=NO
-TELEGRAM_CHAT_DISCOVERY=NO
-PERSISTENT_SOURCE_DISCOVERY=NO
-```
-
-Full-runtime discovery flags remain disabled. Promotion of candidates to approved
-sources, Telegram membership/joining, Source Audit, Telegram graph/global/chat
-discovery, and persistent discovery each remain separate reviewed/authorized
-gates.
-
-Do not combine a bounded discovery pass with a delivery, AI, or matching canary.
-
-PR21 production evidence on 2026-09-09:
-
-```text
-RUN_KEY=owner-profile-web-pr21-bounded-20260909-v1
-DISCOVERY_RUN_ID=3951cae0-3c45-4d81-ab41-38a37edf0614
-LIVE_RUN_ATTEMPTS=1
-LIVE_RUN_RESULT=SUCCESS
-RUN_STATUS=completed
-generated=36
-executable=34
-selected=12
-executed=5
-search_results_considered=12
-telegram_like_candidates=10
-unique_candidates=6
-known_candidates=5
-new_candidates=1
-candidate_queue=high:5 medium:0 low:1
-provider_outcome=SEARCH_BACKEND_DEGRADED
-provider_state=BACKOFF
-backend_failures=1
-backend_failure_classes=captcha:1
-```
-
-Attempt sequence:
-
-```text
-attempt1 direct success results=3
-attempt2 buyer_habitat success results=3
-attempt3 adjacent success results=3
-attempt4 direct success results=3
-attempt5 buyer_habitat failed captcha results=0 provider_state_after=BACKOFF
-SECOND_RUN_EXECUTED=NO
-```
-
-PR22 made the next narrow repair as repository config only, using exact inherited
-SearXNG engine removal for `brave`, `duckduckgo` and `startpage`. Production
-activation proved that destructive removal is unsafe for the pinned SearXNG
-image: retained variants such as `brave.images`, `brave.videos` and
-`brave.news` still reference `network: brave`, so startup failed during
-`searx.search.initialize()` with `KeyError: 'brave'`.
-
-PR23 resolved the SearXNG recovery path as repository config only:
-`use_default_settings: true` plus exact local `disabled: true` overrides for
-`brave`, `duckduckgo` and `startpage`. Production recovery evidence showed
-SearXNG running on `127.0.0.1:8888->8080/tcp`, no `KeyError: 'brave'`, the
-three default engines present but disabled, and three retained users of the
-shared `brave` network alias. The pre-PR24 bounded Web canary then completed
-without provider degradation or backoff, but produced zero new candidates and
-useful yield from the direct angle only.
-
-PR24 is a separate offline query-rendering improvement for profile-driven Web
-Discovery. It keeps the bounded selector contract, run-key idempotency,
-provider pacing/backoff, candidate deduplication, source lifecycle, Telegram
-validation separation, matching policy, and owner notification behavior
-unchanged. The intended change is narrow: preserve `direct` as the quoted
-high-precision baseline, while rendering `buyer_habitat` and `adjacent` queries
-as quoted core concepts plus language-aware buyer/community or adjacent context
-instead of requiring synthetic non-direct phrases as one exact quoted string.
-PR24 is implemented but its first independent review required this follow-up;
-it is not merged, synced, live-yield-proven, or an authorization for Telegram
-validation or persistent runtime.
-
-## Step 7A — Owner candidate notification one-shot
-
-**Status: CODED FOR REVIEW; LIVE TELEGRAM NOTIFICATION PASS NOT AUTHORIZED BY
-THIS DOCUMENT.**
-
-Repository head adds an explicit one-shot review aid for the existing candidate
-backlog:
-
-```text
-python -m freelancer_bot --owner-candidate-notifications
-```
-
-The command considers at most 10 Telegram candidate sources by default. For each
-candidate it uses the dedicated collector account, the Telegram request
-governor, and a single latest-message history probe. Only sources whose latest
-message is at most 10 days old, inclusive, may reserve a durable
-`owner_source_candidate_notifications` row and send one Owner-only Telegram
-review card with a channel URL button.
-
-The one-shot maintains durable Owner-keyed scan progress in
-`owner_source_candidate_notification_scan_state`. Repeated bounded passes move
-through candidate `source_id`s and wrap around, so stale or unresolvable
-candidates do not permanently starve deeper backlog entries. Stale checks are
-still not notification attempts; those rows remain eligible for future reprobe.
-
-The probed Telegram address and Owner URL must be the same address decision. A
-valid handle produces both lookup and button URL; only sources without a valid
-handle may use a valid canonical Telegram URL for both. If source Telegram
-identity changes between probe and locked reservation, the pass fails closed
-without reserving or sending.
-
-Non-goals remain explicit:
-
-```text
-AUTO_APPROVE=NO
-AUTO_REJECT=NO
-AUTO_JOIN=NO
-AUTO_LEAVE=NO
-SOURCE_AUDIT=NO
-AI_SCORING=NO
-LIFECYCLE_CHANGE=NO
-PERSISTENT_RUNTIME=NO
-```
-
-The at-most-once marker is written only for sources that pass the freshness gate
-and reach the send-attempt stage. Stale, empty, unresolvable, unsafe URL, and
-non-candidate rows are not marked as notified.
-
-## Step 8 — Persistent runtime deployment
-
-**Not currently authorized.**
-
-Only after bounded end-to-end validations are clean should the project choose a
-persistent process model.
-
-Before authorizing persistence define:
-
-- restart policy;
-- log handling;
-- session locking;
-- graceful shutdown;
-- health/observability;
-- backup/rollback;
-- Telegram membership provisioning/verification;
-- rate/spend limits;
-- shared-server resource boundaries.
-
-A successful bounded `--run` does not authorize a daemon/systemd deployment.
-
-## Explicit non-goals until ordered
-
-Do not:
-
-- enable catch-up to force test data;
-- enable discovery concurrently with first AI setup;
-- run full `--run` for the first live Opportunity Analysis canary;
-- switch collector back to owner's main Telegram account;
-- remove owner-only bot access;
-- add automatic channel joining without a separately reviewed design;
-- redesign legacy filter from one live shadow sample;
-- modify unrelated shared-server services;
-- treat implemented later-stage code as proof that live behavior has passed;
-- start persistent runtime before the later persistence gate.
+This target is not current production authorization.

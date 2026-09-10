@@ -1,229 +1,57 @@
 # LeadRadar — Current Deployment
 
 **Status:** CANONICAL  
-**Snapshot date:** 2026-09-09
-**Deployment code baseline:** `aab68eb64a2ee29e7c90cae2cbba8a8a31f07f23`
-**Repository/server head:** `aab68eb64a2ee29e7c90cae2cbba8a8a31f07f23`
+**Snapshot date:** 2026-09-10  
+**Deployment code baseline:** `1299e64f28886dffe3b4bb0ddc201952aa8a2a28`  
+**Repository/server head:** `1299e64f28886dffe3b4bb0ddc201952aa8a2a28`
 
-This document records the current shared-server LeadRadar layout. It contains no
-credential values.
+This document records the current shared-server LeadRadar layout and deployment boundaries. Exact operational commands live in [`OPERATIONS.md`](OPERATIONS.md).
 
-## Server isolation
-
-LeadRadar checkout:
+## Server layout
 
 ```text
-/opt/leadradar/LeadRadar
-```
-
-Runtime state outside Git checkout:
-
-```text
-/opt/leadradar/runtime/.env
-/opt/leadradar/runtime/sessions/
-```
-
-Project-local tooling:
-
-```text
-/opt/leadradar/LeadRadar/.venv
-/opt/leadradar/tools/uv
-/opt/leadradar/cache
-```
-
-Project Python:
-
-```text
-3.14.7
+checkout=/opt/leadradar/LeadRadar
+runtime_env=/opt/leadradar/runtime/.env
+runtime_sessions=/opt/leadradar/runtime/sessions/
+venv=/opt/leadradar/LeadRadar/.venv
+python=3.14.7
+production_python=./.venv/bin/python
 ```
 
 Do not modify shared-host global Python for LeadRadar work.
 
 ## PostgreSQL
 
-Current isolated topology:
+Verified production topology:
 
 ```text
 container=leadradar-postgres
 image=postgres:18.4-alpine
-network=leadradar-net
-volume=leadradar-postgres-data
-host bind=127.0.0.1:55432
-database=leadradar
-role=leadradar
+host_bind=127.0.0.1:55432->5432/tcp
+health=healthy
+alembic_current=20260908_0042
 ```
 
-Expected state:
+The canonical runtime env must be loaded before DB-connected Alembic commands. Never print PostgreSQL credentials or the full credentialed `DATABASE_URL`.
 
-```text
-POSTGRES_HEALTH=healthy
-ALEMBIC_CURRENT=20260908_0042
-```
+## SearXNG
 
-Never print PostgreSQL credentials or the full credentialed `DATABASE_URL`.
-Earlier exposed credentials were rotated and historical values are invalid.
-
-## Telegram identities and sessions
-
-Runtime session directory:
-
-```text
-/opt/leadradar/runtime/sessions
-```
-
-Active roles:
-
-```text
-freelancer_user          -> dedicated collector account
-freelancer_delivery_bot  -> bot identity
-```
-
-The owner's main Telegram account is the bot user/recipient, not the collector.
-The old main-account collector session is rollback-only and is not active.
-
-Session files are bearer credentials. Collector and bot must use separate paths,
-and two LeadRadar processes must not use the same session concurrently.
-
-## Owner-only bot boundary
-
-Runtime configuration has exactly one `TELEGRAM_ALLOWED_USER_IDS` entry: the
-owner's main Telegram account. Its numeric value must not be recorded in docs or
-reports.
-
-With non-empty allowlist, inbound bot use requires an allowlisted positive
-`sender_id` from a private 1:1 chat. Group/supergroup events fail closed.
-Personalized delivery has an independent recipient allowlist check.
-
-## Source catalog
-
-Repository seed:
-
-```text
-config/sources.json
-total=15
-enabled=13
-disabled=2
-```
-
-PostgreSQL runtime state:
-
-```text
-approved=13
-candidate=2
-```
-
-PostgreSQL lifecycle/access state controls the monitored runtime snapshot.
-`config/sources.json` is seed/diagnostic input, not a permissive fallback.
-
-## Collector membership prerequisite
-
-A critical deployment prerequisite is now proven:
-
-> The dedicated collector must be a Telegram participant/member of an approved
-> channel to receive that channel's live `NewMessage` updates.
-
-Public-source resolution/history access is not enough. During investigation the
-collector could resolve/read all approved sources while being a participant in
-0/13; six natural messages occurred in three monitored sources during a
-3600-second canary, yet no live callback fired.
-
-After a controlled three-source join pilot, a natural message traversed:
-
-```text
-Telegram live update
--> raw_messages
--> cheap V2 prefilter
--> legacy-filter shadow
-```
-
-with valid schema/filter SHA and zero AI calls/Opportunities/deliveries.
-
-Membership rollout is now complete:
-
-```text
-APPROVED_SOURCE_COUNT=13
-MEMBER_AFTER_COUNT=13
-NON_MEMBER_AFTER_COUNT=0
-NEW_JOIN_SUCCESS_COUNT=10
-NEW_JOIN_FAILURE_COUNT=0
-COLLECTOR_MEMBERSHIP_ROLLOUT=COMPLETE
-COLLECTOR_DEPLOYMENT_READY=YES
-```
-
-Membership is external Telegram account state. It is not stored as the source
-lifecycle authority in PostgreSQL, so deployment/preflight procedures must
-verify both:
-
-```text
-source APPROVED in PostgreSQL
-AND
-collector is Telegram member/participant
-```
-
-Do not add automatic join behavior without a separately reviewed design.
-
-## Runtime flags
-
-Current expected safe deployment flags:
-
-```text
-SEND_CATCH_UP=false
-LEGACY_DELIVERY_ENABLED=false
-
-SOURCE_DISCOVERY_ENABLED=false
-SOURCE_AUDIT_ENABLED=false
-SOURCE_GRAPH_DISCOVERY_ENABLED=false
-TELEGRAM_CHAT_DISCOVERY_ENABLED=false
-
-AI_REPLY_ENABLED=false
-```
-
-Current expected AI credential state:
-
-```text
-OPENAI_API_KEY=not configured
-DEEPSEEK_API_KEY=not configured
-TOKENROUTER_API_KEY=not configured
-OPENROUTER_API_KEY=configured
-```
-
-Current SearXNG Web backend topology:
+Verified production topology:
 
 ```text
 endpoint=http://127.0.0.1:8888
 container=freelancer-lead-bot-searxng-1
-image=searxng/searxng@sha256:892cf809341915a4b7710d3c9045005b4c377d51335a089b6d4da0b28750788d
+image_id_prefix=892cf8093419
+pinned_image=searxng/searxng@sha256:892cf809341915a4b7710d3c9045005b4c377d51335a089b6d4da0b28750788d
+host_bind=127.0.0.1:8888->8080/tcp
 host_settings=config/searxng/settings.yml
 container_settings=/etc/searxng/settings.yml
 settings_mount=read-only
-working_dir=/usr/local/searxng
-entrypoint=["/usr/local/searxng/entrypoint.sh"]
-pid1_exe=/usr/bin/python3.14
-pid1_cmdline=searxng
 runtime_interpreter=/usr/local/searxng/.venv/bin/python3
-settings_loader=/usr/local/searxng/searx/settings_loader.py
-DEFAULT_SETTINGS_FILE=/usr/local/searxng/searx/settings.yml
+state=running
 ```
 
-Safe read-only container introspection must use the discovered runtime
-interpreter, not a guessed `python` executable. For heredoc/stdin diagnostics,
-attach stdin with `docker exec -i`.
-
-PR22 synced a repository SearXNG settings change that removed exact default
-engines `brave`, `duckduckgo` and `startpage`. It is now proven unsafe for the
-pinned image: after the separate runtime-env correction to `SEARXNG_PORT=8888`,
-SearXNG reached startup and exited during `searx.search.initialize()` with
-`KeyError: 'brave'` because retained Brave variants still reference
-`network: brave`.
-
-Current production SearXNG state is down/recovery-required. Vaultwarden remained
-unchanged and healthy throughout: the first failed activation attempt defaulted
-to port 8080 because `SEARXNG_PORT` was missing from the production runtime env,
-and Vaultwarden safely blocked that bind. Do not modify runtime env in the
-repository hotfix; that server action was completed separately.
-
-The recovery config strategy is exact disabled overrides under ordinary default
-inheritance:
+Current verified engine strategy:
 
 ```yaml
 use_default_settings: true
@@ -237,137 +65,139 @@ engines:
     disabled: true
 ```
 
-This preserves inherited network definitions while excluding those engines from
-normal default selection. The hotfix is not production-active until independent
-review, merge, production sync and separately authorized SearXNG recreate/startup
-validation. No Web, Telegram or OpenRouter calls occurred during the recovery
-diagnostics.
+This preserves inherited network aliases. Do not replace it with destructive engine removal or `inactive: true`.
 
-Current OpenRouter implementation state:
+## Shared-host no-touch neighbor
+
+Vaultwarden owns host port 8080:
 
 ```text
-OpenRouter Opportunity support present in checkout=YES
-runtime OpenRouter configuration=YES
-provider calls=0
+container=vaultwarden
+image=vaultwarden/server:latest
+host_bind=127.0.0.1:8080->80/tcp
+health=healthy
 ```
 
-`READY_FOR_BOUNDED_AI_ANALYSIS=YES` means the selected OpenRouter route is
-configured and ready for a separately authorized one-shot live AI canary. It does
-**not** authorize full `--run`, delivery, discovery, catch-up or persistent
-runtime.
+LeadRadar SearXNG therefore remains on loopback port 8888. LeadRadar tasks must not modify Vaultwarden.
 
-After this branch is merged and server-synced, the bounded canary entrypoint is:
+## Runtime state
 
-```bash
-python -m freelancer_bot --opportunity-analysis-job-id <UUID>
-```
+There is currently no persistent LeadRadar application runtime.
 
-Use exactly one explicit `opportunity.analysis.v1` durable job UUID. The command
-must not be replaced with full runtime for the first AI call.
-
-## Process state
-
-There is currently **no persistent LeadRadar runtime**.
-
-Expected outside bounded tasks:
+Expected outside explicitly authorized bounded tasks:
 
 ```text
-application process=not running
+application_process=not running
 collector=not running
 bot=not running
-user session lock=not held
+persistent_runtime_authorized=NO
 ```
 
-No LeadRadar systemd unit is authorized.
+No persistent runtime should be started implicitly by a SearXNG, documentation, database-read, or bounded Web-discovery task.
 
-## Current live validation
+## Current safety flags
 
-Validated:
+Verified production values:
 
 ```text
-collector membership prerequisite=YES
-approved source membership=13/13
-live raw ingestion=YES
-live cheap prefilter=YES
-live legacy shadow=YES
-shadow schema match=YES
-shadow filter SHA match=YES
-bounded AI provider validation=PASS
-live Opportunities=validated in bounded one-shot path
-live deliveries=0
-OPENROUTER_IMPLEMENTATION_READY=YES
-OPENROUTER_RUNTIME_CONFIGURED=YES
-READY_FOR_OPENROUTER_CONFIGURATION=COMPLETE
-READY_FOR_BOUNDED_AI_ANALYSIS=COMPLETE
-LIVE_AI_ANALYSIS_VALIDATED=YES
-PR21_BOUNDED_WEB_ONLY_RUN=COMPLETED
-PR21_PROVIDER_OUTCOME=SEARCH_BACKEND_DEGRADED
-SEARXNG_PRODUCTION_STATE=DOWN_RECOVERY_REQUIRED
-SEARXNG_REMOVE_CONFIG_STARTUP_FAILURE=YES
-SEARXNG_DISABLED_OVERRIDE_HOTFIX=IMPLEMENTATION_PENDING_REVIEW
-VAULTWARDEN_UNCHANGED_HEALTHY=YES
-PERSISTENT_RUNTIME_AUTHORIZED=NO
+SOURCE_DISCOVERY_ENABLED=false
+SOURCE_AUDIT_ENABLED=false
+TELEGRAM_GLOBAL_DISCOVERY_ENABLED=false
+SOURCE_GRAPH_DISCOVERY_ENABLED=false
+AI_REPLY_ENABLED=false
+SEARXNG_PORT=8888
+SEARXNG_URL=http://127.0.0.1:8888
+DATABASE_URL=configured
 ```
 
-The next gate is independent review of the SearXNG disabled-override hotfix and
-documentation sync PR, defined in `docs/ACTIVE_PLAN.md`. Production recovery is
-not claimed before later merge, sync and controlled SearXNG recreate/startup
-evidence.
+These values are production state, not `.env.example` completeness claims.
 
-## Evidence references
+## Telegram identities and sessions
 
-Safe report hashes:
+Runtime session directory:
 
 ```text
-investigation report:
-cf5f14807005319ddf4862c36746904670ca04a1e9aa69a480650a792865eb12
-
-membership pilot report:
-f60769f6dcfbe65b7094ba7fba901fea9bc1e9a2278481c49265f83a9c50c623
-
-membership rollout report:
-dfbf1d19b29963c43e01eb9512e6817343a2274182be4c0d562466f0898cec5e
-
-OpenRouter implementation sync report:
-89decdcf40c3486d5cd51571ab2ab27d99049abb0d2158be602d11188bd4b369
+/opt/leadradar/runtime/sessions/
 ```
 
-## Shared-server no-touch boundary
+Accepted identity separation:
 
-LeadRadar shares the host with unrelated projects. LeadRadar tasks must not
-modify:
+```text
+dedicated Telegram account -> collector
+owner main Telegram account -> bot user/recipient
+Telegram bot -> separate bot identity
+```
+
+Session files are bearer credentials. Never print or copy session contents. Two LeadRadar processes must not use the same session concurrently.
+
+The owner-only bot allowlist remains part of the deployment boundary; the numeric owner Telegram ID must not be recorded in canonical docs or reports.
+
+## Source catalog and lifecycle
+
+Repository seed remains configuration/diagnostic input. PostgreSQL is the runtime lifecycle authority.
+
+Verified lifecycle field:
+
+```text
+sources.lifecycle_status
+candidate_value=candidate
+```
+
+Current read-only inventory snapshot:
+
+```text
+SOURCE_COUNT=22
+CANDIDATE_COUNT=7
+OWNER_NOTIFICATION_COUNT=3
+```
+
+These counts will naturally change; the schema field names and lifecycle semantics are the contract.
+
+## Current PR24 state
+
+```text
+PR24_MERGED=YES
+PR24_PRODUCTION_SYNCED=YES
+PR24_POST_SYNC_VERIFICATION=PASS
+PR24_STAGE_A_OFFLINE=PASS
+PR24_LIVE_YIELD_IMPROVEMENT_PROVEN=NO
+```
+
+The first attempted PR24 live canary did not reach Web Discovery because the application CLI namespace was invoked instead of the operator CLI namespace. That failure is not evidence about SearXNG/provider performance or PR24 search quality.
+
+The verified operator entrypoint for the next profile Web run is documented in `OPERATIONS.md`.
+
+## Promotion rules
+
+Before production checkout changes:
+
+1. verify exact current HEAD;
+2. verify tracked worktree clean;
+3. fetch exact authorized target;
+4. verify provenance and diff;
+5. require fast-forward only;
+6. verify exact HEAD after sync;
+7. preserve `/opt/leadradar/runtime`;
+8. keep activation/restart as a separate authorization unless explicitly included.
+
+Do not sync to a newer-than-authorized `origin/main` and do not use local merge/rebase/destructive reset.
+
+## Shared-server boundary
+
+LeadRadar tasks must not modify:
 
 - WayFound;
 - Hermes;
-- unrelated Docker containers/networks/volumes;
+- Vaultwarden;
+- unrelated Docker containers, networks or volumes;
 - unrelated systemd services;
 - firewall;
 - system time/NTP;
 - global Python;
 - unrelated databases.
 
-A known Hermes restart-loop predates LeadRadar work and remains out of scope.
-
-## Promotion rules
-
-Before updating server checkout:
-
-1. verify current HEAD;
-2. verify tracked worktree clean;
-3. fetch exact reviewed `origin/main`;
-4. verify provenance/diff;
-5. fast-forward only;
-6. verify Alembic state;
-7. preserve `/opt/leadradar/runtime`.
-
-Code promotion, Telegram membership provisioning and runtime feature enablement
-are separate actions.
-
 ## Secrets/reporting rules
 
-Safe reports may contain commit SHAs, migration revisions, counts, booleans,
-non-secret file hashes, public source handles and membership status.
+Safe reports may include commit SHAs, migration revisions, counts, booleans, public container names, non-secret hashes and public source handles.
 
-Reports must not contain bot token, API hash, DB password/full DSN, owner numeric
-Telegram ID, session contents, Telegram login/2FA codes, live message bodies or
-AI provider keys.
+Reports must not contain bot tokens, API hashes, DB credentials/full DSNs, owner numeric Telegram ID, session contents, Telegram login/2FA codes, live message bodies or AI provider keys.
