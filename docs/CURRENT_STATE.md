@@ -11,6 +11,8 @@ LeadRadar production is stable at the merged PR24 commit. PR23 restored SearXNG 
 
 PR24 production sync, post-sync verification and full bounded offline Stage A all passed.
 
+PR25 established the canonical production operations documentation. It was independently reviewed and merged as docs-only. Its production docs sync is intentionally deferred and should be combined with the next meaningful production update, so the deployed code checkout remains at the PR24 merge commit.
+
 Current proven bounded planner fingerprint:
 
 ```text
@@ -182,6 +184,19 @@ PR24_LIVE_YIELD_IMPROVEMENT_PROVEN=NO
 
 The attempted live command using `python -m freelancer_bot profile-discovery run ...` was rejected by the application CLI parser. Because the invocation was issued under a one-attempt authorization, that authorization is consumed even though actual Web execution did not begin.
 
+## PR25 documentation state
+
+```text
+PR25_REVIEWED=PASS
+PR25_REVIEWED_HEAD=c0951e2e0400d1e3489bdb91b353b71e83139b5f
+PR25_MERGED=YES
+PR25_MERGE_COMMIT=da5eda8753f3bf48f14dfbcbeaa480159951a739
+PR25_PRODUCTION_DOCS_SYNC=DEFERRED
+SEPARATE_DOCS_ONLY_SERVER_SYNC=NOT_REQUIRED_NOW
+```
+
+The repository `main` may therefore be ahead of the production checkout by docs-only commits without implying a production code drift.
+
 ## Current authorization state
 
 ```text
@@ -197,19 +212,25 @@ NEW_PR24_WEB_CANARY_AUTHORIZED=NO
 
 ## Next gate
 
-Documentation must be reviewed and merged before a new live canary is planned.
+The documentation gate is complete. The next step is a separate read-only PRELIVE task; it must not execute Web Discovery.
 
 ```text
-CANONICAL_OPERATIONS_DOCUMENTATION
--> INDEPENDENT_DOCS_REVIEW
--> OWNER_MERGE_AUTHORIZATION
--> merge exact reviewed docs head
--> separate production docs sync if required
--> derive canary from canonical OPERATIONS.md + exact operator CLI --help
--> fresh Owner authorization
+PR25_REVIEW_AND_MERGE=COMPLETE
+-> READ_ONLY_PR24_WEB_CANARY_PRELIVE
+   -> verify exact production continuity and safety state
+   -> verify exact operator CLI --help
+   -> parser-only validate exact future argv without dispatch
+   -> verify profile active/confirmed/revision=8
+   -> verify fresh run key absent
+   -> verify effective persisted provider health
+   -> capture baseline counters
+-> only if PRELIVE=PASS: fresh Owner authorization
 -> exactly one new bounded PR24 Web-only canary with a fresh run key
+-> no retry under the same authorization
 -> compare non-direct yield and novelty against PR23
 -> only then decide whether Telegram validation is justified
 ```
+
+Provider-health preflight must follow runtime semantics: `UNAVAILABLE` blocks; an active `BACKOFF` with `backoff_until > now` blocks; an expired `BACKOFF` is effectively `DEGRADED` and is not a blocker by itself; `DEGRADED` alone is not a blocker; `READY` passes.
 
 Useful owner delivery and persistent unattended operation remain later gates.
