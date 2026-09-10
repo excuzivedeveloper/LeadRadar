@@ -50,7 +50,15 @@ PR24_MERGE_COMMIT=1299e64f28886dffe3b4bb0ddc201952aa8a2a28
 PR24_PRODUCTION_SYNC=PASS
 PR24_POST_SYNC_VERIFICATION=PASS
 PR24_FULL_BOUNDED_STAGE_A_OFFLINE=PASS
+
+PR25_REVIEWED=PASS
+PR25_REVIEWED_HEAD=c0951e2e0400d1e3489bdb91b353b71e83139b5f
+PR25_MERGED=YES
+PR25_MERGE_COMMIT=da5eda8753f3bf48f14dfbcbeaa480159951a739
+PR25_PRODUCTION_DOCS_SYNC=DEFERRED
 ```
+
+PR25 is docs-only. Its production docs sync is intentionally deferred and should be combined with the next meaningful production update; the production code checkout therefore remains at the PR24 merge commit.
 
 PR24 preserved the bounded planner contract:
 
@@ -120,7 +128,7 @@ This event is not evidence about SearXNG/provider stability or PR24 live yield.
 
 ## Operational contract gate
 
-A full read-only production operational inventory has now passed and established:
+A full read-only production operational inventory has passed and established:
 
 ```text
 PRODUCTION_PYTHON=./.venv/bin/python
@@ -137,34 +145,50 @@ ALEMBIC_REQUIRES_CANONICAL_ENV_LOADED=YES
 OPERATIONAL_CONTRACT_DISCOVERY=PASS
 ```
 
-The canonical command/runbook surface is being recorded in `docs/OPERATIONS.md` before any new live canary.
+The canonical command/runbook surface is recorded in `docs/OPERATIONS.md` and PR25 has been independently reviewed and merged.
 
 ## Current gate
 
 ```text
-CURRENT_GATE=CANONICAL_OPERATIONS_DOCUMENTATION
-NEXT_GATE=INDEPENDENT_REVIEW_CANONICAL_OPERATIONS_DOCS
+CURRENT_GATE=PR24_BOUNDED_WEB_CANARY_READ_ONLY_PRELIVE
+NEXT_GATE=FRESH_OWNER_AUTHORIZATION_IF_PRELIVE_PASS
+NEW_PR24_WEB_CANARY_AUTHORIZED=NO
 ```
 
 ## Required sequence from here
 
 ```text
-1. complete docs-only canonical operations PR
-2. independent review of exact docs PR head
-3. only if PASS: Owner merge authorization
-4. merge exact reviewed docs head
-5. sync docs-only merge to production checkout separately if needed
-6. derive next canary command from docs/OPERATIONS.md and exact operator CLI --help
-7. create fresh Owner authorization with a fresh run key
-8. execute exactly one bounded PR24 Web-only canary
-9. compare buyer_habitat/adjacent yield and candidate novelty against PR23 baseline
-10. only if useful/new Web candidates justify it, design a separate Telegram validation gate
-11. persistent unattended runtime remains unauthorized until useful end-to-end behavior is proven
+1. run a separate read-only PRELIVE task at exact production HEAD
+2. verify production continuity and safety state
+3. verify exact operator CLI --help
+4. parser-only validate the exact future canary argv without dispatch
+5. verify profile active/confirmed/revision=8
+6. verify the fresh run key does not already exist
+7. verify effective persisted Web provider health semantics
+8. capture baseline counters
+9. only if PRELIVE=PASS: obtain a fresh Owner authorization
+10. execute exactly one bounded PR24 Web-only canary
+11. no retry under the same authorization
+12. compare buyer_habitat/adjacent yield and candidate novelty against PR23 baseline
+13. only if useful/new Web candidates justify it, design a separate Telegram validation gate
+14. persistent unattended runtime remains unauthorized until useful end-to-end behavior is proven
+```
+
+The PRELIVE task is read-only. It must not issue the live discovery invocation and does not itself authorize Web, Telegram, AI, restart/recreate, repair, or persistent runtime activity.
+
+Effective persisted Web provider health must be interpreted using runtime semantics:
+
+```text
+UNAVAILABLE -> BLOCK
+BACKOFF with backoff_until > now -> BLOCK
+BACKOFF with backoff_until <= now -> not a blocker; effective state is DEGRADED
+DEGRADED -> not a blocker by itself
+READY -> PASS
 ```
 
 ## Next PR24 live canary requirements
 
-Do not create or execute this canary until the docs gate above is complete.
+Do not create or execute the live canary until the separate read-only PRELIVE task has passed and a fresh Owner authorization has been granted.
 
 The next canary must use the operator CLI namespace:
 
@@ -185,6 +209,8 @@ FRESH_RUN_KEY=REQUIRED
 RUN_COMMAND_ATTEMPTS_MAX=1
 CANARY_RETRY_ALLOWED=NO
 ```
+
+The PRELIVE parser-only check must validate the exact future argv while avoiding command dispatch. Parser acceptance proves only the argparse contract; profile state, run-key freshness, provider health and other operational conditions remain separate PRELIVE checks.
 
 A new Owner authorization is required. The previous authorization is consumed and must not be reused.
 
