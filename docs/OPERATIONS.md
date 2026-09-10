@@ -1,7 +1,7 @@
 # LeadRadar — Production Operations
 
 **Status:** CANONICAL  
-**Last verified:** 2026-09-10  
+**Last verified:** 2026-09-11
 **Production baseline:** `1299e64f28886dffe3b4bb0ddc201952aa8a2a28`
 
 This document is the operational source of truth for the current LeadRadar production environment. It records only facts proven from the exact repository commit and the read-only production inventory. If a future code or deployment change invalidates any item below, update this document before using old commands in a new server task.
@@ -380,6 +380,20 @@ For bounded discovery canaries:
 
 A CLI parse rejection is not Web/provider evidence, but it still consumes an authorization if the authorized invocation command was actually issued under a one-attempt task.
 
+The same no-retry rule applies to runtime failures before `discovery_runs`
+creation. The PR24 correctly namespaced live invocation with run key
+`owner-profile-web-pr24-bounded-20260911-v1` failed before run creation with
+`RuntimeError: profile discovery intent identity has conflicting content`.
+A second Web invocation was accidentally issued and was not authorized. Treat
+that run key as retired operationally:
+
+```text
+RETIRED_RUN_KEY=owner-profile-web-pr24-bounded-20260911-v1
+RETIRED_RUN_KEY_STATUS=RETIRED_DO_NOT_REUSE
+AUTHORIZED_LIVE_COMMAND_ATTEMPTS=1
+LIVE_COMMAND_ATTEMPTS=2
+```
+
 ## 11. Shared-host no-touch boundary
 
 LeadRadar tasks must not modify unrelated host workloads, including:
@@ -426,6 +440,7 @@ PR24_MERGED=YES
 PR24_PRODUCTION_SYNCED=YES
 PR24_POST_SYNC_VERIFICATION=PASS
 PR24_STAGE_A_OFFLINE=PASS
+PR24_WEB_CANARY_READ_ONLY_PRELIVE=PASS
 PR24_LIVE_YIELD_IMPROVEMENT_PROVEN=NO
 PR25_REVIEWED=PASS
 PR25_MERGED=YES
@@ -439,19 +454,28 @@ PR25 is docs-only. Its production docs sync is intentionally deferred and should
 
 The first attempted PR24 live canary did not reach Web Discovery because the wrong CLI namespace was invoked. That attempt is not evidence about SearXNG/provider quality or PR24 candidate yield.
 
+The later correctly namespaced PR24 live invocation failed before Web discovery
+run creation because PR24 changed persisted `generated_web_queries` under the
+unchanged `profile-discovery-intent.v1` identity contract. The immutable
+content guard is correct and must remain fail-closed. Historical v1 rows are
+durable evidence and must not be rewritten or deleted. The required repair is a
+new Profile Discovery Intent contract version, `profile-discovery-intent.v2`,
+which produces a new deterministic intent UUID for the same profile revision.
+
 Before another live PR24 canary:
 
 ```text
-1. run a separate read-only PRELIVE at the exact production HEAD;
-2. verify production continuity, exact operator CLI --help and parser-only exact future argv;
-3. verify profile active/confirmed/revision=8 and fresh run key absence;
-4. verify effective persisted provider health using runtime backoff semantics;
-5. capture baseline counters;
-6. only if PRELIVE=PASS, obtain a fresh Owner authorization;
-7. execute exactly one bounded Web-only invocation with the fresh run key;
-8. do not retry under the same authorization;
-9. compare non-direct yield and candidate novelty against the PR23 baseline;
-10. only then decide whether Telegram validation is justified.
+1. review and merge the exact profile-discovery intent-version fix head;
+2. separately authorize and perform production sync;
+3. perform read-only post-sync verification;
+4. run read-only PRELIVE for the repaired profile-discovery path;
+5. prove current v2 intent identity no longer conflicts with historical v1;
+6. choose a NEW fresh run key, not owner-profile-web-pr24-bounded-20260911-v1;
+7. only if PRELIVE=PASS, obtain a fresh one-attempt Owner authorization;
+8. execute exactly one bounded Web-only invocation with the fresh run key;
+9. do not retry under the same authorization;
+10. compare non-direct yield and candidate novelty against the PR23 baseline;
+11. only then decide whether Telegram validation is justified.
 ```
 
 The separate PRELIVE task must not issue the live discovery invocation. Telegram, AI, persistent runtime, restart/recreate and repair remain outside that gate.

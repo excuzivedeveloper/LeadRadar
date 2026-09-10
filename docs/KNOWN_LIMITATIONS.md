@@ -1,8 +1,8 @@
 # LeadRadar — Known Limitations and Validation Gaps
 
 **Status:** CANONICAL  
-**Last verified:** 2026-09-09
-**Implementation baseline:** `031e489a21fc53de7b1ddacc107ae57aa6d46f98`
+**Last verified:** 2026-09-11
+**Implementation baseline:** `fcf2559605e40f4210b9611a57a2b7fbbdd91a3a`
 
 This document distinguishes code that exists from behavior that has actually
 been validated in the current deployment.
@@ -67,6 +67,19 @@ Opportunity evidence, not ingestion or first-provider configuration.
 
 ## Current top limitations
 
+1. **P0 — PR24 live Web yield remains unproven.** The corrected-namespace PR24
+   live invocation failed before `discovery_runs` creation with
+   `RuntimeError: profile discovery intent identity has conflicting content`.
+   Root cause is confirmed: PR24 changed persisted `generated_web_queries` under
+   unchanged `profile-discovery-intent.v1`; only that field differed, and the
+   historical v1 row is referenced by existing relevance/run evidence. The fix
+   is to version the current intent contract to `profile-discovery-intent.v2`,
+   not to mutate historical rows or weaken the conflict guard.
+2. **P0 — The used PR24 Web canary run key is retired.** The run key
+   `owner-profile-web-pr24-bounded-20260911-v1` was used in an authorized
+   invocation and then in an unauthorized second invocation, despite no run row
+   being created. Future validation needs a new run key and fresh one-attempt
+   Owner authorization after read-only PRELIVE passes.
 1. **P0 — Useful live owner delivery is not proven.** Matching and
    personalized delivery are implemented/tested, and a fresh C++/HFT natural
    sample passed Opportunity Analysis and matching, but useful owner delivery

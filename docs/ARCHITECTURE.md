@@ -1,8 +1,8 @@
 # LeadRadar — Current Architecture
 
 **Status:** CANONICAL  
-**Last verified:** 2026-09-09
-**Implementation baseline:** `031e489a21fc53de7b1ddacc107ae57aa6d46f98`
+**Last verified:** 2026-09-11
+**Implementation baseline:** `fcf2559605e40f4210b9611a57a2b7fbbdd91a3a`
 
 ## Purpose
 
@@ -594,6 +594,15 @@ as the quoted anchor plus language-aware buyer/community or adjacent context
 terms. This improves non-direct recall without changing `max_queries`,
 selection balance, provider pacing/backoff, candidate deduplication, lifecycle
 state, Telegram validation separation, matching, or owner notification behavior.
+
+Profile Discovery Intent rows are immutable, versioned evidence. The
+deterministic intent UUID includes the intent contract version, profile identity
+and profile revision. Persisted content changes under the same version must
+continue to fail closed through the repository conflict guard. PR24 changed the
+persisted `generated_web_queries` contract, so current profile Web Discovery now
+uses `profile-discovery-intent.v2`; historical `profile-discovery-intent.v1`
+rows remain valid evidence and may coexist with v2 rows for the same
+SearchProfile revision.
 
 The PR21 production run completed one bounded Web-only pass and stopped after
 5 of 12 selected queries because SearXNG entered provider backoff after captcha

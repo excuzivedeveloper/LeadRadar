@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 from datetime import datetime, timezone
 from types import SimpleNamespace
+from uuid import NAMESPACE_URL, uuid5
 
 import sqlalchemy as sa
 
@@ -20,7 +21,12 @@ from freelancer_bot.persistence.discovery import (
     DiscoveryRunRepository,
 )
 from freelancer_bot.profile_discovery import (
+    DiscoveryProfileInput,
+    PROFILE_DISCOVERY_INTENT_VERSION,
+    ProfileDiscoveryIntent,
+    ProfileDiscoveryIntentRepository,
     ProfileDiscoveryService,
+    build_discovery_intent,
     build_evaluation_intent,
     build_profile_discovery_intent,
     evaluation_profile_specs,
@@ -40,6 +46,54 @@ NOW = datetime(2026, 8, 16, 12, 0, tzinfo=timezone.utc)
 
 
 class ProfileDiscoveryIntentTest(unittest.TestCase):
+    def test_current_profile_discovery_intent_version_is_v2(self):
+        self.assertEqual(
+            PROFILE_DISCOVERY_INTENT_VERSION,
+            "profile-discovery-intent.v2",
+        )
+        intent = build_discovery_intent(
+            DiscoveryProfileInput(
+                identity_key="unit-profile",
+                search_profile_id=None,
+                profile_revision=8,
+                roles=("Python developer",),
+                services=("Telegram bots",),
+                skills=("Telethon",),
+                industries=("automation",),
+                languages=("en", "ru"),
+                geographies=(),
+                work_modes=("remote",),
+            )
+        )
+
+        self.assertEqual(intent.version, "profile-discovery-intent.v2")
+
+    def test_intent_identity_changes_across_contract_versions(self):
+        profile = DiscoveryProfileInput(
+            identity_key="profile:e3f2a0d1-3a46-4506-8a79-f4ed47400279",
+            search_profile_id=None,
+            profile_revision=8,
+            roles=("Python developer",),
+            services=("Telegram bots",),
+            skills=("Telethon",),
+            industries=("automation",),
+            languages=("en", "ru"),
+            geographies=(),
+            work_modes=("remote",),
+        )
+
+        v1_id = uuid5(
+            NAMESPACE_URL,
+            f"profile-discovery-intent.v1:{profile.identity_key}:"
+            f"{profile.profile_revision}",
+        )
+        first_v2 = build_discovery_intent(profile)
+        second_v2 = build_discovery_intent(profile)
+
+        self.assertNotEqual(v1_id, first_v2.id)
+        self.assertEqual(first_v2.id, second_v2.id)
+        self.assertEqual(first_v2.version, "profile-discovery-intent.v2")
+
     def test_effective_provider_observability_falls_back_when_run_lacks_observability(self):
         execution = SimpleNamespace(run=SimpleNamespace(request={}))
         provider = SimpleNamespace(
@@ -177,6 +231,150 @@ class ProfileDiscoveryPostgresIntegrationTest(unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self):
         await self.database.close()
         self.database_context.__exit__(None, None, None)
+
+    async def _active_python_profile(self, external_user_id: str):
+        confirmation = ProfileConfirmationService(self.database)
+        draft = await confirmation.create_manual_draft(
+            platform="telegram",
+            external_user_id=external_user_id,
+            semantic_text="Python Telegram automation",
+            roles=("Python developer",),
+            skills=("Telethon", "PostgreSQL"),
+            categories=("Telegram bots",),
+        )
+        confirmed = await confirmation.confirm(
+            platform="telegram",
+            external_user_id=external_user_id,
+            profile_id=draft.profile.id,
+            expected_revision=draft.profile.revision,
+        )
+        activated = await confirmation.activate(
+            platform="telegram",
+            external_user_id=external_user_id,
+            profile_id=draft.profile.id,
+            expected_revision=confirmed.profile.revision,
+        )
+        return activated.profile.profile
+
+    def _legacy_v1_intent(self, current: ProfileDiscoveryIntent) -> ProfileDiscoveryIntent:
+        legacy_queries = tuple(
+            f"legacy-v1 {query}" for query in current.generated_web_queries
+        )
+        return ProfileDiscoveryIntent(
+            **{
+                **current.__dict__,
+                "id": uuid5(
+                    NAMESPACE_URL,
+                    f"profile-discovery-intent.v1:{current.search_profile_id}:"
+                    f"{current.profile_revision}",
+                ),
+                "generated_web_queries": legacy_queries,
+                "version": "profile-discovery-intent.v1",
+            }
+        )
+
+    async def test_legacy_v1_intent_coexists_with_current_v2_discovery(self):
+        profile = await self._active_python_profile(
+            "profile-discovery-legacy-v1-owner"
+        )
+        current_v2 = build_profile_discovery_intent(profile)
+        legacy_v1 = self._legacy_v1_intent(current_v2)
+        repository = ProfileDiscoveryIntentRepository()
+        async with self.database.transaction() as connection:
+            legacy_outcome = await repository.ensure(connection, legacy_v1)
+        self.assertTrue(legacy_outcome.created)
+
+        class Backend:
+            def __init__(self):
+                self.calls = []
+
+            async def search(self, query, *, language, limit):
+                self.calls.append((query, language, limit))
+                return (
+                    WebSearchResult(
+                        "https://t.me/python_v2_buyers/1",
+                        "Python Telegram Automation Buyers",
+                        "Need a Telethon implementation partner",
+                    ),
+                )
+
+        backend = Backend()
+        service = ProfileDiscoveryService(self.database)
+        execution = await service.discover_profile(
+            profile,
+            requested_at=NOW,
+            run_key="profile-discovery-v1-then-v2-v1",
+            backend=backend,
+            max_queries=12,
+        )
+
+        async with self.database.connect() as connection:
+            rows = (
+                await connection.execute(
+                    sa.select(profile_discovery_intents)
+                    .where(profile_discovery_intents.c.search_profile_id == profile.id)
+                    .where(
+                        profile_discovery_intents.c.profile_revision
+                        == profile.revision
+                    )
+                    .order_by(profile_discovery_intents.c.version)
+                )
+            ).mappings().all()
+            run = await DiscoveryRunRepository().get_by_key(
+                connection,
+                provider="web_search",
+                run_key="profile-discovery-v1-then-v2-v1",
+            )
+
+        self.assertEqual(execution.intent.version, "profile-discovery-intent.v2")
+        self.assertEqual(execution.intent.id, current_v2.id)
+        self.assertNotEqual(legacy_v1.id, current_v2.id)
+        self.assertEqual(len(rows), 2)
+        by_version = {row["version"]: row for row in rows}
+        self.assertEqual(
+            set(by_version),
+            {"profile-discovery-intent.v1", "profile-discovery-intent.v2"},
+        )
+        self.assertEqual(by_version["profile-discovery-intent.v1"]["id"], legacy_v1.id)
+        self.assertEqual(
+            tuple(by_version["profile-discovery-intent.v1"]["generated_web_queries"]),
+            legacy_v1.generated_web_queries,
+        )
+        self.assertEqual(by_version["profile-discovery-intent.v2"]["id"], current_v2.id)
+        self.assertEqual(
+            run.request["parameters"]["profile_discovery"]["intent_id"],
+            str(current_v2.id),
+        )
+        self.assertEqual(
+            run.request["parameters"]["profile_discovery"]["intent_version"],
+            "profile-discovery-intent.v2",
+        )
+        self.assertEqual(len(backend.calls), 12)
+
+    async def test_current_v2_intent_conflict_still_fails_closed(self):
+        profile = await self._active_python_profile(
+            "profile-discovery-v2-conflict-owner"
+        )
+        current_v2 = build_profile_discovery_intent(profile)
+        conflicting_v2 = ProfileDiscoveryIntent(
+            **{
+                **current_v2.__dict__,
+                "generated_web_queries": (
+                    "conflicting generated query",
+                    *current_v2.generated_web_queries[1:],
+                ),
+            }
+        )
+        repository = ProfileDiscoveryIntentRepository()
+
+        async with self.database.transaction() as connection:
+            first = await repository.ensure(connection, current_v2)
+            self.assertTrue(first.created)
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "profile discovery intent identity has conflicting content",
+            ):
+                await repository.ensure(connection, conflicting_v2)
 
     async def test_activation_persists_one_intent_and_web_discovery_is_idempotent(self):
         confirmation = ProfileConfirmationService(self.database)
