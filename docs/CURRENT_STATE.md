@@ -2,8 +2,8 @@
 
 **Status:** CANONICAL  
 **Snapshot date:** 2026-09-09
-**Implementation baseline:** `031e489a21fc53de7b1ddacc107ae57aa6d46f98`
-**Current deployed repository head:** `031e489a21fc53de7b1ddacc107ae57aa6d46f98`
+**Implementation baseline:** `aab68eb64a2ee29e7c90cae2cbba8a8a31f07f23`
+**Current deployed repository head:** `aab68eb64a2ee29e7c90cae2cbba8a8a31f07f23`
 
 ## Executive status
 
@@ -14,10 +14,11 @@ PR21 profile Web Discovery query-bound rollout.
 
 PR21 is merged, production-synced and bounded-run validated. The completed
 Web-only run proved the explicit one-shot `--max-queries` bound and surfaced
-SearXNG provider degradation from inherited default engines. This branch
-implements the reviewed repository-side SearXNG default-engine filter, but that
-filter is not production-active until a later merge/sync/recreate gate proves
-it.
+SearXNG provider degradation from inherited default engines. PR22 then merged a
+repository-side SearXNG exact-engine removal, but production activation exposed
+a startup failure in the pinned SearXNG image. This hotfix replaces destructive
+engine removal with exact disabled overrides and is not production-active until
+later review, merge, sync and controlled SearXNG recreation.
 
 Persistent discovery, Telegram discovery, Source Audit, auto-approval,
 auto-joining, candidate notification automation and persistent LeadRadar runtime
@@ -91,7 +92,16 @@ PR21_RUN_KEY=owner-profile-web-pr21-bounded-20260909-v1
 PR21_DISCOVERY_RUN_ID=3951cae0-3c45-4d81-ab41-38a37edf0614
 PR21_PROVIDER_OUTCOME=SEARCH_BACKEND_DEGRADED
 PR21_PROVIDER_STATE=BACKOFF
-SEARXNG_ENGINE_FILTER_CHANGE=IMPLEMENTATION_PENDING_REVIEW
+PR22_SEARXNG_REMOVE_CONFIG_MERGED=YES
+PR22_PRODUCTION_SYNCED=YES
+SEARXNG_PORT_RUNTIME_CORRECTED_SEPARATELY=YES
+SEARXNG_PRODUCTION_STATE=DOWN_RECOVERY_REQUIRED
+SEARXNG_REMOVE_CONFIG_STARTUP_FAILURE=YES
+SEARXNG_DISABLED_OVERRIDE_HOTFIX=IMPLEMENTATION_PENDING_REVIEW
+EXACT_PINNED_IMAGE_INIT_VALIDATION=REQUIRED_PRE_MERGE
+READY_FOR_OWNER_MERGE_AUTHORIZATION=NO
+VAULTWARDEN_UNCHANGED_HEALTHY=YES
+RECOVERY_WEB_TELEGRAM_OPENROUTER_CALLS=0
 OA_PROVIDER_ROUTE_SWITCH_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 SECOND_BOUNDED_WEB_RUN_AUTHORIZED=NO
@@ -102,13 +112,15 @@ READY_FOR_PERSISTENT_RUNTIME=NO
 The exact next execution sequence is:
 
 ```text
-independent review of the SearXNG engine-filter and docs PR
--> Owner authorizes merge
--> merge reviewed PR
--> separately authorize production sync of the exact reviewed merge
+independent review of the SearXNG disabled-override hotfix and docs PR
+-> exact pinned-image SearXNG startup/init validation
+-> only after PASS: Owner merge authorization
+-> merge exact reviewed head
+-> separate production sync authorization
 -> verify config/searxng/settings.yml arrives in the production checkout
--> separately authorize SearXNG container recreate/restart to consume mounted settings
--> read-only verify exact effective default engines no longer contain brave, duckduckgo or startpage
+-> separate controlled SearXNG recovery/recreate authorization
+-> production startup verification proves SearXNG initializes without KeyError: 'brave'
+-> production effective-settings verification proves brave/duckduckgo/startpage remain present but disabled by default
 -> separately authorize one new bounded Web-only canary
 -> evaluate provider stability and candidate quality
 -> only then decide Telegram freshness validation or candidate notifications
@@ -127,13 +139,13 @@ development. A useful real owner delivery is not yet proven at this snapshot.
 Production implementation baseline:
 
 ```text
-031e489a21fc53de7b1ddacc107ae57aa6d46f98
+aab68eb64a2ee29e7c90cae2cbba8a8a31f07f23
 ```
 
 Current server repository head:
 
 ```text
-031e489a21fc53de7b1ddacc107ae57aa6d46f98
+aab68eb64a2ee29e7c90cae2cbba8a8a31f07f23
 ```
 
 Runtime/tooling baseline:
@@ -355,13 +367,35 @@ settings_loader=/usr/local/searxng/searx/settings_loader.py
 DEFAULT_SETTINGS_FILE=/usr/local/searxng/searx/settings.yml
 ```
 
-Before this config PR, repository settings used `use_default_settings: true`
-with no local engine removals. Effective defaults therefore inherited the exact
-general engines `brave`, `duckduckgo` and `startpage`, and those exact names
-were present in persisted `unresponsive_engines` evidence. Removing those exact
-general engine names from inherited defaults is implementation-pending-review;
-production activation requires later merge, sync and SearXNG recreate/restart
-evidence.
+Before PR22, repository settings used `use_default_settings: true` with no local
+engine overrides. Effective defaults therefore inherited the exact general
+engines `brave`, `duckduckgo` and `startpage`, and those exact names were
+present in persisted `unresponsive_engines` evidence.
+
+PR22 attempted to filter those defaults through
+`use_default_settings.engines.remove`. Production activation then produced this
+historical incident sequence:
+
+1. PR22 remove config merged.
+2. Production sync passed.
+3. First activation attempt defaulted to port 8080 because `SEARXNG_PORT` was
+   missing from `/opt/leadradar/runtime/.env`.
+4. Unrelated Vaultwarden safely blocked the bind and remained unchanged and
+   healthy.
+5. Runtime env was restored separately to `SEARXNG_PORT=8888`.
+6. The second recreate reached SearXNG startup.
+7. SearXNG exited during `searx.search.initialize()` with `KeyError: 'brave'`.
+8. Read-only diagnostics proved a repository config fix is required.
+
+The proven defect is SearXNG config topology: the base `brave` engine was
+deleted while retained variants such as `brave.images`, `brave.videos` and
+`brave.news` still reference `network: brave`. The production-safe strategy is
+ordinary default inheritance plus exact local overrides with `disabled: true`
+for `brave`, `duckduckgo` and `startpage`. This preserves network definitions
+while excluding those engines from normal default selection. Do not use
+`inactive: true`, do not remove dependent variants, and do not claim production
+recovery until later review, merge, sync and controlled SearXNG recreation
+prove startup.
 
 ### Bot and owner-only access
 
@@ -850,15 +884,20 @@ one-shot Web Discovery bound gates are complete.
 
 Remaining ordered work:
 
-1. independent review of the SearXNG exact-engine removal and documentation PR;
-2. Owner-authorized merge of the reviewed PR;
-3. separately authorize production sync of the exact reviewed merge;
-4. verify `config/searxng/settings.yml` arrives in the production checkout;
-5. separately authorize SearXNG container recreate/restart to consume the
+1. independent review of the SearXNG disabled-override hotfix and documentation PR;
+2. exact pinned-image SearXNG startup/init validation;
+3. only after PASS, Owner-authorized merge of the reviewed PR;
+4. merge exact reviewed head;
+5. separately authorize production sync of the exact reviewed merge;
+6. verify `config/searxng/settings.yml` arrives in the production checkout;
+7. separately authorize controlled SearXNG recovery/recreate to consume the
    read-only mounted settings file;
-6. read-only verify effective settings no longer contain the exact engines
-   `brave`, `duckduckgo` or `startpage`;
-7. separately authorize one new bounded Web-only canary and evaluate provider
+8. production startup verification proves SearXNG initializes without
+   `KeyError: 'brave'`;
+9. production effective-settings verification proves `brave`, `duckduckgo` and
+   `startpage` definitions remain
+   present but disabled by default;
+10. separately authorize one new bounded Web-only canary and evaluate provider
    stability plus candidate quality before any Telegram validation or Owner
    notification pass;
 
@@ -871,10 +910,10 @@ legacy routing until saved. Telegram source-language callbacks carry the
 profile revision that rendered them; stale open/toggle callbacks discard their
 encoded selection mask and refresh the persisted state, while stale save
 callbacks remain blocked by `expected_revision`.
-8. evaluate provider/model strict-schema capability later as a separate gate;
-9. separately review candidate promotion/joining and broader discovery/audit
+11. evaluate provider/model strict-schema capability later as a separate gate;
+12. separately review candidate promotion/joining and broader discovery/audit
    rollout;
-10. authorize persistent runtime only after bounded end-to-end Owner MVP
+13. authorize persistent runtime only after bounded end-to-end Owner MVP
    validation and operational safeguards are complete.
 
 The authoritative order is in `docs/ACTIVE_PLAN.md`.
