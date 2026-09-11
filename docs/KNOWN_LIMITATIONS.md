@@ -2,7 +2,7 @@
 
 **Status:** CANONICAL  
 **Last verified:** 2026-09-11
-**Implementation baseline:** `fcf2559605e40f4210b9611a57a2b7fbbdd91a3a`
+**Implementation baseline:** `81a675b72ed4c1229cedad28e5d2e1f56bac1f66`
 
 This document distinguishes code that exists from behavior that has actually
 been validated in the current deployment.
@@ -63,99 +63,108 @@ SEARXNG_PRODUCTION_STATE=RUNNING
 SEARXNG_DISABLED_OVERRIDE_STRATEGY=PRODUCTION_VALIDATED
 ```
 
-The next limitation/gate is useful owner delivery from relevant live
-Opportunity evidence, not ingestion or first-provider configuration.
+The immediate execution gate is the PR28 canonical-docs reconciliation,
+followed by independent review, docs-only production sync, and a final
+read-only live-gate refresh before any new bounded Web canary authorization.
+
+Useful owner delivery remains a later product limitation and is not authorized
+or proven by the current Web-discovery gate.
 
 ## Current top limitations
 
-1. **P0 — PR24 live Web yield remains unproven.** The corrected-namespace PR24
-   live invocation failed before `discovery_runs` creation with
-   `RuntimeError: profile discovery intent identity has conflicting content`.
-   Root cause is confirmed: PR24 changed persisted `generated_web_queries` under
-   unchanged `profile-discovery-intent.v1`; only that field differed, and the
-   historical v1 row is referenced by existing relevance/run evidence. The fix
-   is to version the current intent contract to `profile-discovery-intent.v2`,
-   not to mutate historical rows or weaken the conflict guard.
+1. **P0 — PR24/PR27 live Web yield remains unproven.** PR27 implemented,
+   reviewed, merged and production-synced the `profile-discovery-intent.v2`
+   identity-version fix, and the technical read-only PRELIVE passed. No live Web
+   canary has been authorized or executed after PR27 sync, so buyer_habitat /
+   adjacent yield and candidate novelty remain unproven.
 2. **P0 — The used PR24 Web canary run key is retired.** The run key
    `owner-profile-web-pr24-bounded-20260911-v1` was used in an authorized
    invocation and then in an unauthorized second invocation, despite no run row
    being created. Future validation needs a new run key and fresh one-attempt
-   Owner authorization after read-only PRELIVE passes.
-3. **P0 — Useful live owner delivery is not proven.** Matching and
+   Owner authorization after the final read-only live-gate refresh passes.
+3. **P0 — Profile Discovery v2 is not yet persisted in production.** The
+   historical v1 row remains immutable evidence, same-version content conflicts
+   still fail closed, and the current v2 deterministic identity is distinct from
+   v1. Technical PRELIVE showed `PERSISTED_V2_COUNT=0` and
+   `CURRENT_V2_CONFLICT_PRESENT=NO`. Code deployment and read-only PRELIVE did
+   not persist v2; a later authorized path that calls the intent repository
+   `ensure()` may persist the current v2 row, including profile activation or
+   Profile Discovery.
+4. **P0 — Useful live owner delivery is not proven.** Matching and
    personalized delivery are implemented/tested, and a fresh C++/HFT natural
    sample passed Opportunity Analysis and matching, but useful owner delivery
    has not yet been proven.
-4. **P0 — PR13 RU/EN web repair live result is inconclusive.** PR13 is
+5. **P0 — PR13 RU/EN web repair live result is inconclusive.** PR13 is
    reviewed, merged and repeat-canaried, but the fresh sample was C++/HFT rather
    than a relevant RU/EN web sample.
-5. **P1 — Collector membership is required external state.** PostgreSQL
+6. **P1 — Collector membership is required external state.** PostgreSQL
    `APPROVED` status and public-history readability do not guarantee live update
    delivery. Deployment/preflight must also verify Telegram membership.
-6. **P1 — Telegram account/platform limits remain external.** FloodWait,
+7. **P1 — Telegram account/platform limits remain external.** FloodWait,
    ChannelsTooMuch, membership loss, source removal/rename and access changes can
    interrupt collection independently of PostgreSQL correctness.
-7. **P1 — Membership drift is not automatically reconciled.** Current rollout is
+8. **P1 — Membership drift is not automatically reconciled.** Current rollout is
    13/13, but there is no authorized automatic join/remediation mechanism. A
    future source approval requires explicit membership provisioning.
-8. **P1 — Legacy filter substring behavior can create false positives.** The
+9. **P1 — Legacy filter substring behavior can create false positives.** The
    accumulated stop-word matcher remains substring-based. It is intentionally
    preserved until enough shadow data supports a narrow redesign.
-9. **P1 — Current shadow sample is small.** Live path correctness is proven, but
+10. **P1 — Current shadow sample is small.** Live path correctness is proven, but
    one successful natural shadow row is not enough to tune thresholds/keywords
    confidently.
-10. **P1 — OpenRouter model availability/cost are external.**
+11. **P1 — OpenRouter model availability/cost are external.**
    `minimax/minimax-m3:free` availability, pricing and rate/free-tier limits can
    change outside the repository and must be reverified before further live
    validation or expanded use.
-11. **P1 — Opportunity Analysis has no separate enable switch.** Once the
+12. **P1 — Opportunity Analysis has no separate enable switch.** Once the
    matching provider key is configured, full `--run` can process pending
    `opportunity.analysis.v1` jobs and make provider calls. `AI_REPLY_ENABLED`
    controls reply drafting only.
-12. **P1 — SearchProfile onboarding requires a configured AI route for its
+13. **P1 — SearchProfile onboarding requires a configured AI route for its
    natural-language flow.** That route is not enabled yet.
-13. **P1 — At-least-once external delivery remains.** Telegram send and
+14. **P1 — At-least-once external delivery remains.** Telegram send and
     PostgreSQL confirmation cannot be one atomic transaction; idempotency reduces
     but cannot mathematically remove the crash window.
-14. **P2 — OpenRouter scope is currently Opportunity Analysis only.** It is not
+15. **P2 — OpenRouter scope is currently Opportunity Analysis only.** It is not
     first-class support for onboarding, Source Audit, Telegram Chat Screening,
     reply drafting or source discovery.
-15. **P2 — Discovery/audit code is not deployment evidence.** Web,
+16. **P2 — Discovery/audit code is not deployment evidence.** Web,
     global/graph/chat discovery and Source Audit exist but remain disabled.
     Source-language provenance in repository head is therefore a persisted
     contract, not proof that all production sources have been audited or resolved.
-16. **P2 — Billing/payment code is not configured production payment behavior.**
+17. **P2 — Billing/payment code is not configured production payment behavior.**
     Provider-neutral state/adapters exist, but current private single-owner
     deployment has not activated production billing.
-17. **P2 — Legacy V1 compatibility remains in the codebase.** SQLite/legacy
+18. **P2 — Legacy V1 compatibility remains in the codebase.** SQLite/legacy
     components still exist even though PostgreSQL is V2 authority and legacy
     delivery is disabled.
-18. **P2 — Synthetic fixtures are not production-quality evidence.** Tests are
+19. **P2 — Synthetic fixtures are not production-quality evidence.** Tests are
     necessary but do not substitute for bounded live validation.
-19. **P2 — PR14/PR15 OpportunityAnalysisV2 evidence-aware matching is runtime
+20. **P2 — PR14/PR15 OpportunityAnalysisV2 evidence-aware matching is runtime
     shadow instrumentation only.** `PR14_EVIDENCE_RUNTIME_INSTRUMENTATION_IMPLEMENTED=YES`,
     `SHADOW_RUNTIME_WIRED=YES`, `SHADOW_DURABLE_PERSISTENCE=YES`,
     `PRODUCTION_MATCH_POLICY_CHANGED=NO`, `DELIVERY_POLICY_CHANGED=NO` and
     `SHADOW_LIVE_VALIDATED=NO`; the trace is an observational evidence surface,
     not current matching or delivery policy.
-20. **P2 — Persistent runtime is intentionally absent.** No LeadRadar daemon is
+21. **P2 — Persistent runtime is intentionally absent.** No LeadRadar daemon is
     authorized, so unattended continuity/restart behavior is not yet proven.
-21. **P2 — PR21 Web-only provider evidence is a single sample.** The run ended
+22. **P2 — PR21 Web-only provider evidence is a single sample.** The run ended
     after 5 of 12 selected queries due captcha/backoff, considered 12 search
     results, produced one weak new candidate, and is not enough to judge
     long-term source quality or novelty.
-22. **P2 — Historical PR22 SearXNG engine removal was unsafe.** PR22 exact-engine
+23. **P2 — Historical PR22 SearXNG engine removal was unsafe.** PR22 exact-engine
     removal was merged and production-synced, but activation proved unsafe for
     the pinned SearXNG image: dependent Brave variants still reference
     `network: brave`, and startup failed with `KeyError: 'brave'`. PR23 restored
     production SearXNG by preserving inherited engine/network definitions and
     disabling the exact unwanted engines with `disabled: true` overrides.
-23. **P2 — Disabling those engines is not a guarantee against captcha/backoff.**
+24. **P2 — Disabling those engines is not a guarantee against captcha/backoff.**
     It narrows known noisy default engines, but provider stability still depends
     on SearXNG defaults, upstream search behavior and local rate conditions.
-24. **P2 — PR21 one-shot query bounds do not bound autonomous discovery.**
+25. **P2 — PR21 one-shot query bounds do not bound autonomous discovery.**
     `--max-queries` bounds an explicit operator run; persistent Web discovery
     remains unauthorized and separately unproven.
-25. **P2 — Candidate notification automation is not authorized.** The explicit
+26. **P2 — Candidate notification automation is not authorized.** The explicit
     Owner candidate notification one-shot exists, but no recurring schedule,
     Telegram freshness validation run or Owner notification pass is currently
     implemented/authorized by this gate.

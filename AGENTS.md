@@ -1,8 +1,8 @@
 # LeadRadar — Agent Entry Point
 
 **Status:** CANONICAL  
-**Last verified:** 2026-09-09
-**Implementation baseline:** `031e489a21fc53de7b1ddacc107ae57aa6d46f98`
+**Last verified:** 2026-09-11
+**Implementation baseline:** `81a675b72ed4c1229cedad28e5d2e1f56bac1f66`
 
 This file is the entry point for ChatGPT, Codex, Claude, DeepSeek, or any other
 engineer/agent that receives repository access without prior conversation
@@ -18,11 +18,12 @@ implementation or server work:
 3. `docs/CURRENT_STATE.md`
 4. `docs/ARCHITECTURE.md`
 5. `docs/ACTIVE_PLAN.md`
-6. `docs/DEPLOYMENT.md`
-7. `docs/DECISIONS.md`
-8. `SECURITY.md`
-9. `docs/COST_SAFETY.md`
-10. `docs/KNOWN_LIMITATIONS.md`
+6. `docs/OPERATIONS.md`
+7. `docs/DEPLOYMENT.md`
+8. `docs/DECISIONS.md`
+9. `SECURITY.md`
+10. `docs/COST_SAFETY.md`
+11. `docs/KNOWN_LIMITATIONS.md`
 
 Then inspect the code that is relevant to the requested task.
 
@@ -37,9 +38,11 @@ When facts disagree, use this order:
 
 1. fresh server/runtime evidence for deployment state;
 2. code and migrations at the current repository head;
-3. canonical current documentation listed above;
-4. tests and CI;
-5. historical documentation and old PR/task reports.
+3. exact command contracts from current code, `--help`, and repository APIs;
+4. canonical current documentation listed above, especially
+   `docs/OPERATIONS.md` for server/live task design;
+5. tests and CI;
+6. historical documentation and old PR/task reports.
 
 `docs/CURRENT_STATE.md` records an implementation/deployment snapshot. A later
 docs-only commit can make repository `HEAD` differ from the implementation
@@ -64,6 +67,9 @@ baseline, verify the diff and update the canonical docs in the same workstream.
 - Any credential exposed during testing must be rotated before continuing.
 - Server work is performed one command at a time with output review between
   commands.
+- Production commands must be verified from exact-head code, `--help`,
+  repository APIs and `docs/OPERATIONS.md`; do not guess module paths,
+  parser contracts or database APIs from memory or previous tasks.
 - LeadRadar runs on a shared server. Do not modify unrelated containers,
   systemd services, firewall, global Python, WayFound, Hermes, or other
   databases.

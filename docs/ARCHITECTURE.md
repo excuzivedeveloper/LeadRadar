@@ -2,7 +2,7 @@
 
 **Status:** CANONICAL  
 **Last verified:** 2026-09-11
-**Implementation baseline:** `fcf2559605e40f4210b9611a57a2b7fbbdd91a3a`
+**Implementation baseline:** `81a675b72ed4c1229cedad28e5d2e1f56bac1f66`
 
 ## Purpose
 
@@ -599,10 +599,15 @@ Profile Discovery Intent rows are immutable, versioned evidence. The
 deterministic intent UUID includes the intent contract version, profile identity
 and profile revision. Persisted content changes under the same version must
 continue to fail closed through the repository conflict guard. PR24 changed the
-persisted `generated_web_queries` contract, so current profile Web Discovery now
-uses `profile-discovery-intent.v2`; historical `profile-discovery-intent.v1`
-rows remain valid evidence and may coexist with v2 rows for the same
-SearchProfile revision.
+persisted `generated_web_queries` contract, and PR27 made current profile Web
+Discovery use `profile-discovery-intent.v2`; historical
+`profile-discovery-intent.v1` rows remain valid evidence and may coexist with v2
+rows for the same SearchProfile revision. A current v2 row is not created merely
+by code deployment or read-only PRELIVE diagnostics. It is persisted when an
+authorized code path calls `ProfileDiscoveryIntentRepository.ensure(...)` for
+the current intent; current known persistence paths include
+`ProfileConfirmationService.activate()` and Profile Discovery paths that ensure
+the intent.
 
 The PR21 production run completed one bounded Web-only pass and stopped after
 5 of 12 selected queries because SearXNG entered provider backoff after captcha
