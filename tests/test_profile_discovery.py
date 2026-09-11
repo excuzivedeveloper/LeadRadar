@@ -369,12 +369,18 @@ class ProfileDiscoveryPostgresIntegrationTest(unittest.IsolatedAsyncioTestCase):
 
         async with self.database.transaction() as connection:
             first = await repository.ensure(connection, current_v2)
-            self.assertTrue(first.created)
+            self.assertFalse(first.created)
             with self.assertRaisesRegex(
                 RuntimeError,
                 "profile discovery intent identity has conflicting content",
             ):
                 await repository.ensure(connection, conflicting_v2)
+            current_v2_count = await connection.scalar(
+                sa.select(sa.func.count())
+                .select_from(profile_discovery_intents)
+                .where(profile_discovery_intents.c.id == current_v2.id)
+            )
+            self.assertEqual(current_v2_count, 1)
 
     async def test_activation_persists_one_intent_and_web_discovery_is_idempotent(self):
         confirmation = ProfileConfirmationService(self.database)
