@@ -2,9 +2,10 @@
 
 **Status:** CANONICAL  
 **Last verified:** 2026-09-11
-**Production baseline:** `81a675b72ed4c1229cedad28e5d2e1f56bac1f66`
+**Implementation baseline:** `81a675b72ed4c1229cedad28e5d2e1f56bac1f66`
+**Current production repository head:** `f39eb215526c9ff18bd2227ccf0f3cd40304407f`
 
-This document is the operational source of truth for the current LeadRadar production environment. It records only facts proven from the exact repository commit and the read-only production inventory. If a future code or deployment change invalidates any item below, update this document before using old commands in a new server task.
+This document is the operational source of truth for the current LeadRadar production environment. Fresh exact-head server evidence outranks this document; if later evidence disagrees, stop and reconcile docs before designing a new live task.
 
 ## 1. Production layout
 
@@ -17,6 +18,8 @@ python=./.venv/bin/python
 python_version=3.14.7
 bare_python=ABSENT
 alembic_current=20260908_0042
+production_head=f39eb215526c9ff18bd2227ccf0f3cd40304407f
+implementation_baseline=81a675b72ed4c1229cedad28e5d2e1f56bac1f66
 ```
 
 Do not modify global Python for LeadRadar work.
@@ -50,7 +53,7 @@ Vaultwarden no-touch neighbor:
   health=healthy
 ```
 
-Persistent LeadRadar application runtime is currently not authorized and must remain stopped outside a separately authorized runtime gate.
+Persistent LeadRadar application runtime is not authorized and must remain stopped outside a separately authorized runtime gate.
 
 ## 3. Canonical runtime safety flags
 
@@ -79,17 +82,13 @@ There are two different CLI namespaces. Do not interchange them.
 ./.venv/bin/python -m freelancer_bot --help
 ```
 
-`freelancer_bot/__main__.py` calls `freelancer_bot.app.cli()`. This is the application/runtime CLI.
-
 ### Operator CLI
 
 ```bash
 ./.venv/bin/python -m freelancer_bot.operator_cli --help
 ```
 
-This is the bounded operator/maintenance CLI. Profile Web Discovery lives here.
-
-### Verified profile Web Discovery command
+Profile Web Discovery lives under the operator CLI:
 
 ```bash
 ./.venv/bin/python -m freelancer_bot.operator_cli \
@@ -102,60 +101,45 @@ This is the bounded operator/maintenance CLI. Profile Web Discovery lives here.
   --max-queries <N>
 ```
 
-`--max-queries` bounds only this explicit one-shot operator invocation. It does not bound or authorize the persistent runtime.
+`--max-queries` bounds only that explicit one-shot invocation. It does not bound or authorize persistent runtime.
 
-Before any live run, verify the command contract with:
+Before a future live run, verify the exact command contract from exact-head code and parser-only validate the exact future argv without dispatch. Parser acceptance proves only the argparse contract; profile state, run-key freshness, provider health, authorization and all other gates remain separate.
 
-```bash
-./.venv/bin/python -m freelancer_bot.operator_cli \
-  profile-discovery run --help
-```
+## 5. Operator CLI command catalog and side-effect classes
 
-For one-attempt canaries, also validate the exact future argv through the parser without dispatch before Owner authorization. Parser acceptance proves only the argparse contract; profile state, run-key freshness, provider health and other operational conditions remain separate checks. Parser-only validation must use the exact operator CLI parser contract and must not dispatch the command.
-
-## 5. Operator CLI command catalog
-
-The following command families exist in `freelancer_bot.operator_cli`. Presence does not imply production authorization.
+Current command families include:
 
 ```text
 collectors
   status
-
 telegram-discovery
   status
   topics
   run
   screen-pending
-
 sources
   list
   show
   audits
   transition
-
 discovery
   web
   graph
   runs
   results
-
 audit
   run
   re-audit
   list
-
 match
   runs
   traces
-
 delivery
   list
-
 observe
   raw
   opportunities
   metrics
-
 profile-discovery
   evaluate
   canary
@@ -163,14 +147,12 @@ profile-discovery
   coverage
   intents
   calibrate
-
 source-bootstrap
   start
   status
   pause
   resume
   run
-
 source-library
   stats
   coverage
@@ -182,16 +164,13 @@ source-library
   offline-scale
 ```
 
-### Authorization classes
-
-Treat commands by side effect, not by name:
+Treat commands by actual side effect, not by name:
 
 ```text
 READ-ONLY / OFFLINE candidates:
   --help
   collectors status
-  telegram-discovery status
-  telegram-discovery topics
+  telegram-discovery status/topics
   sources list/show/audits
   discovery runs/results
   audit list
@@ -220,32 +199,18 @@ EXPLICIT MUTATION:
   source-library rerank-candidates
 ```
 
-The classification above is operational guidance. Before using a command in a production task, inspect its current implementation and `--help` at the exact target commit, because command behavior can change.
+Before using any command in production, inspect its implementation and `--help` at the exact target commit.
 
 ## 6. Database contract
 
-LeadRadar uses SQLAlchemy async connections.
+LeadRadar uses SQLAlchemy async connections:
 
 ```text
 Database.connect() -> sqlalchemy.ext.asyncio.AsyncConnection
 read API -> connection.execute(...) / connection.scalar(...)
 ```
 
-Do not assume asyncpg methods such as:
-
-```text
-fetchval
-fetchrow
-fetch
-```
-
-unless the exact code path explicitly returns an asyncpg connection.
-
-Module paths and repository APIs must also be verified from exact-head code. A
-PR27 PRELIVE diagnostic first failed because the task guessed
-`freelancer_bot.database`; the corrected exact-code diagnostic used the actual
-repository modules and SQLAlchemy async API. Do not invent module paths or
-database APIs from memory.
+Do not assume asyncpg `fetchval`, `fetchrow`, or `fetch` methods unless the exact code path explicitly returns asyncpg.
 
 Verified source lifecycle field and candidate value:
 
@@ -254,9 +219,7 @@ sources.lifecycle_status
 SourceStatus.CANDIDATE="candidate"
 ```
 
-Do not use `sources.lifecycle_state`.
-
-Verified schema symbols used for current operational counters:
+Verified operational schema symbols include:
 
 ```text
 discovery_runs
@@ -267,25 +230,23 @@ ai_call_telemetry
 source_lifecycle_events
 ```
 
-Current read-only inventory at the 2026-09-10 checkpoint:
+Latest bounded evidence snapshot:
 
 ```text
-DISCOVERY_RUN_COUNT=6
+DISCOVERY_RUN_COUNT=7
 SOURCE_COUNT=22
 CANDIDATE_COUNT=7
 OWNER_NOTIFICATION_COUNT=3
-TELEGRAM_OPERATION_EVENT_COUNT=203
+TELEGRAM_OPERATION_EVENT_COUNT=207
 AI_CALL_TELEMETRY_COUNT=51
 SOURCE_LIFECYCLE_EVENT_COUNT=24
 ```
 
-These counts are a snapshot, not invariants. Table/column names and API contracts are the durable facts.
+Counts are snapshots, not invariants.
 
 ## 7. Alembic contract
 
-`alembic.ini` does not carry the production DSN. `migrations/env.py` first checks Alembic `sqlalchemy.url`; otherwise it resolves the database through `RuntimeConfig.from_env(mode=DATABASE)`.
-
-Therefore production DB-connected Alembic commands require the canonical runtime env to be loaded first:
+`alembic.ini` does not carry the production DSN. Production DB-connected Alembic commands require the canonical runtime env:
 
 ```bash
 cd /opt/leadradar/LeadRadar
@@ -301,7 +262,7 @@ Expected current revision:
 20260908_0042
 ```
 
-Never run `alembic upgrade` or `downgrade` unless a separate migration task explicitly authorizes it.
+Never run `alembic upgrade` or `downgrade` without a separate migration authorization.
 
 ## 8. SearXNG operational contract
 
@@ -319,21 +280,19 @@ engines:
     disabled: true
 ```
 
-Do not remove those base engine definitions. Retained engine variants depend on shared network aliases, and destructive removal previously caused `KeyError: 'brave'` during SearXNG initialization.
+Do not remove these base engine definitions. Retained variants depend on shared network aliases; destructive removal historically caused `KeyError: 'brave'` during initialization. Do not substitute `inactive: true` for the verified override.
 
-Do not use `inactive: true` as a substitute for the verified disabled override.
-
-Safe container inspection must use the discovered runtime interpreter when Python is required:
+Container Python diagnostics use:
 
 ```text
 /usr/local/searxng/.venv/bin/python3
 ```
 
-For heredoc/stdin diagnostics use `docker exec -i`.
+Use `docker exec -i` for heredoc/stdin diagnostics.
 
-## 9. Standard read-only production preflight
+## 9. Standard production preflight
 
-A production task should normally establish these facts before any live or mutating operation:
+Before any new live or mutating production operation establish at least:
 
 ```text
 exact expected HEAD
@@ -347,51 +306,37 @@ Vaultwarden unchanged
 required safety flags unchanged
 ```
 
-For a bounded profile Web canary, PRELIVE must additionally verify:
+Any future Web canary must additionally revalidate its exact command, profile state, fresh run key, baseline counters and effective provider health.
 
-```text
-exact operator CLI --help
-parser-only acceptance of the exact future argv without dispatch
-profile exists, active, confirmed and at the expected revision
-fresh run key absent from persisted discovery runs
-baseline counters captured
-effective persisted Web provider health is not blocking
-```
-
-Provider-health gating must follow the same semantics as `WebDiscoveryGovernor.restore()`:
+Provider-health semantics remain:
 
 ```text
 UNAVAILABLE -> BLOCK
 BACKOFF with backoff_until > now -> BLOCK
-BACKOFF with backoff_until <= now -> not a blocker; effective state becomes DEGRADED
+BACKOFF with backoff_until <= now -> not a blocker; effective state DEGRADED
 DEGRADED -> not a blocker by itself
 READY -> PASS
 ```
 
-Read-only evidence does not authorize repair or the live invocation itself.
+Read-only evidence never authorizes repair or a live invocation.
 
-## 10. Run-key and one-attempt rules
+## 10. One-attempt authorization and run-key rules
 
 For bounded discovery canaries:
 
 ```text
-1. verify the exact run key does not already exist;
+1. verify the exact run key is unused;
 2. capture pre-run counters;
-3. invoke the exact reviewed operator CLI command once;
-4. once the invocation command is issued, the Owner authorization is consumed;
-5. do not retry under the same authorization, even if failure happens before useful provider work;
-6. capture persisted run evidence, post-run counters and final continuity;
+3. invoke the exact reviewed command once;
+4. authorization is consumed when the invocation is issued;
+5. do not retry under the same authorization;
+6. capture persisted evidence and post-run continuity;
 7. return to the orchestrator for the next decision.
 ```
 
-A CLI parse rejection is not Web/provider evidence, but it still consumes an authorization if the authorized invocation command was actually issued under a one-attempt task.
+A parse rejection is not provider evidence but still consumes authorization if invocation was the defined consumption point. A runtime failure before `discovery_runs` creation also consumes it.
 
-The same no-retry rule applies to runtime failures before `discovery_runs`
-creation. The PR24 correctly namespaced live invocation with run key
-`owner-profile-web-pr24-bounded-20260911-v1` failed before run creation with
-`RuntimeError: profile discovery intent identity has conflicting content`.
-A second Web invocation was accidentally issued and was not authorized. Treat
-that run key as retired operationally:
+Historical PR24 retired key:
 
 ```text
 RETIRED_RUN_KEY=owner-profile-web-pr24-bounded-20260911-v1
@@ -400,20 +345,148 @@ AUTHORIZED_LIVE_COMMAND_ATTEMPTS=1
 LIVE_COMMAND_ATTEMPTS=2
 ```
 
-The PR27 technical PRELIVE proposed a fresh replacement key and validated it
-without dispatch:
+The PR27 replacement key is no longer proposed/unused. It was consumed by the successful bounded canary:
 
 ```text
-PROPOSED_RUN_KEY=owner-profile-web-pr27-bounded-20260911-v1
-PROPOSED_RUN_KEY_STATUS=FRESH_UNUSED_NOT_AUTHORIZED
-RUN_KEY_WEB_SEARCH_COUNT=0
-PARSER_ONLY=PASS
-DISPATCH_CALLED=NO
+RUN_KEY=owner-profile-web-pr27-bounded-20260911-v1
+DISCOVERY_RUN_ID=6a529712-6a7f-44a4-bd39-c8b23d25d44b
+DISCOVERY_RUN_STATUS=completed
+AUTHORIZATION_CONSUMED=YES
+RETRY_ALLOWED=NO
 ```
 
-## 11. Shared-host no-touch boundary
+## 11. PR27 bounded Web evidence
 
-LeadRadar tasks must not modify unrelated host workloads, including:
+Exact-head production canary outcome:
+
+```text
+PR27_BOUNDED_WEB_CANARY=PASS
+PRODUCTION_HEAD=f39eb215526c9ff18bd2227ccf0f3cd40304407f
+LIVE_COMMAND_EXIT_CODE=0
+GENERATED_QUERY_COUNT=36
+EXECUTABLE_QUERY_COUNT=34
+SELECTED_QUERY_COUNT=12
+EXECUTED_QUERY_COUNT=12
+SELECTED_DIRECT=4
+SELECTED_BUYER_HABITAT=4
+SELECTED_ADJACENT=4
+SEARCH_RESULTS_CONSIDERED=19
+TELEGRAM_LIKE_CANDIDATES=18
+UNIQUE_CANDIDATES=4
+KNOWN_CANDIDATES=4
+NEW_CANDIDATES=0
+DISCOVERY_RUN_RESULT_COUNT=4
+DISCOVERY_RUN_MATERIALIZED_COUNT=4
+CREATED_RESULT_COUNT=0
+EXISTING_RESULT_COUNT=4
+PERSISTED_V2_COUNT=1
+PERSISTED_V2_INTENT_ID=b3f53d57-afd9-55e1-b822-77d687fe466d
+CURRENT_V2_ID_MATCH=YES
+CURRENT_V2_CONTENT_MATCH=YES
+CURRENT_V2_CONFLICT_PRESENT=NO
+SEARXNG_EFFECTIVE_STATE=READY
+FLOOD_OR_BACKEND_FAILURE=NONE
+```
+
+Angle attribution proves:
+
+```text
+NON_DIRECT_LIVE_YIELD_PROVEN=YES
+NON_DIRECT_ONLY_LIVE_YIELD_PROVEN=NO
+NON_DIRECT_SUPPORTED_UNIQUE_CANDIDATES=3
+NOVELTY_IMPROVED=NO
+```
+
+Compared with PR23, search results rose `7 -> 19` and Telegram-like matches rose `6 -> 18`, while unique candidates stayed `4 -> 4` and new candidates stayed `0 -> 0`. Do not claim buyer-habitat/adjacent improved novelty or found a new source.
+
+## 12. Telegram collector identity contract and current anomaly
+
+Initial PRELIVE found:
+
+```text
+ACTIVE_TELEGRAM_COLLECTOR_COUNT=2
+ACTIVE_TELEGRAM_COLLECTOR_IDS=1,2
+```
+
+Exact-head code supports this state: session source listing resolves `client.get_me()` and collector-account `ensure(... active_on_create=True)` is scoped to `(platform, external_account_id)`; it does not deactivate an older row with another external ID.
+
+Read-only evidence showed collector `2` carries the historical production activity. A separately authorized identity-only gate proved the configured Telethon session is collector `2`:
+
+```text
+CURRENT_SESSION_COLLECTOR_ACCOUNT_ID=2
+CURRENT_SESSION_BINDING_PROVEN=YES
+CURRENT_SESSION_MATCHES_HISTORICAL_PRODUCTION_COLLECTOR=YES
+CURRENT_SESSION_IS_BOT=NO
+COLLECTOR_ACCOUNT_MUTATION_PERFORMED=NO
+DELTA_TELEGRAM_OPERATION_EVENTS=0
+```
+
+Collector `1` remains active. Treat it as a stale/legacy active-row anomaly pending a separate controlled cleanup decision. Do not infer its exact historical Telegram-user origin from the current evidence.
+
+A future cleanup is an **explicit mutation** and requires its own Owner authorization. This docs reconciliation does not authorize it.
+
+## 13. Bounded Telegram source access/freshness evidence
+
+The authorized source probe was guarded to collector `2` and issued exactly four governed source operations:
+
+```text
+BOUNDED_TELEGRAM_PROBE_EXECUTION=PASS
+IDENTITY_GUARD_COLLECTOR_2_MATCH=YES
+MAX_GOVERNED_SOURCE_OPERATIONS=4
+GOVERNED_SOURCE_OPERATIONS_ISSUED=4
+FLOODWAIT_OCCURRED=NO
+PRE_TELEGRAM_OPERATION_EVENT_COUNT=203
+POST_TELEGRAM_OPERATION_EVENT_COUNT=207
+DELTA_TELEGRAM_OPERATION_EVENTS=4
+NEW_OPERATION_EVENTS_ON_OTHER_COLLECTORS=0
+```
+
+Source results:
+
+```text
+SOURCE_19_HANDLE=@phystechcareerchannel
+SOURCE_19_ENTITY_RESOLVED=YES
+SOURCE_19_USERNAME_MATCH=YES
+SOURCE_19_HISTORY_READ=YES
+SOURCE_19_LATEST_MESSAGE_AT=2026-09-09T07:03:47+00:00
+SOURCE_19_FRESH_WITHIN_10_DAYS=YES
+SOURCE_19_LIFECYCLE=candidate
+
+SOURCE_20_HANDLE=@juniors_rabota_jobs
+SOURCE_20_ENTITY_RESOLVED=YES
+SOURCE_20_USERNAME_MATCH=YES
+SOURCE_20_HISTORY_READ=YES
+SOURCE_20_LATEST_MESSAGE_AT=2026-09-11T07:08:01+00:00
+SOURCE_20_FRESH_WITHIN_10_DAYS=YES
+SOURCE_20_LIFECYCLE=candidate
+```
+
+The probe did **not** call the lifecycle validation service and performed no lifecycle transition, join/leave request or Owner notification:
+
+```text
+SOURCE_VALIDATION_SERVICE_CALLED=NO
+LIFECYCLE_TRANSITIONS_PERFORMED=NO
+OWNER_NOTIFICATIONS_SENT=0
+JOIN_LEAVE_REQUESTS=0
+SOURCE_19_20_LIFECYCLE_DECISION=NONE
+```
+
+Operationally separate these concepts:
+
+```text
+public entity resolution / history readability / freshness
+!= lifecycle approval
+!= Telegram membership
+!= live-update readiness
+!= Owner notification
+!= persistent collection
+```
+
+Do not approve, join, notify, clean up collector rows, or start runtime based solely on this evidence.
+
+## 14. Shared-host no-touch boundary
+
+LeadRadar tasks must not modify unrelated host workloads:
 
 ```text
 WayFound
@@ -427,9 +500,9 @@ global Python
 unrelated databases
 ```
 
-Vaultwarden is especially relevant because it owns host port `127.0.0.1:8080`; LeadRadar SearXNG is intentionally bound to `127.0.0.1:8888`.
+Vaultwarden owns `127.0.0.1:8080`; LeadRadar SearXNG remains on `127.0.0.1:8888`.
 
-## 12. Production promotion contract
+## 15. Production promotion contract
 
 Before syncing a reviewed change to production:
 
@@ -443,72 +516,62 @@ Before syncing a reviewed change to production:
 7. fast-forward only;
 8. verify exact HEAD after sync;
 9. re-check runtime continuity;
-10. keep activation/runtime restart as a separate authorization unless explicitly included.
+10. keep activation/runtime restart separate unless explicitly authorized.
 ```
 
-Do not use local merge, rebase, destructive reset or a newer-than-authorized `origin/main` target.
+Do not use local merge, rebase, destructive reset or a newer-than-authorized target.
 
-## 13. Current rollout state
-
-At this baseline:
+## 16. Current rollout and authorization state
 
 ```text
 PR24_MERGED=YES
 PR24_PRODUCTION_SYNCED=YES
 PR24_POST_SYNC_VERIFICATION=PASS
 PR24_STAGE_A_OFFLINE=PASS
-PR24_WEB_CANARY_READ_ONLY_PRELIVE=PASS
-PR24_LIVE_YIELD_IMPROVEMENT_PROVEN=NO
-PR25_REVIEWED=PASS
-PR25_MERGED=YES
-PR25_PRODUCTION_DOCS_SYNC=CARRIED_BY_PR27
 PR27_REVIEWED=PASS
 PR27_MERGED=YES
 PR27_PRODUCTION_SYNCED=YES
 PR27_POST_SYNC_VERIFICATION=PASS
 PR27_TECHNICAL_PRELIVE=PASS
+PR27_BOUNDED_WEB_CANARY=PASS
 PROFILE_DISCOVERY_INTENT_VERSION=profile-discovery-intent.v2
-PERSISTED_V2_COUNT=0
+PERSISTED_V2_COUNT=1
 CURRENT_V2_CONFLICT_PRESENT=NO
+NON_DIRECT_LIVE_YIELD_PROVEN=YES
+NON_DIRECT_ONLY_LIVE_YIELD_PROVEN=NO
+NOVELTY_IMPROVED=NO
+CURRENT_TELETHON_SESSION_COLLECTOR_ACCOUNT_ID=2
+CURRENT_SESSION_BINDING_PROVEN=YES
+DUPLICATE_ACTIVE_COLLECTOR_ROWS_PRESENT=YES
+ACTIVE_COLLECTOR_IDS=1,2
+COLLECTOR_1_CLEANUP_COMPLETED=NO
+SOURCE_19_BOUNDED_TELEGRAM_ACCESS_FRESHNESS=PASS
+SOURCE_20_BOUNDED_TELEGRAM_ACCESS_FRESHNESS=PASS
+SOURCE_19_LIFECYCLE=candidate
+SOURCE_20_LIFECYCLE=candidate
+OWNER_NOTIFICATION_SENT_FOR_19_20=NO
+SOURCE_19_20_JOIN_PERFORMED=NO
+SOURCE_19_20_LIFECYCLE_DECISION=NONE
 PERSISTENT_RUNTIME_AUTHORIZED=NO
-TELEGRAM_CANDIDATE_VALIDATION_AUTHORIZED=NO
-NEW_PR27_WEB_CANARY_AUTHORIZED=NO
+NEW_LIVE_ACTION_AUTHORIZED=NO
 ```
 
-PR25/PR26 documentation changes were carried by the PR27 production sync.
+The successful bounded gates do not authorize a repeat or a new operation.
 
-The first attempted PR24 live canary did not reach Web Discovery because the wrong CLI namespace was invoked. That attempt is not evidence about SearXNG/provider quality or PR24 candidate yield.
-
-The later correctly namespaced PR24 live invocation failed before Web discovery
-run creation because PR24 changed persisted `generated_web_queries` under the
-unchanged `profile-discovery-intent.v1` identity contract. The immutable
-content guard is correct and must remain fail-closed. Historical v1 rows are
-durable evidence and must not be rewritten or deleted. PR27 repaired the root
-cause with the new Profile Discovery Intent contract version,
-`profile-discovery-intent.v2`, which produces a new deterministic intent UUID
-for the same profile revision. Technical PRELIVE confirmed the current v2
-identity is distinct from the historical v1 row, no v2 row exists yet, and no
-current v2 conflict is present.
-
-Before another live PR24 canary:
+Required next ordering:
 
 ```text
-1. reconcile canonical docs with PR27 production sync and technical PRELIVE;
-2. independently review, merge and docs-sync that reconciliation;
-3. perform a minimum final read-only live-gate refresh;
-4. reverify exact production HEAD, clean worktree, runtime stopped, fresh run key
-   still unused, provider health still non-blocking and exact future argv still
-   valid if code changed;
-5. only then obtain a fresh one-attempt Owner authorization;
-6. execute exactly one bounded Web-only invocation with the fresh run key;
-7. do not retry under the same authorization;
-8. compare non-direct yield and candidate novelty against the PR23 baseline;
-9. only then decide whether Telegram validation is justified.
+1. docs reconciliation
+2. independent review
+3. Owner merge authorization
+4. merge reviewed docs head
+5. docs-only production sync / exact-head reconciliation as required
+6. then choose the next separate Owner-authorized gate
 ```
 
-The separate PRELIVE task must not issue the live discovery invocation. Telegram, AI, persistent runtime, restart/recreate and repair remain outside that gate.
+The next gate has not been selected. Collector-1 cleanup, source lifecycle decisions, Owner candidate notification proof, membership provisioning and persistent runtime remain separate future choices.
 
-## 14. Documentation precedence for operations
+## 17. Documentation precedence for operations
 
 For production commands, use this order:
 
