@@ -1,8 +1,8 @@
 # LeadRadar — Current State
 
 **Status:** CANONICAL  
-**Snapshot date:** 2026-09-10  
-**Implementation baseline:** `1299e64f28886dffe3b4bb0ddc201952aa8a2a28`  
+**Snapshot date:** 2026-09-11
+**Implementation baseline:** `fcf2559605e40f4210b9611a57a2b7fbbdd91a3a`
 **Current deployed repository head:** `1299e64f28886dffe3b4bb0ddc201952aa8a2a28`
 
 ## Executive status
@@ -26,7 +26,7 @@ selected_buyer_habitat=4
 selected_adjacent=4
 ```
 
-PR24 live yield improvement is **not yet proven**. The first attempted PR24 live canary did not reach Web Discovery because the wrong CLI namespace was invoked. It therefore provides no evidence about provider/SearXNG quality, non-direct yield or candidate novelty.
+PR24 live yield improvement is **not yet proven**. The first attempted PR24 live canary did not reach Web Discovery because the wrong CLI namespace was invoked. A later correctly namespaced, authorized invocation failed before `discovery_runs` creation because PR24 changed persisted `generated_web_queries` while the current Profile Discovery Intent contract still used `profile-discovery-intent.v1`. The historical v1 row is durable evidence and must not be rewritten.
 
 Persistent LeadRadar runtime, Telegram candidate validation and unattended discovery remain unauthorized.
 
@@ -180,9 +180,50 @@ PR24_PRODUCTION_SYNC=PASS
 PR24_POST_SYNC_VERIFICATION=PASS
 PR24_FULL_STAGE_A_OFFLINE=PASS
 PR24_LIVE_YIELD_IMPROVEMENT_PROVEN=NO
+PR24_WEB_CANARY_READ_ONLY_PRELIVE=PASS
 ```
 
 The attempted live command using `python -m freelancer_bot profile-discovery run ...` was rejected by the application CLI parser. Because the invocation was issued under a one-attempt authorization, that authorization is consumed even though actual Web execution did not begin.
+
+The subsequent correctly namespaced live invocation consumed a fresh authorization and failed before Web discovery run creation:
+
+```text
+RUN_KEY=owner-profile-web-pr24-bounded-20260911-v1
+LIVE_INVOCATION_ISSUED=YES
+AUTHORIZATION_CONSUMED=YES
+PRIMARY_LIVE_FAILURE_TYPE=RuntimeError
+PRIMARY_LIVE_FAILURE=profile discovery intent identity has conflicting content
+DISCOVERY_RUN_CREATED=NO
+CANARY_EVIDENCE_CAPTURE=INCOMPLETE
+```
+
+A second Web invocation was accidentally issued and returned the same error:
+
+```text
+LIVE_COMMAND_ATTEMPTS=2
+AUTHORIZED_LIVE_COMMAND_ATTEMPTS=1
+SECOND_WEB_ATTEMPT_PERFORMED=YES
+SECOND_WEB_ATTEMPT_AUTHORIZED=NO
+```
+
+Root-cause evidence:
+
+```text
+DETERMINISTIC_ID_MATCH=YES
+DIFFERING_FIELD_COUNT=1
+DIFFERING_FIELDS=generated_web_queries
+ONLY_GENERATED_WEB_QUERIES_DIFFER=YES
+SOURCE_PROFILE_RELEVANCE_REF_COUNT=19
+DISCOVERY_RUN_INTENT_REF_COUNT=4
+PR24_QUERY_RENDERING_CONFLICT_HYPOTHESIS=SUPPORTED
+```
+
+The attempted run key is retired operationally despite no `discovery_runs` row:
+
+```text
+RETIRED_RUN_KEY=owner-profile-web-pr24-bounded-20260911-v1
+RETIRED_RUN_KEY_STATUS=RETIRED_DO_NOT_REUSE
+```
 
 ## PR25 documentation state
 
@@ -212,20 +253,20 @@ NEW_PR24_WEB_CANARY_AUTHORIZED=NO
 
 ## Next gate
 
-The documentation gate is complete. The next step is a separate read-only PRELIVE task; it must not execute Web Discovery.
+The next step is a code-fix PR that versions the current Profile Discovery Intent contract to `profile-discovery-intent.v2` while preserving historical v1 rows and the identity-content conflict guard.
 
 ```text
-PR25_REVIEW_AND_MERGE=COMPLETE
--> READ_ONLY_PR24_WEB_CANARY_PRELIVE
-   -> verify exact production continuity and safety state
-   -> verify exact operator CLI --help
-   -> parser-only validate exact future argv without dispatch
-   -> verify profile active/confirmed/revision=8
-   -> verify fresh run key absent
-   -> verify effective persisted provider health
-   -> capture baseline counters
--> only if PRELIVE=PASS: fresh Owner authorization
--> exactly one new bounded PR24 Web-only canary with a fresh run key
+PROFILE_DISCOVERY_INTENT_VERSION_FIX
+-> independent review of exact fix head
+-> Owner merge authorization
+-> merge exact reviewed head
+-> separate production sync authorization
+-> read-only post-sync verification
+-> read-only PRELIVE for repaired profile-discovery path
+-> prove current v2 intent no longer conflicts with historical v1
+-> choose a NEW fresh Web canary run key
+-> only if PRELIVE=PASS: fresh one-attempt Owner authorization
+-> exactly one new bounded PR24 Web-only canary
 -> no retry under the same authorization
 -> compare non-direct yield and novelty against PR23
 -> only then decide whether Telegram validation is justified

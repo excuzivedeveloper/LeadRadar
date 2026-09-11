@@ -1,7 +1,7 @@
 # LeadRadar — Project Learnings
 
 **Status:** CANONICAL  
-**Last verified:** 2026-09-10
+**Last verified:** 2026-09-11
 
 This file records operational lessons that should shape future implementation, review and server work. Read it immediately after `docs/DOCUMENTATION_INDEX.md`.
 
@@ -17,7 +17,9 @@ This file records operational lessons that should shape future implementation, r
 - **Alembic production commands need the canonical runtime env.** `migrations/env.py` resolves the DSN through `RuntimeConfig.from_env(mode=DATABASE)` when `sqlalchemy.url` is absent, so load `/opt/leadradar/runtime/.env` before DB-connected `alembic current`. Never print `DATABASE_URL`.
 - **A one-shot query bound is not a persistent-runtime bound.** The `profile-discovery run --max-queries` contract bounds that explicit operator invocation only. It does not authorize or bound unattended persistent source discovery.
 - **A one-attempt Owner authorization is consumed when the authorized invocation command is issued.** Even a CLI parse rejection consumes that authorization if the task defined invocation itself as the consumption point. A new live attempt then needs a fresh authorization and run key.
+- **Do not retry a failed live Web invocation under the same authorization.** A runtime failure before `discovery_runs` creation still consumes the one-attempt authorization once the invocation is issued. The run key `owner-profile-web-pr24-bounded-20260911-v1` is retired even though no run row was created.
 - **CLI parse rejection is not provider evidence.** If argument parsing prevents Web Discovery from starting, do not interpret zero results as SearXNG failure, PR24 yield failure or successful bounded discovery.
+- **Profile Discovery Intent content changes require a new intent version.** The deterministic intent UUID includes the intent version, profile identity and profile revision. If generated persisted intent content changes, keep historical rows immutable and bump the intent contract version rather than weakening `ensure()` or changing the SearchProfile revision.
 - **Web provider backoff is evidence, not permission to retry.** A degraded provider state such as `BACKOFF` documents what happened and should inform the next reviewed gate; it is not authorization for an immediate second live run.
 - **SearXNG default engine inheritance matters.** `use_default_settings: true` inherits default engines even when the local settings file has no explicit engine list.
 - **SearXNG engine removal can break network aliases.** Before removing an inherited engine, inspect whether retained engines declare `network: <engine-name>`. Removing a base engine can break initialization even if that engine itself is unwanted.

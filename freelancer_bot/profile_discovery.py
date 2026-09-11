@@ -55,7 +55,7 @@ from .web_discovery import (
 )
 
 
-PROFILE_DISCOVERY_INTENT_VERSION = "profile-discovery-intent.v1"
+PROFILE_DISCOVERY_INTENT_VERSION = "profile-discovery-intent.v2"
 SOURCE_PROFILE_RELEVANCE_VERSION = "source-profile-relevance.v2"
 PROFILE_DISCOVERY_JOB_VERSION = "profile-web-discovery.v1"
 
