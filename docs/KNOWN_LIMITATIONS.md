@@ -86,8 +86,10 @@ or proven by the current Web-discovery gate.
    historical v1 row remains immutable evidence, same-version content conflicts
    still fail closed, and the current v2 deterministic identity is distinct from
    v1. Technical PRELIVE showed `PERSISTED_V2_COUNT=0` and
-   `CURRENT_V2_CONFLICT_PRESENT=NO`; the v2 row will only be persisted by a
-   later authorized v2 discovery execution.
+   `CURRENT_V2_CONFLICT_PRESENT=NO`. Code deployment and read-only PRELIVE did
+   not persist v2; a later authorized path that calls the intent repository
+   `ensure()` may persist the current v2 row, including profile activation or
+   Profile Discovery.
 4. **P0 — Useful live owner delivery is not proven.** Matching and
    personalized delivery are implemented/tested, and a fresh C++/HFT natural
    sample passed Opportunity Analysis and matching, but useful owner delivery
