@@ -2,7 +2,7 @@
 
 **Status:** CANONICAL  
 **Last verified:** 2026-09-11
-**Production baseline:** `1299e64f28886dffe3b4bb0ddc201952aa8a2a28`
+**Production baseline:** `81a675b72ed4c1229cedad28e5d2e1f56bac1f66`
 
 This document is the operational source of truth for the current LeadRadar production environment. It records only facts proven from the exact repository commit and the read-only production inventory. If a future code or deployment change invalidates any item below, update this document before using old commands in a new server task.
 
@@ -111,7 +111,7 @@ Before any live run, verify the command contract with:
   profile-discovery run --help
 ```
 
-For one-attempt canaries, also validate the exact future argv through the parser without dispatch before Owner authorization. Parser acceptance proves only the argparse contract; profile state, run-key freshness, provider health and other operational conditions remain separate checks.
+For one-attempt canaries, also validate the exact future argv through the parser without dispatch before Owner authorization. Parser acceptance proves only the argparse contract; profile state, run-key freshness, provider health and other operational conditions remain separate checks. Parser-only validation must use the exact operator CLI parser contract and must not dispatch the command.
 
 ## 5. Operator CLI command catalog
 
@@ -240,6 +240,12 @@ fetch
 ```
 
 unless the exact code path explicitly returns an asyncpg connection.
+
+Module paths and repository APIs must also be verified from exact-head code. A
+PR27 PRELIVE diagnostic first failed because the task guessed
+`freelancer_bot.database`; the corrected exact-code diagnostic used the actual
+repository modules and SQLAlchemy async API. Do not invent module paths or
+database APIs from memory.
 
 Verified source lifecycle field and candidate value:
 
@@ -394,6 +400,17 @@ AUTHORIZED_LIVE_COMMAND_ATTEMPTS=1
 LIVE_COMMAND_ATTEMPTS=2
 ```
 
+The PR27 technical PRELIVE proposed a fresh replacement key and validated it
+without dispatch:
+
+```text
+PROPOSED_RUN_KEY=owner-profile-web-pr27-bounded-20260911-v1
+PROPOSED_RUN_KEY_STATUS=FRESH_UNUSED_NOT_AUTHORIZED
+RUN_KEY_WEB_SEARCH_COUNT=0
+PARSER_ONLY=PASS
+DISPATCH_CALLED=NO
+```
+
 ## 11. Shared-host no-touch boundary
 
 LeadRadar tasks must not modify unrelated host workloads, including:
@@ -444,13 +461,21 @@ PR24_WEB_CANARY_READ_ONLY_PRELIVE=PASS
 PR24_LIVE_YIELD_IMPROVEMENT_PROVEN=NO
 PR25_REVIEWED=PASS
 PR25_MERGED=YES
-PR25_PRODUCTION_DOCS_SYNC=DEFERRED
+PR25_PRODUCTION_DOCS_SYNC=CARRIED_BY_PR27
+PR27_REVIEWED=PASS
+PR27_MERGED=YES
+PR27_PRODUCTION_SYNCED=YES
+PR27_POST_SYNC_VERIFICATION=PASS
+PR27_TECHNICAL_PRELIVE=PASS
+PROFILE_DISCOVERY_INTENT_VERSION=profile-discovery-intent.v2
+PERSISTED_V2_COUNT=0
+CURRENT_V2_CONFLICT_PRESENT=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 TELEGRAM_CANDIDATE_VALIDATION_AUTHORIZED=NO
-NEW_PR24_WEB_CANARY_AUTHORIZED=NO
+NEW_PR27_WEB_CANARY_AUTHORIZED=NO
 ```
 
-PR25 is docs-only. Its production docs sync is intentionally deferred and should be combined with the next meaningful production update; no separate docs-only server sync is required now.
+PR25/PR26 documentation changes were carried by the PR27 production sync.
 
 The first attempted PR24 live canary did not reach Web Discovery because the wrong CLI namespace was invoked. That attempt is not evidence about SearXNG/provider quality or PR24 candidate yield.
 
@@ -458,24 +483,27 @@ The later correctly namespaced PR24 live invocation failed before Web discovery
 run creation because PR24 changed persisted `generated_web_queries` under the
 unchanged `profile-discovery-intent.v1` identity contract. The immutable
 content guard is correct and must remain fail-closed. Historical v1 rows are
-durable evidence and must not be rewritten or deleted. The required repair is a
-new Profile Discovery Intent contract version, `profile-discovery-intent.v2`,
-which produces a new deterministic intent UUID for the same profile revision.
+durable evidence and must not be rewritten or deleted. PR27 repaired the root
+cause with the new Profile Discovery Intent contract version,
+`profile-discovery-intent.v2`, which produces a new deterministic intent UUID
+for the same profile revision. Technical PRELIVE confirmed the current v2
+identity is distinct from the historical v1 row, no v2 row exists yet, and no
+current v2 conflict is present.
 
 Before another live PR24 canary:
 
 ```text
-1. review and merge the exact profile-discovery intent-version fix head;
-2. separately authorize and perform production sync;
-3. perform read-only post-sync verification;
-4. run read-only PRELIVE for the repaired profile-discovery path;
-5. prove current v2 intent identity no longer conflicts with historical v1;
-6. choose a NEW fresh run key, not owner-profile-web-pr24-bounded-20260911-v1;
-7. only if PRELIVE=PASS, obtain a fresh one-attempt Owner authorization;
-8. execute exactly one bounded Web-only invocation with the fresh run key;
-9. do not retry under the same authorization;
-10. compare non-direct yield and candidate novelty against the PR23 baseline;
-11. only then decide whether Telegram validation is justified.
+1. reconcile canonical docs with PR27 production sync and technical PRELIVE;
+2. independently review, merge and docs-sync that reconciliation;
+3. perform a minimum final read-only live-gate refresh;
+4. reverify exact production HEAD, clean worktree, runtime stopped, fresh run key
+   still unused, provider health still non-blocking and exact future argv still
+   valid if code changed;
+5. only then obtain a fresh one-attempt Owner authorization;
+6. execute exactly one bounded Web-only invocation with the fresh run key;
+7. do not retry under the same authorization;
+8. compare non-direct yield and candidate novelty against the PR23 baseline;
+9. only then decide whether Telegram validation is justified.
 ```
 
 The separate PRELIVE task must not issue the live discovery invocation. Telegram, AI, persistent runtime, restart/recreate and repair remain outside that gate.

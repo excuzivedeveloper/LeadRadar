@@ -1,8 +1,8 @@
 # LeadRadar Documentation Index
 
 **Status:** CANONICAL  
-**Last verified:** 2026-09-10  
-**Implementation baseline:** `1299e64f28886dffe3b4bb0ddc201952aa8a2a28`
+**Last verified:** 2026-09-11
+**Implementation baseline:** `81a675b72ed4c1229cedad28e5d2e1f56bac1f66`
 
 This index defines which documents describe the current project and which are historical/reference material.
 
@@ -48,7 +48,7 @@ For production commands and server tasks, use this precedence:
 
 ```text
 1. fresh server evidence at the exact production HEAD
-2. exact repository code and `--help` at that HEAD
+2. exact repository code, repository APIs and `--help` at that HEAD
 3. docs/OPERATIONS.md
 4. DEPLOYMENT.md / CURRENT_STATE.md / ACTIVE_PLAN.md
 5. historical reports

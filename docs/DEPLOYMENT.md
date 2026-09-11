@@ -1,9 +1,9 @@
 # LeadRadar — Current Deployment
 
 **Status:** CANONICAL  
-**Snapshot date:** 2026-09-10  
-**Deployment code baseline:** `1299e64f28886dffe3b4bb0ddc201952aa8a2a28`  
-**Repository/server head:** `1299e64f28886dffe3b4bb0ddc201952aa8a2a28`
+**Snapshot date:** 2026-09-11
+**Deployment code baseline:** `81a675b72ed4c1229cedad28e5d2e1f56bac1f66`
+**Repository/server head:** `81a675b72ed4c1229cedad28e5d2e1f56bac1f66`
 
 This document records the current shared-server LeadRadar layout and deployment boundaries. Exact operational commands live in [`OPERATIONS.md`](OPERATIONS.md).
 
@@ -153,7 +153,7 @@ OWNER_NOTIFICATION_COUNT=3
 
 These counts will naturally change; the schema field names and lifecycle semantics are the contract.
 
-## Current PR24 state
+## Current PR27 state
 
 ```text
 PR24_MERGED=YES
@@ -161,11 +161,20 @@ PR24_PRODUCTION_SYNCED=YES
 PR24_POST_SYNC_VERIFICATION=PASS
 PR24_STAGE_A_OFFLINE=PASS
 PR24_LIVE_YIELD_IMPROVEMENT_PROVEN=NO
+PR27_MERGED=YES
+PR27_PRODUCTION_SYNCED=YES
+PR27_POST_SYNC_VERIFICATION=PASS
+PR27_TECHNICAL_PRELIVE=PASS
+PROFILE_DISCOVERY_INTENT_VERSION=profile-discovery-intent.v2
 ```
 
 The first attempted PR24 live canary did not reach Web Discovery because the application CLI namespace was invoked instead of the operator CLI namespace. That failure is not evidence about SearXNG/provider performance or PR24 search quality.
 
-The verified operator entrypoint for the next profile Web run is documented in `OPERATIONS.md`.
+PR27 production fast-forward passed without migration, dependency mutation,
+runtime env mutation, service restart, or persistent runtime activation. The
+technical PRELIVE was read-only and is not a deployment activation or live Web
+authorization. The verified operator entrypoint for the next profile Web run is
+documented in `OPERATIONS.md`.
 
 ## Promotion rules
 

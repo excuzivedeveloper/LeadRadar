@@ -2,18 +2,19 @@
 
 **Status:** CANONICAL / ACTIVE  
 **Last verified:** 2026-09-11
-**Implementation baseline:** `fcf2559605e40f4210b9611a57a2b7fbbdd91a3a`
+**Implementation baseline:** `81a675b72ed4c1229cedad28e5d2e1f56bac1f66`
 
 This file defines execution order. Implemented capability does not imply authorization to activate it.
 
 ## Current production baseline
 
 ```text
-PRODUCTION_HEAD=1299e64f28886dffe3b4bb0ddc201952aa8a2a28
+PRODUCTION_HEAD=81a675b72ed4c1229cedad28e5d2e1f56bac1f66
 BRANCH=main
 TRACKED_WORKTREE=CLEAN
 ALEMBIC_CURRENT=20260908_0042
 PERSISTENT_RUNTIME=STOPPED
+PROFILE_DISCOVERY_INTENT_VERSION=profile-discovery-intent.v2
 ```
 
 Verified service state:
@@ -55,10 +56,18 @@ PR25_REVIEWED=PASS
 PR25_REVIEWED_HEAD=c0951e2e0400d1e3489bdb91b353b71e83139b5f
 PR25_MERGED=YES
 PR25_MERGE_COMMIT=da5eda8753f3bf48f14dfbcbeaa480159951a739
-PR25_PRODUCTION_DOCS_SYNC=DEFERRED
+PR25_PRODUCTION_DOCS_SYNC=CARRIED_BY_PR27
+
+PR27_REVIEWED=PASS
+PR27_REVIEWED_HEAD=c09f3a501cd554a931531b14e8fd84aeda94d90a
+PR27_MERGE_COMMIT=81a675b72ed4c1229cedad28e5d2e1f56bac1f66
+PR27_PRODUCTION_SYNC=PASS
+PR27_POST_SYNC_VERIFICATION=PASS
+PR27_TECHNICAL_PRELIVE=PASS
 ```
 
-PR25 is docs-only. Its production docs sync is intentionally deferred and should be combined with the next meaningful production update; the production code checkout therefore remains at the PR24 merge commit.
+PR25/PR26 documentation changes were carried by the PR27 production sync. The
+production checkout is now at the PR27 merge commit.
 
 PR24 preserved the bounded planner contract:
 
@@ -181,6 +190,30 @@ TELEGRAM_CANDIDATE_VALIDATION_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 ```
 
+PR27 repaired the root cause by versioning the immutable Profile Discovery
+Intent contract to `profile-discovery-intent.v2`. Technical read-only PRELIVE
+then passed without issuing live Web, Telegram, or AI work:
+
+```text
+CHECKPOINT_4R=PASS
+CURRENT_INTENT_ID=b3f53d57-afd9-55e1-b822-77d687fe466d
+HISTORICAL_V1_INTENT_ID=503e6238-1896-5d4a-84b1-004487d56c97
+CURRENT_V2_DISTINCT_FROM_V1=YES
+PERSISTED_V2_COUNT=0
+CURRENT_V2_CONFLICT_PRESENT=NO
+TECHNICAL_PRELIVE=PASS
+PARSER_ONLY=PASS
+PROPOSED_RUN_KEY=owner-profile-web-pr27-bounded-20260911-v1
+RUN_KEY_UNUSED=YES
+SEARXNG_EFFECTIVE_STATE=READY
+PROVIDER_HEALTH_GATE=PASS
+BASELINE_COUNTERS_CAPTURED=YES
+WEB_REQUESTS_PERFORMED=NO
+TELEGRAM_REQUESTS_PERFORMED=NO
+AI_REQUESTS_PERFORMED=NO
+DB_WRITES_PERFORMED=NO
+```
+
 ## Operational contract gate
 
 A full read-only production operational inventory has passed and established:
@@ -205,13 +238,82 @@ The canonical command/runbook surface is recorded in `docs/OPERATIONS.md` and PR
 ## Current gate
 
 ```text
-CURRENT_GATE=PROFILE_DISCOVERY_INTENT_VERSION_CODE_FIX
-NEXT_GATE=INDEPENDENT_REVIEW_OF_INTENT_VERSION_FIX
-NEW_PR24_WEB_CANARY_AUTHORIZED=NO
+CURRENT_GATE=CANONICAL_DOCS_RECONCILIATION_AFTER_PR27_PRELIVE
+NEXT_GATE=INDEPENDENT_REVIEW_OF_DOCS_RECONCILIATION
+NEW_PR27_WEB_CANARY_AUTHORIZED=NO
 ```
 
 ## Required sequence from here
 
+```text
+1. reconcile canonical docs with PR27 production sync and technical PRELIVE
+2. independent review of exact docs head
+3. Owner merge authorization
+4. merge exact reviewed docs head
+5. separate controlled docs-only production sync
+6. minimum final read-only live-gate refresh
+7. reverify exact production HEAD, clean worktree and runtime stopped
+8. reverify proposed run key remains unused
+9. reverify provider health remains non-blocking
+10. revalidate exact future argv if code changed
+11. fresh explicit one-attempt Owner Web authorization
+12. exactly one bounded Web-only canary
+13. no retry
+14. compare PR24 buyer_habitat/adjacent yield and novelty against PR23 baseline
+15. Telegram validation remains a separate later gate
+16. persistent unattended runtime remains unauthorized until useful end-to-end behavior is proven
+```
+
+The docs reconciliation does not authorize live Web work. The PR27 technical
+PRELIVE passed, but time-sensitive live-gate facts still require a final
+read-only refresh immediately before any fresh one-attempt Owner authorization.
+
+Effective persisted Web provider health must be interpreted using runtime semantics:
+
+```text
+UNAVAILABLE -> BLOCK
+BACKOFF with backoff_until > now -> BLOCK
+BACKOFF with backoff_until <= now -> not a blocker; effective state is DEGRADED
+DEGRADED -> not a blocker by itself
+READY -> PASS
+```
+
+## Next bounded Web canary requirements
+
+Do not create or execute the live canary until this docs reconciliation is
+reviewed, merged, docs-synced to production, and the final read-only live-gate
+refresh passes with a fresh Owner authorization granted.
+
+The canary must use the operator CLI namespace:
+
+```text
+./.venv/bin/python -m freelancer_bot.operator_cli profile-discovery run ...
+```
+
+It must use:
+
+```text
+PROFILE_ID=e3f2a0d1-3a46-4506-8a79-f4ed47400279
+PROFILE_REVISION=8
+MAX_QUERIES=12
+RESULTS_PER_QUERY=3
+MAX_CANDIDATES=10
+SEARXNG_URL=http://127.0.0.1:8888
+PROPOSED_RUN_KEY=owner-profile-web-pr27-bounded-20260911-v1
+PROPOSED_RUN_KEY_STATUS=FRESH_UNUSED_NOT_AUTHORIZED
+RETIRED_RUN_KEY=owner-profile-web-pr24-bounded-20260911-v1
+RUN_COMMAND_ATTEMPTS_MAX=1
+CANARY_RETRY_ALLOWED=NO
+```
+
+The exact future argv parser-only check already passed during technical
+PRELIVE. Repeat parser-only validation during final live-gate refresh if code
+has changed before live authorization.
+
+A new Owner authorization is required. The previous PR24 authorization is
+consumed and must not be reused.
+
+<!-- Historical sequence retained below for context: PR27 has completed these steps. -->
 ```text
 1. independent review of exact profile-discovery intent-version fix head
 2. Owner merge authorization
@@ -229,52 +331,6 @@ NEW_PR24_WEB_CANARY_AUTHORIZED=NO
 14. Telegram validation remains a separate later gate
 15. persistent unattended runtime remains unauthorized until useful end-to-end behavior is proven
 ```
-
-The code fix changes the current immutable Profile Discovery Intent contract to
-`profile-discovery-intent.v2`. Historical v1 rows remain durable evidence and
-must not be rewritten or deleted. The PRELIVE task is read-only. It must not
-issue the live discovery invocation and does not itself authorize Web,
-Telegram, AI, restart/recreate, repair, or persistent runtime activity.
-
-Effective persisted Web provider health must be interpreted using runtime semantics:
-
-```text
-UNAVAILABLE -> BLOCK
-BACKOFF with backoff_until > now -> BLOCK
-BACKOFF with backoff_until <= now -> not a blocker; effective state is DEGRADED
-DEGRADED -> not a blocker by itself
-READY -> PASS
-```
-
-## Next PR24 live canary requirements
-
-Do not create or execute the live canary until the intent-version fix is
-reviewed, merged, production-synced, post-sync-verified, and the separate
-read-only PRELIVE task has passed with a fresh Owner authorization granted.
-
-The next canary must use the operator CLI namespace:
-
-```text
-./.venv/bin/python -m freelancer_bot.operator_cli profile-discovery run ...
-```
-
-It must use:
-
-```text
-PROFILE_ID=e3f2a0d1-3a46-4506-8a79-f4ed47400279
-PROFILE_REVISION=8
-MAX_QUERIES=12
-RESULTS_PER_QUERY=3
-MAX_CANDIDATES=10
-SEARXNG_URL=http://127.0.0.1:8888
-FRESH_RUN_KEY=REQUIRED_NOT_owner-profile-web-pr24-bounded-20260911-v1
-RUN_COMMAND_ATTEMPTS_MAX=1
-CANARY_RETRY_ALLOWED=NO
-```
-
-The PRELIVE parser-only check must validate the exact future argv while avoiding command dispatch. Parser acceptance proves only the argparse contract; profile state, run-key freshness, provider health and other operational conditions remain separate PRELIVE checks.
-
-A new Owner authorization is required. The previous authorization is consumed and must not be reused.
 
 ## Later product target
 

@@ -2,16 +2,16 @@
 
 **Status:** CANONICAL  
 **Snapshot date:** 2026-09-11
-**Implementation baseline:** `fcf2559605e40f4210b9611a57a2b7fbbdd91a3a`
-**Current deployed repository head:** `1299e64f28886dffe3b4bb0ddc201952aa8a2a28`
+**Implementation baseline:** `81a675b72ed4c1229cedad28e5d2e1f56bac1f66`
+**Current deployed repository head:** `81a675b72ed4c1229cedad28e5d2e1f56bac1f66`
 
 ## Executive status
 
-LeadRadar production is stable at the merged PR24 commit. PR23 restored SearXNG by preserving inherited engine/network definitions and disabling the exact unwanted engines. PR24 changed profile Web query rendering for `buyer_habitat` and `adjacent` without changing the bounded planner contract.
+LeadRadar production is stable at the merged PR27 commit. PR23 restored SearXNG by preserving inherited engine/network definitions and disabling the exact unwanted engines. PR24 changed profile Web query rendering for `buyer_habitat` and `adjacent` without changing the bounded planner contract. PR27 versioned the immutable Profile Discovery Intent contract to `profile-discovery-intent.v2`.
 
 PR24 production sync, post-sync verification and full bounded offline Stage A all passed.
 
-PR25 established the canonical production operations documentation. It was independently reviewed and merged as docs-only. Its production docs sync is intentionally deferred and should be combined with the next meaningful production update, so the deployed code checkout remains at the PR24 merge commit.
+PR25/PR26 documentation changes were carried by the PR27 production sync. PR27 production sync, post-sync verification, and the technical read-only PRELIVE for the repaired profile-discovery path all passed.
 
 Current proven bounded planner fingerprint:
 
@@ -26,14 +26,14 @@ selected_buyer_habitat=4
 selected_adjacent=4
 ```
 
-PR24 live yield improvement is **not yet proven**. The first attempted PR24 live canary did not reach Web Discovery because the wrong CLI namespace was invoked. A later correctly namespaced, authorized invocation failed before `discovery_runs` creation because PR24 changed persisted `generated_web_queries` while the current Profile Discovery Intent contract still used `profile-discovery-intent.v1`. The historical v1 row is durable evidence and must not be rewritten.
+PR24/PR27 live Web yield improvement is **not yet proven**. No live Web canary has been authorized or issued after the PR27 production sync. The technical PRELIVE passed without Web, Telegram, AI, database-write, service-restart, runtime-env, or persistent-runtime side effects.
 
 Persistent LeadRadar runtime, Telegram candidate validation and unattended discovery remain unauthorized.
 
 ## Production contract
 
 ```text
-PRODUCTION_HEAD=1299e64f28886dffe3b4bb0ddc201952aa8a2a28
+PRODUCTION_HEAD=81a675b72ed4c1229cedad28e5d2e1f56bac1f66
 BRANCH=main
 TRACKED_WORKTREE=CLEAN
 PYTHON_VERSION=3.14.7
@@ -41,6 +41,7 @@ PRODUCTION_PYTHON=./.venv/bin/python
 BARE_PYTHON=ABSENT
 ALEMBIC_CURRENT=20260908_0042
 PERSISTENT_RUNTIME=STOPPED
+PROFILE_DISCOVERY_INTENT_VERSION=profile-discovery-intent.v2
 ```
 
 CLI namespaces are distinct:
@@ -225,18 +226,69 @@ RETIRED_RUN_KEY=owner-profile-web-pr24-bounded-20260911-v1
 RETIRED_RUN_KEY_STATUS=RETIRED_DO_NOT_REUSE
 ```
 
-## PR25 documentation state
+## PR27 production sync and PRELIVE state
 
 ```text
+PR27_REVIEWED=PASS
+PR27_REVIEWED_HEAD=c09f3a501cd554a931531b14e8fd84aeda94d90a
+PR27_MERGE_COMMIT=81a675b72ed4c1229cedad28e5d2e1f56bac1f66
+PR27_PRODUCTION_SYNC=PASS
+PR27_POST_SYNC_VERIFICATION=PASS
+PR27_TECHNICAL_PRELIVE=PASS
+PR25_PR26_DOCS_SYNCED_WITH_PR27=YES
+
 PR25_REVIEWED=PASS
 PR25_REVIEWED_HEAD=c0951e2e0400d1e3489bdb91b353b71e83139b5f
 PR25_MERGED=YES
 PR25_MERGE_COMMIT=da5eda8753f3bf48f14dfbcbeaa480159951a739
-PR25_PRODUCTION_DOCS_SYNC=DEFERRED
-SEPARATE_DOCS_ONLY_SERVER_SYNC=NOT_REQUIRED_NOW
+PR25_PRODUCTION_DOCS_SYNC=CARRIED_BY_PR27
 ```
 
-The repository `main` may therefore be ahead of the production checkout by docs-only commits without implying a production code drift.
+Technical PRELIVE repaired-path evidence:
+
+```text
+CHECKPOINT_4R=PASS
+PROFILE_ID=e3f2a0d1-3a46-4506-8a79-f4ed47400279
+PROFILE_REVISION=8
+PROFILE_ACTIVE=YES
+PROFILE_PRIMARY=YES
+PROFILE_CONFIRMATION_STATUS=confirmed
+CURRENT_INTENT_ID=b3f53d57-afd9-55e1-b822-77d687fe466d
+CURRENT_INTENT_VERSION=profile-discovery-intent.v2
+CURRENT_GENERATED_WEB_QUERY_COUNT=36
+PERSISTED_INTENT_ROW_COUNT=1
+PERSISTED_V1_COUNT=1
+HISTORICAL_V1_INTENT_ID=503e6238-1896-5d4a-84b1-004487d56c97
+CURRENT_V2_DISTINCT_FROM_V1=YES
+PERSISTED_V2_COUNT=0
+PERSISTED_V2_INTENT_ID=NONE
+CURRENT_V2_CONFLICT_PRESENT=NO
+```
+
+This is expected safe Case A: historical v1 remains immutable, current v2 has a distinct deterministic identity, and no v2 row exists until the first authorized v2 discovery execution persists it.
+
+Technical PRELIVE gate evidence:
+
+```text
+PARSER_ONLY=PASS
+PROPOSED_RUN_KEY=owner-profile-web-pr27-bounded-20260911-v1
+RUN_KEY_UNUSED=YES
+SEARXNG_EFFECTIVE_STATE=READY
+PROVIDER_HEALTH_BLOCKER=NO
+PROVIDER_HEALTH_GATE=PASS
+BASELINE_COUNTERS_CAPTURED=YES
+DISCOVERY_RUN_COUNT=6
+SOURCE_COUNT=22
+CANDIDATE_COUNT=7
+OWNER_NOTIFICATION_COUNT=3
+TELEGRAM_OPERATION_EVENT_COUNT=203
+AI_CALL_TELEMETRY_COUNT=51
+SOURCE_LIFECYCLE_EVENT_COUNT=24
+DB_WRITES_PERFORMED=NO
+WEB_REQUESTS_PERFORMED=NO
+TELEGRAM_REQUESTS_PERFORMED=NO
+AI_REQUESTS_PERFORMED=NO
+```
 
 ## Current authorization state
 
@@ -249,24 +301,27 @@ AUTO_JOIN_AUTHORIZED=NO
 TELEGRAM_CANDIDATE_VALIDATION_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 NEW_PR24_WEB_CANARY_AUTHORIZED=NO
+NEW_PR27_WEB_CANARY_AUTHORIZED=NO
+WEB_DISCOVERY_EXECUTED_AFTER_PR27_SYNC=NO
 ```
 
 ## Next gate
 
-The next step is a code-fix PR that versions the current Profile Discovery Intent contract to `profile-discovery-intent.v2` while preserving historical v1 rows and the identity-content conflict guard.
+The next step is canonical documentation reconciliation after PR27 production sync and technical PRELIVE. Technical PRELIVE pass is not live Web authorization.
 
 ```text
-PROFILE_DISCOVERY_INTENT_VERSION_FIX
--> independent review of exact fix head
+CANONICAL_DOCS_RECONCILIATION_AFTER_PR27_PRELIVE
+-> independent review of exact docs head
 -> Owner merge authorization
 -> merge exact reviewed head
--> separate production sync authorization
--> read-only post-sync verification
--> read-only PRELIVE for repaired profile-discovery path
--> prove current v2 intent no longer conflicts with historical v1
--> choose a NEW fresh Web canary run key
--> only if PRELIVE=PASS: fresh one-attempt Owner authorization
--> exactly one new bounded PR24 Web-only canary
+-> separate docs-only production sync authorization
+-> minimum final read-only live-gate refresh
+-> confirm exact production HEAD / clean worktree / runtime stopped
+-> confirm proposed run key remains unused
+-> confirm provider health remains non-blocking
+-> confirm exact future argv remains valid if code changed
+-> fresh explicit one-attempt Owner authorization
+-> exactly one bounded Web-only canary
 -> no retry under the same authorization
 -> compare non-direct yield and novelty against PR23
 -> only then decide whether Telegram validation is justified
