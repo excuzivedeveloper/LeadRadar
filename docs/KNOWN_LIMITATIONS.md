@@ -63,8 +63,12 @@ SEARXNG_PRODUCTION_STATE=RUNNING
 SEARXNG_DISABLED_OVERRIDE_STRATEGY=PRODUCTION_VALIDATED
 ```
 
-The next limitation/gate is useful owner delivery from relevant live
-Opportunity evidence, not ingestion or first-provider configuration.
+The immediate execution gate is the PR28 canonical-docs reconciliation,
+followed by independent review, docs-only production sync, and a final
+read-only live-gate refresh before any new bounded Web canary authorization.
+
+Useful owner delivery remains a later product limitation and is not authorized
+or proven by the current Web-discovery gate.
 
 ## Current top limitations
 
