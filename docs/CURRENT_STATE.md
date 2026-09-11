@@ -265,7 +265,7 @@ PERSISTED_V2_INTENT_ID=NONE
 CURRENT_V2_CONFLICT_PRESENT=NO
 ```
 
-This is expected safe Case A: historical v1 remains immutable, current v2 has a distinct deterministic identity, and no v2 row exists until the first authorized v2 discovery execution persists it.
+This is expected safe Case A: historical v1 remains immutable, current v2 has a distinct deterministic identity, and the read-only PRELIVE observed `PERSISTED_V2_COUNT=0`. Code deployment and read-only PRELIVE did not persist v2. A later authorized path that calls `ProfileDiscoveryIntentRepository.ensure(...)` may persist the current v2 row, including profile activation or Profile Discovery.
 
 Technical PRELIVE gate evidence:
 
