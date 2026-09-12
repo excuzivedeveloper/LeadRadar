@@ -3,7 +3,7 @@
 **Status:** CANONICAL  
 **Snapshot date:** 2026-09-12
 **Deployment code baseline:** `81a675b72ed4c1229cedad28e5d2e1f56bac1f66`
-**Repository/server head:** `c89e473fdd8895aefb7a0fac3a863468d56ab56e`
+**Latest verified production evidence head:** `b660bdd633137f13dae5a8524f14d36c0f5ecd05`
 
 This document records the current shared-server LeadRadar layout and deployment boundaries. Exact operational commands live in [`OPERATIONS.md`](OPERATIONS.md). A docs-only repository head can be newer than the implementation baseline without changing deployed code behavior.
 
@@ -204,15 +204,38 @@ SOURCE_20_BOUNDED_TELEGRAM_ACCESS_FRESHNESS=PASS
 SOURCE_20_LATEST_MESSAGE_AT=2026-09-11T07:08:01+00:00
 ```
 
-This is **not** deployment membership evidence. Neither source was joined, approved, rejected or notified by that gate:
+This is **not** deployment membership evidence. Neither source was joined, approved, rejected or notified by that access/freshness gate:
 
 ```text
 SOURCE_19_20_JOIN_PERFORMED=NO
 SOURCE_19_20_LIFECYCLE_DECISION=NONE
-OWNER_NOTIFICATION_SENT_FOR_19_20=NO
+OWNER_NOTIFICATIONS_SENT=0
 ```
 
 Public-history readability and freshness must not be conflated with lifecycle approval, Telegram membership or live-update readiness.
+
+Fresh read-only evidence later proved that both sources already had durable terminal Owner candidate-notification rows dated 2026-09-08:
+
+```text
+SOURCE_19_OWNER_CANDIDATE_NOTIFICATION=sent
+SOURCE_20_OWNER_CANDIDATE_NOTIFICATION=sent
+SOURCE_19_20_OWNER_NOTIFICATION_TO_CURRENT_OWNER=PROVEN
+DURABLE_AT_MOST_ONCE_MARKERS_PRESENT=YES
+REPEAT_NOTIFICATION_NEEDED=NO
+REPEAT_NOTIFICATION_AUTHORIZED=NO
+```
+
+A newly authorized notification-proof PRELIVE stopped before Telegram when it found those rows. The authorization was not consumed by a network attempt, but the old live checkpoint is retired because the product fact is already proven:
+
+```text
+SOURCE_19_20_NOTIFICATION_PRELIVE=FAIL_PREEXISTING_DURABLE_ROWS
+TELEGRAM_NETWORK_ATTEMPTED=NO
+NOTIFICATION_PROOF_AUTHORIZATION_CONSUMED=NO
+LIVE_CHECKPOINT_2_EXECUTED=NO
+LIVE_CHECKPOINT_2_RETIRED=YES
+```
+
+The notification rows do not persist an exact creating command, collector FK or governor-event FK. Nearby collector-`2` events, scan state and timestamps are labeled `TEMPORAL/STRUCTURAL_INFERENCE`, not direct attribution. Both sources remain `candidate`; notification does not prove lifecycle approval, membership, live-update readiness, Owner review, personalized opportunity delivery or recurring automation.
 
 ## Current PR27 live-evidence state
 
@@ -254,7 +277,7 @@ Do not sync to a newer-than-authorized `origin/main` and do not use local merge/
 Current required order is:
 
 ```text
-1. docs reconciliation after collector 1 controlled cleanup
+1. docs reconciliation with source 19/20 notification-row evidence
 2. independent review
 3. Owner merge authorization
 4. merge reviewed docs head
@@ -262,7 +285,7 @@ Current required order is:
 6. choose the next separate Owner-authorized gate
 ```
 
-Source `19`/`20` lifecycle decisions, Owner candidate-notification proof, membership provisioning and persistent runtime are not authorized by this reconciliation.
+Source `19`/`20` lifecycle decisions, membership provisioning, recurring candidate-notification automation and persistent runtime are not authorized by this reconciliation. The pre-existing notification rows require no repeat send, and the retired live checkpoint must not be executed.
 
 ## Shared-server boundary
 
