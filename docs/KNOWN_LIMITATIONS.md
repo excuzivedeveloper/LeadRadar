@@ -3,7 +3,7 @@
 **Status:** CANONICAL  
 **Last verified:** 2026-09-12
 **Implementation baseline:** `81a675b72ed4c1229cedad28e5d2e1f56bac1f66`
-**Current repository / deployed docs head:** `c89e473fdd8895aefb7a0fac3a863468d56ab56e`
+**Latest verified production evidence head:** `b660bdd633137f13dae5a8524f14d36c0f5ecd05`
 
 This document distinguishes code that exists from behavior that has actually been validated in the current deployment.
 
@@ -32,25 +32,30 @@ SOURCE_19_BOUNDED_TELEGRAM_ACCESS_FRESHNESS=PASS
 SOURCE_20_BOUNDED_TELEGRAM_ACCESS_FRESHNESS=PASS
 SOURCE_19_LIFECYCLE=candidate
 SOURCE_20_LIFECYCLE=candidate
-OWNER_NOTIFICATION_SENT_FOR_19_20=NO
+SOURCE_19_OWNER_CANDIDATE_NOTIFICATION=sent
+SOURCE_20_OWNER_CANDIDATE_NOTIFICATION=sent
+SOURCE_19_20_OWNER_NOTIFICATION_TO_CURRENT_OWNER=PROVEN
+NOTIFICATION_PROOF_AUTHORIZATION_CONSUMED=NO
+LIVE_CHECKPOINT_2_RETIRED=YES
 SOURCE_19_20_JOIN_PERFORMED=NO
+CANDIDATE_NOTIFICATION_RECURRING_AUTOMATION_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 ```
 
-The immediate gate is canonical-docs reconciliation followed by independent review, Owner merge authorization and docs-only production synchronization/exact-head reconciliation as required. No next live or mutating gate is currently authorized.
+The immediate gate is canonical-docs reconciliation with the notification-row evidence, followed by independent review, Owner merge authorization and docs-only production synchronization/exact-head reconciliation as required. No next live or mutating gate is currently authorized.
 
-Useful owner delivery remains a later product limitation and is not proven by the current Web/Telegram validation gates.
+Useful personalized opportunity delivery remains a later product limitation. The narrower fact now proven is durable delivery persistence for source-candidate cards for sources `19` and `20`; that does not establish end-to-end matched-opportunity delivery or Owner review/action.
 
 ## Current top limitations
 
 1. **P0 — PR27 improved search volume/support, but candidate novelty did not improve in the bounded sample.** The successful canary considered 19 search results and 18 Telegram-like matches versus PR23's 7 and 6, while both runs produced 4 unique candidates and 0 new candidates. Buyer-habitat/adjacent supplied live support to 3/4 unique candidates, so non-direct live support is proven. No non-direct-only candidate was produced, and novelty improvement is not proven.
-2. **P0 — Source `19` and `20` have only access/freshness proof, not lifecycle or membership proof.** `@phystechcareerchannel` and `@juniors_rabota_jobs` both resolved and exposed public history through the proven collector `2`, with fresh messages inside 10 days. Both remain lifecycle `candidate`; neither was approved, rejected, joined, notified, or proven live-update-ready.
+2. **P0 — Source `19` and `20` remain candidates without lifecycle or membership proof.** `@phystechcareerchannel` and `@juniors_rabota_jobs` both resolved and exposed public history through the proven collector `2`, with fresh messages inside 10 days. Durable terminal rows prove their candidate cards were sent to the current Owner, but neither source was approved, rejected, joined or proven live-update-ready.
 3. **P0 — Useful live owner delivery is not proven.** Matching and personalized delivery are implemented/tested, and prior bounded Opportunity Analysis/matching evidence exists, but useful current owner delivery has not yet been proven end-to-end.
 4. **P0 — PR13 RU/EN web repair live result remains inconclusive.** PR13 is reviewed, merged and repeat-canaried, but the fresh sample was C++/HFT rather than a relevant RU/EN web sample.
 5. **P1 — Lifecycle approval and Telegram membership are separate gates.** PostgreSQL `APPROVED` status plus public-history readability still does not guarantee Telegram live-update delivery. A future source approval requires explicit membership provisioning before collection readiness can be claimed.
 6. **P1 — Telegram account/platform limits remain external.** FloodWait, ChannelsTooMuch, membership loss, source removal/rename and access changes can interrupt collection independently of PostgreSQL correctness.
 7. **P1 — Membership drift is not automatically reconciled.** Previously approved source membership was brought to 13/13, but there is no authorized automatic join/remediation mechanism. Sources `19` and `20` were not joined by the new bounded probe.
-8. **P1 — Candidate notification automation remains unauthorized.** The explicit Owner candidate-notification one-shot exists, but the completed source `19`/`20` access/freshness probe did not invoke it. No recurring schedule is authorized, and no notification was sent for those sources.
+8. **P1 — Candidate notification automation remains unauthorized.** Durable rows prove source `19`/`20` candidate cards were sent on 2026-09-08, but exact creating-command attribution is not persisted and no recurring schedule is authorized. The new proof PRELIVE stopped before Telegram because the terminal rows already existed; its obsolete live checkpoint is retired and must not be retried.
 9. **P1 — Legacy filter substring behavior can create false positives.** The accumulated stop-word matcher remains substring-based. It is intentionally preserved until enough shadow data supports a narrow redesign.
 10. **P1 — Current shadow sample is small.** Live path correctness is proven, but one successful natural shadow row is not enough to tune thresholds/keywords confidently.
 11. **P1 — OpenRouter model availability/cost are external.** `minimax/minimax-m3:free` availability, pricing and rate/free-tier limits can change outside the repository and must be reverified before further live validation or expanded use.
@@ -70,7 +75,7 @@ Useful owner delivery remains a later product limitation and is not proven by th
 25. **P2 — One-shot query bounds do not bound autonomous discovery.** `--max-queries` bounds an explicit operator run; persistent Web discovery remains unauthorized and separately unproven.
 26. **P2 — Successful access/freshness probes do not validate the lifecycle service.** The source `19`/`20` gate intentionally did not call `SourceValidationService`; source and validation-table hashes remained unchanged. Treat it as access/freshness evidence only.
 27. **P2 — Historical inactive collector row `1` remains persisted.** The duplicate-active anomaly is resolved and collector `2` is the sole active row. Collector `1` remains inactive for historical/FK continuity; its dependent operation-state row and historical references were intentionally preserved. This is not a blocker by itself, and its exact historical Telegram-user origin remains unproven.
-28. **P2 — The next production gate is deliberately undecided.** Source `19`/`20` lifecycle decisions, bounded Owner candidate notification, membership provisioning, and persistent runtime are separate future choices and none is authorized by the current docs work.
+28. **P2 — The next production gate is deliberately undecided.** Source `19`/`20` lifecycle decisions, membership provisioning, recurring notification automation and persistent runtime are separate future choices and none is authorized by the current docs work.
 
 ## PR27 bounded Web evidence boundary
 
@@ -132,6 +137,26 @@ Telegram membership
 Owner notification
 persistent collection
 ```
+
+## Owner candidate-notification evidence boundary
+
+The later attempted notification proof failed safely in PRELIVE because durable target rows were already present. No Telegram network request or send was attempted by that gate, so its authorization was not consumed; the old live checkpoint is retired rather than retryable.
+
+```text
+SOURCE_19_20_NOTIFICATION_PRELIVE=FAIL_PREEXISTING_DURABLE_ROWS
+TELEGRAM_NETWORK_ATTEMPTED=NO
+BOT_SEND_ATTEMPTS=0
+NOTIFICATION_PROOF_AUTHORIZATION_CONSUMED=NO
+NOTIFICATION_PROOF_AUTHORIZATION_RETIRED_DUE_PREEXISTING_SENT_ROWS=YES
+LIVE_CHECKPOINT_2_RETIRED=YES
+RETRY_OR_LATE_CHECKPOINT2_ALLOWED=NO
+```
+
+Read-only diagnosis proved terminal `sent` rows for sources `19` and `20`, addressed to the current Owner, with consistent timestamps, Telegram message IDs and no failure codes. These are durable at-most-once markers under the unique `(recipient_chat_id, source_id)` contract; repeat notification is neither needed nor authorized.
+
+Exact creating-command provenance is not persisted. The compatible notification timestamps, nearby collector-`2` governor events and durable scan state are explicitly `TEMPORAL/STRUCTURAL_INFERENCE`, not proof of an exact CLI command, process or direct event-row linkage.
+
+This narrow delivery proof does not establish Owner review, lifecycle approval, membership, live-update readiness, useful personalized opportunity delivery or recurring notification automation. Both sources remain lifecycle `candidate`, and no join or lifecycle decision occurred.
 
 ## What the historical membership investigation established
 

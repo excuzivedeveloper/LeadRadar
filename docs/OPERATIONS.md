@@ -3,7 +3,7 @@
 **Status:** CANONICAL  
 **Last verified:** 2026-09-12
 **Implementation baseline:** `81a675b72ed4c1229cedad28e5d2e1f56bac1f66`
-**Current production repository head:** `c89e473fdd8895aefb7a0fac3a863468d56ab56e`
+**Latest verified production evidence head:** `b660bdd633137f13dae5a8524f14d36c0f5ecd05`
 
 This document is the operational source of truth for the current LeadRadar production environment. Fresh exact-head server evidence outranks this document; if later evidence disagrees, stop and reconcile docs before designing a new live task.
 
@@ -18,7 +18,7 @@ python=./.venv/bin/python
 python_version=3.14.7
 bare_python=ABSENT
 alembic_current=20260908_0042
-production_head=c89e473fdd8895aefb7a0fac3a863468d56ab56e
+latest_verified_production_evidence_head=b660bdd633137f13dae5a8524f14d36c0f5ecd05
 implementation_baseline=81a675b72ed4c1229cedad28e5d2e1f56bac1f66
 ```
 
@@ -476,7 +476,7 @@ SOURCE_20_FRESH_WITHIN_10_DAYS=YES
 SOURCE_20_LIFECYCLE=candidate
 ```
 
-The probe did **not** call the lifecycle validation service and performed no lifecycle transition, join/leave request or Owner notification:
+The probe did **not** call the lifecycle validation service and performed no lifecycle transition, join/leave request or Owner notification itself:
 
 ```text
 SOURCE_VALIDATION_SERVICE_CALLED=NO
@@ -499,7 +499,88 @@ public entity resolution / history readability / freshness
 
 Do not approve, join, notify, clean up collector rows, or start runtime based solely on this evidence.
 
-## 14. Shared-host no-touch boundary
+## 14. Existing Owner candidate-notification evidence
+
+A later newly authorized notification proof stopped safely in read-only PRELIVE. The target rows already existed, so no Telegram client or network send was invoked and the live checkpoint is retired:
+
+```text
+SOURCE_19_20_NOTIFICATION_PRELIVE=FAIL_PREEXISTING_DURABLE_ROWS
+PRE_TARGET_OWNER_NOTIFICATION_COUNT=2
+PRE_TARGET_ANY_RECIPIENT_NOTIFICATION_COUNT=2
+PRE_OWNER_NOTIFICATION_COUNT=3
+TELEGRAM_NETWORK_ATTEMPTED=NO
+CHECKPOINT_2_AUTHORIZED=NO
+BOT_SEND_ATTEMPTS=0
+OWNER_NOTIFICATIONS_SENT_BY_THIS_GATE=0
+NOTIFICATION_PROOF_AUTHORIZATION_CONSUMED=NO
+NOTIFICATION_PROOF_AUTHORIZATION_RETIRED_DUE_PREEXISTING_SENT_ROWS=YES
+LIVE_CHECKPOINT_2_EXECUTED=NO
+LIVE_CHECKPOINT_2_RETIRED=YES
+RETRY_OR_LATE_CHECKPOINT2_ALLOWED=NO
+```
+
+A separate read-only diagnostic proved three total Owner notification rows for source IDs `19`, `20`, and `21`. The two target rows are terminal successful deliveries to the current Owner:
+
+```text
+SOURCE_19_NOTIFICATION_ROW_ID=1
+SOURCE_19_OWNER_CANDIDATE_NOTIFICATION=sent
+SOURCE_19_RECIPIENT_IS_CURRENT_OWNER=YES
+SOURCE_19_ATTEMPTED_AT=2026-09-08T14:27:58.543085+00:00
+SOURCE_19_CREATED_AT=2026-09-08T14:27:58.543085+00:00
+SOURCE_19_UPDATED_AT=2026-09-08T14:27:58.606278+00:00
+SOURCE_19_SENT_AT=2026-09-08T14:27:58.606278+00:00
+SOURCE_19_NOTIFICATION_LATEST_MESSAGE_AT=2026-09-04T19:01:01+00:00
+SOURCE_19_TELEGRAM_MESSAGE_ID_PRESENT=YES
+SOURCE_19_FAILURE_CODE=NONE
+SOURCE_19_STATUS_PAYLOAD_CONSISTENT=YES
+SOURCE_19_SNAPSHOT_LIFECYCLE=candidate
+
+SOURCE_20_NOTIFICATION_ROW_ID=2
+SOURCE_20_OWNER_CANDIDATE_NOTIFICATION=sent
+SOURCE_20_RECIPIENT_IS_CURRENT_OWNER=YES
+SOURCE_20_ATTEMPTED_AT=2026-09-08T14:28:32.725012+00:00
+SOURCE_20_CREATED_AT=2026-09-08T14:28:32.725012+00:00
+SOURCE_20_UPDATED_AT=2026-09-08T14:28:32.769672+00:00
+SOURCE_20_SENT_AT=2026-09-08T14:28:32.769672+00:00
+SOURCE_20_NOTIFICATION_LATEST_MESSAGE_AT=2026-09-08T14:15:32+00:00
+SOURCE_20_TELEGRAM_MESSAGE_ID_PRESENT=YES
+SOURCE_20_FAILURE_CODE=NONE
+SOURCE_20_STATUS_PAYLOAD_CONSISTENT=YES
+SOURCE_20_SNAPSHOT_LIFECYCLE=candidate
+
+SOURCE_19_20_OWNER_NOTIFICATION_TO_CURRENT_OWNER=PROVEN
+DURABLE_AT_MOST_ONCE_MARKERS_PRESENT=YES
+REPEAT_NOTIFICATION_NEEDED=NO
+REPEAT_NOTIFICATION_AUTHORIZED=NO
+```
+
+Both rows have a Telegram message ID, no failure code and internally consistent terminal payloads. Their notification-time `latest_message_at` values are historical snapshots and must not be replaced by the newer access/freshness-probe values.
+
+The row timestamps, nearby collector-`2` `ENTITY_ACCESS`/`HISTORY` events and durable scan state are `TEMPORAL/STRUCTURAL_INFERENCE` compatible with the standard candidate-notification flow. Exact command attribution is not persisted:
+
+```text
+ROW_ORIGIN_EXACT_COMMAND_PROVABLE_FROM_SCHEMA=NO
+ROW_ORIGIN_DIRECTLY_PERSISTED=NO
+NOTIFICATION_ROW_COLLECTOR_FK_PRESENT=NO
+NOTIFICATION_ROW_GOVERNOR_EVENT_FK_PRESENT=NO
+```
+
+The compatible but non-linked sequence was:
+
+```text
+ATTRIBUTION_CLASS=TEMPORAL/STRUCTURAL_INFERENCE
+SOURCE_19_NEARBY_EVENTS=198:entity_access:completed,199:history:completed
+SOURCE_20_NEARBY_EVENTS=200:entity_access:completed,201:history:completed
+FOLLOWING_EVENTS=202:entity_access:completed,203:history:completed
+NEARBY_EVENT_COLLECTOR_ACCOUNT_ID=2
+CURRENT_OWNER_SCAN_LAST_SOURCE_ID=21
+CURRENT_OWNER_SCAN_CREATED_AT=2026-09-08T14:06:21.852702+00:00
+CURRENT_OWNER_SCAN_UPDATED_AT=2026-09-08T14:27:48.912712+00:00
+```
+
+Do not delete or reset the rows to force a repeat proof. A terminal `sent` row proves durable candidate-card delivery persistence, not lifecycle approval, membership, live-update readiness, Owner review, useful personalized opportunity delivery or recurring automation.
+
+## 15. Shared-host no-touch boundary
 
 LeadRadar tasks must not modify unrelated host workloads:
 
@@ -517,7 +598,7 @@ unrelated databases
 
 Vaultwarden owns `127.0.0.1:8080`; LeadRadar SearXNG remains on `127.0.0.1:8888`.
 
-## 15. Production promotion contract
+## 16. Production promotion contract
 
 Before syncing a reviewed change to production:
 
@@ -536,7 +617,7 @@ Before syncing a reviewed change to production:
 
 Do not use local merge, rebase, destructive reset or a newer-than-authorized target.
 
-## 16. Current rollout and authorization state
+## 17. Current rollout and authorization state
 
 ```text
 PR24_MERGED=YES
@@ -552,6 +633,9 @@ PR27_BOUNDED_WEB_CANARY=PASS
 PR29_REVIEWED=PASS
 PR29_MERGED=YES
 PR29_PRODUCTION_DOCS_SYNC=PASS
+PR30_REVIEWED=PASS
+PR30_MERGED=YES
+PR30_PRODUCTION_DOCS_SYNC=PASS
 PROFILE_DISCOVERY_INTENT_VERSION=profile-discovery-intent.v2
 PERSISTED_V2_COUNT=1
 CURRENT_V2_CONFLICT_PRESENT=NO
@@ -571,9 +655,16 @@ SOURCE_19_BOUNDED_TELEGRAM_ACCESS_FRESHNESS=PASS
 SOURCE_20_BOUNDED_TELEGRAM_ACCESS_FRESHNESS=PASS
 SOURCE_19_LIFECYCLE=candidate
 SOURCE_20_LIFECYCLE=candidate
-OWNER_NOTIFICATION_SENT_FOR_19_20=NO
+SOURCE_19_OWNER_CANDIDATE_NOTIFICATION=sent
+SOURCE_20_OWNER_CANDIDATE_NOTIFICATION=sent
+SOURCE_19_20_OWNER_NOTIFICATION_TO_CURRENT_OWNER=PROVEN
+NOTIFICATION_PROOF_AUTHORIZATION_CONSUMED=NO
+NOTIFICATION_PROOF_AUTHORIZATION_RETIRED_DUE_PREEXISTING_SENT_ROWS=YES
+LIVE_CHECKPOINT_2_RETIRED=YES
+REPEAT_NOTIFICATION_AUTHORIZED=NO
 SOURCE_19_20_JOIN_PERFORMED=NO
 SOURCE_19_20_LIFECYCLE_DECISION=NONE
+CANDIDATE_NOTIFICATION_RECURRING_AUTOMATION_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 NEW_LIVE_ACTION_AUTHORIZED=NO
 ```
@@ -583,7 +674,7 @@ The successful bounded gates do not authorize a repeat or a new operation.
 Required next ordering:
 
 ```text
-1. docs reconciliation after collector 1 controlled cleanup
+1. docs reconciliation with source 19/20 notification-row evidence
 2. independent review
 3. Owner merge authorization
 4. merge reviewed docs head
@@ -591,9 +682,9 @@ Required next ordering:
 6. then choose the next separate Owner-authorized gate
 ```
 
-The next gate has not been selected. Source lifecycle decisions, Owner candidate notification proof, membership provisioning and persistent runtime remain separate future choices.
+The next gate has not been selected. Source lifecycle decisions, membership provisioning and persistent runtime remain separate future choices. The obsolete notification-proof checkpoint must not be retried.
 
-## 17. Documentation precedence for operations
+## 18. Documentation precedence for operations
 
 For production commands, use this order:
 

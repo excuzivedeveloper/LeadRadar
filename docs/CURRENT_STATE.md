@@ -3,7 +3,7 @@
 **Status:** CANONICAL  
 **Snapshot date:** 2026-09-12
 **Implementation baseline:** `81a675b72ed4c1229cedad28e5d2e1f56bac1f66`
-**Current repository / deployed docs head:** `c89e473fdd8895aefb7a0fac3a863468d56ab56e`
+**Latest verified production evidence head:** `b660bdd633137f13dae5a8524f14d36c0f5ecd05`
 
 ## Executive status
 
@@ -17,14 +17,16 @@ Angle attribution from persisted evidence proves that `buyer_habitat` / `adjacen
 
 A separately authorized Telegram identity-only gate proved that the currently configured Telethon collector session maps to `collector_accounts.id=2`, which also matches the historical production collector. After PR29 was reviewed, merged and synced to production, a separate Owner-authorized controlled cleanup used `CollectorAccountRepository.set_active` to deactivate collector `1`. Collector `2` is now the sole active Telegram collector. Collector `1` was not deleted: it remains persisted for historical/FK continuity, and its operation state, events, validations, raw messages and source-access references were preserved.
 
-A later bounded Telegram source probe, explicitly guarded to collector `2`, proved public entity resolution, public-history readability and freshness for candidate sources `19` (`@phystechcareerchannel`) and `20` (`@juniors_rabota_jobs`). Both remain lifecycle `candidate`. This access/freshness evidence is not lifecycle approval, Telegram membership proof, live-update readiness, Owner notification, or authorization for persistent collection.
+A later bounded Telegram source probe, explicitly guarded to collector `2`, proved public entity resolution, public-history readability and freshness for candidate sources `19` (`@phystechcareerchannel`) and `20` (`@juniors_rabota_jobs`). Both remain lifecycle `candidate`. That probe itself sent no notification and its access/freshness evidence is not lifecycle approval, Telegram membership proof, live-update readiness or authorization for persistent collection.
+
+A newly authorized Owner-notification proof then stopped safely in PRELIVE before Telegram because sources `19` and `20` already had durable terminal `sent` rows addressed to the current Owner. A separate read-only diagnostic proved those pre-existing rows and their internally consistent sent payloads. The exact creating command is not persisted; nearby collector-`2` governor events, scan state and timestamps are only `TEMPORAL/STRUCTURAL_INFERENCE`. No repeat notification is needed or authorized.
 
 Persistent LeadRadar runtime remains unauthorized.
 
 ## Production contract
 
 ```text
-PRODUCTION_HEAD=c89e473fdd8895aefb7a0fac3a863468d56ab56e
+LATEST_VERIFIED_PRODUCTION_EVIDENCE_HEAD=b660bdd633137f13dae5a8524f14d36c0f5ecd05
 IMPLEMENTATION_BASELINE=81a675b72ed4c1229cedad28e5d2e1f56bac1f66
 BRANCH=main
 TRACKED_WORKTREE=CLEAN
@@ -402,12 +404,12 @@ SOURCE_20_FRESH_WITHIN_10_DAYS=YES
 SOURCE_20_ERROR_CLASS=NONE
 ```
 
-Business/product state remained unchanged:
+That specific access/freshness probe made no notification or business-state mutation:
 
 ```text
 SOURCE_19_LIFECYCLE=candidate
 SOURCE_20_LIFECYCLE=candidate
-OWNER_NOTIFICATION_SENT_FOR_19_20=NO
+OWNER_NOTIFICATIONS_SENT=0
 SOURCE_19_20_JOIN_PERFORMED=NO
 SOURCE_19_20_LIFECYCLE_DECISION=NONE
 SOURCE_VALIDATION_SERVICE_CALLED=NO
@@ -416,9 +418,82 @@ LIFECYCLE_TRANSITIONS_PERFORMED=NO
 
 Public-history readability is **not** proof of Telegram membership or live-update readiness.
 
+## Existing Owner candidate-notification evidence
+
+The later notification-proof PRELIVE expected no target rows, found two terminal target rows, and stopped before constructing a Telegram client or issuing a send:
+
+```text
+SOURCE_19_20_NOTIFICATION_PRELIVE=FAIL_PREEXISTING_DURABLE_ROWS
+PRE_TARGET_OWNER_NOTIFICATION_COUNT=2
+PRE_TARGET_ANY_RECIPIENT_NOTIFICATION_COUNT=2
+PRE_OWNER_NOTIFICATION_COUNT=3
+TELEGRAM_NETWORK_ATTEMPTED=NO
+CHECKPOINT_2_AUTHORIZED=NO
+BOT_SEND_ATTEMPTS=0
+OWNER_NOTIFICATIONS_SENT_BY_THIS_GATE=0
+NOTIFICATION_PROOF_AUTHORIZATION_CONSUMED=NO
+NOTIFICATION_PROOF_AUTHORIZATION_RETIRED_DUE_PREEXISTING_SENT_ROWS=YES
+LIVE_CHECKPOINT_2_EXECUTED=NO
+LIVE_CHECKPOINT_2_RETIRED=YES
+RETRY_OR_LATE_CHECKPOINT2_ALLOWED=NO
+```
+
+A separate read-only diagnostic proved the current product state:
+
+```text
+DATABASE_WRITES_PERFORMED=NO
+TELEGRAM_CLIENT_CONSTRUCTED=NO
+TELEGRAM_NETWORK_ATTEMPTED=NO
+BOT_SEND_ATTEMPTS=0
+OWNER_NOTIFICATIONS_SENT_BY_DIAGNOSTIC=0
+SOURCE_LIFECYCLE_MUTATIONS=0
+JOIN_LEAVE_REQUESTS=0
+WEB_REQUESTS_PERFORMED=0
+AI_REQUESTS_PERFORMED=0
+PERSISTENT_RUNTIME_STARTED=NO
+
+SOURCE_19_20_EXISTING_NOTIFICATION_ROWS_DIAGNOSTIC=PASS
+DATABASE_WRITES_PERFORMED=NO
+TELEGRAM_CLIENT_CONSTRUCTED=NO
+TELEGRAM_NETWORK_ATTEMPTED=NO
+BOT_SEND_ATTEMPTS=0
+OWNER_NOTIFICATIONS_SENT_BY_DIAGNOSTIC=0
+SOURCE_LIFECYCLE_MUTATIONS=0
+JOIN_LEAVE_REQUESTS=0
+WEB_REQUESTS_PERFORMED=0
+AI_REQUESTS_PERFORMED=0
+PERSISTENT_RUNTIME_STARTED=NO
+ALL_OWNER_NOTIFICATION_ROW_COUNT=3
+ALL_OWNER_NOTIFICATION_SOURCE_IDS=19,20,21
+
+SOURCE_19_OWNER_CANDIDATE_NOTIFICATION=sent
+SOURCE_19_NOTIFICATION_ROW_ID=1
+SOURCE_19_RECIPIENT_IS_CURRENT_OWNER=YES
+SOURCE_19_SENT_AT=2026-09-08T14:27:58.606278+00:00
+SOURCE_19_NOTIFICATION_LATEST_MESSAGE_AT=2026-09-04T19:01:01+00:00
+
+SOURCE_20_OWNER_CANDIDATE_NOTIFICATION=sent
+SOURCE_20_NOTIFICATION_ROW_ID=2
+SOURCE_20_RECIPIENT_IS_CURRENT_OWNER=YES
+SOURCE_20_SENT_AT=2026-09-08T14:28:32.769672+00:00
+SOURCE_20_NOTIFICATION_LATEST_MESSAGE_AT=2026-09-08T14:15:32+00:00
+
+SOURCE_19_20_OWNER_NOTIFICATION_TO_CURRENT_OWNER=PROVEN
+DURABLE_AT_MOST_ONCE_MARKERS_PRESENT=YES
+REPEAT_NOTIFICATION_NEEDED=NO
+REPEAT_NOTIFICATION_AUTHORIZED=NO
+ROW_ORIGIN_EXACT_COMMAND_PROVABLE_FROM_SCHEMA=NO
+ROW_ORIGIN_DIRECTLY_PERSISTED=NO
+ATTRIBUTION_CLASS=TEMPORAL/STRUCTURAL_INFERENCE
+```
+
+Both row payloads are consistent with terminal `sent` status, contain a Telegram message ID, and have no failure code. Their historical `latest_message_at` snapshots must remain distinct from the newer timestamps established by the later access/freshness probe. The row timestamps, collector-`2` `ENTITY_ACCESS`/`HISTORY` event sequence and durable scan state are strongly compatible with the standard candidate-notification flow, but no notification row has a persisted collector or governor-event FK and no exact creating CLI command is proven.
+
+Notification delivery did not approve either source, prove membership/live-update readiness, or prove that the Owner reviewed the cards. It also does not prove useful end-to-end personalized opportunity delivery or recurring notification automation.
+
 ## Current authorization state
 
-Completed one-attempt Web/Telegram gates have consumed their authorizations. They do not authorize another live action.
+Completed earlier one-attempt Web/Telegram gates consumed their authorizations. The later notification-proof PRELIVE made no Telegram attempt, so that authorization is unconsumed but retired as obsolete for this already-proven objective. Neither state authorizes another live action.
 
 ```text
 PR27_WEB_CANARY_AUTHORIZATION_CONSUMED=YES
@@ -426,11 +501,15 @@ IDENTITY_ONLY_TELEGRAM_GATE_AUTHORIZATION_CONSUMED=YES
 SOURCE_19_20_BOUNDED_TELEGRAM_PROBE_AUTHORIZATION_CONSUMED=YES
 COLLECTOR_1_CLEANUP_AUTHORIZATION_CONSUMED=YES
 COLLECTOR_1_CLEANUP_COMPLETED=YES
+NOTIFICATION_PROOF_AUTHORIZATION_CONSUMED=NO
+NOTIFICATION_PROOF_AUTHORIZATION_RETIRED_DUE_PREEXISTING_SENT_ROWS=YES
+LIVE_CHECKPOINT_2_RETIRED=YES
 NEW_LIVE_ACTION_AUTHORIZED=NO
 NEW_WEB_CANARY_AUTHORIZED=NO
 NEW_TELEGRAM_SOURCE_PROBE_AUTHORIZED=NO
 SOURCE_19_20_LIFECYCLE_MUTATION_AUTHORIZED=NO
 OWNER_CANDIDATE_NOTIFICATION_AUTHORIZED=NO
+CANDIDATE_NOTIFICATION_RECURRING_AUTOMATION_AUTHORIZED=NO
 SOURCE_19_20_MEMBERSHIP_PROVISIONING_AUTHORIZED=NO
 PERSISTENT_SOURCE_DISCOVERY_AUTHORIZED=NO
 TELEGRAM_DISCOVERY_AUTHORIZED=NO
@@ -445,7 +524,7 @@ PERSISTENT_RUNTIME_AUTHORIZED=NO
 The next required sequence is documentation-only governance, not another live action:
 
 ```text
-1. canonical docs reconciliation after collector 1 controlled cleanup
+1. canonical docs reconciliation with source 19/20 notification-row evidence
 2. independent review of the exact docs head
 3. Owner merge authorization
 4. merge the exact reviewed docs head
@@ -453,6 +532,6 @@ The next required sequence is documentation-only governance, not another live ac
 6. only then choose a new, separate Owner-authorized gate
 ```
 
-The next live/mutating gate has **not** been selected. Possible later gates remain separate decisions: manual/reviewed lifecycle decision for source `19`/`20`; bounded Owner candidate-notification proof; membership provisioning if/after approval; persistent runtime much later.
+The next live/mutating gate has **not** been selected. Possible later gates remain separate decisions: manual/reviewed lifecycle decision for source `19`/`20`; membership provisioning if/after approval; persistent runtime much later. The obsolete notification-proof checkpoint must not be retried.
 
 Fresh exact-head server evidence remains higher authority than code/CLI, which remains higher authority than canonical docs, which remains higher authority than historical reports.

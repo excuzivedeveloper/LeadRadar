@@ -3,14 +3,14 @@
 **Status:** CANONICAL / ACTIVE  
 **Last verified:** 2026-09-12
 **Implementation baseline:** `81a675b72ed4c1229cedad28e5d2e1f56bac1f66`
-**Current repository / deployed docs head:** `c89e473fdd8895aefb7a0fac3a863468d56ab56e`
+**Latest verified production evidence head:** `b660bdd633137f13dae5a8524f14d36c0f5ecd05`
 
 This file defines execution order. Implemented capability does not imply authorization to activate it.
 
 ## Current production baseline
 
 ```text
-PRODUCTION_HEAD=c89e473fdd8895aefb7a0fac3a863468d56ab56e
+LATEST_VERIFIED_PRODUCTION_EVIDENCE_HEAD=b660bdd633137f13dae5a8524f14d36c0f5ecd05
 IMPLEMENTATION_BASELINE=81a675b72ed4c1229cedad28e5d2e1f56bac1f66
 BRANCH=main
 TRACKED_WORKTREE=CLEAN
@@ -73,6 +73,13 @@ PR29_MERGED=YES
 PR29_PRODUCTION_DOCS_SYNC=PASS
 COLLECTOR_1_CONTROLLED_CLEANUP=PASS
 ACTIVE_TELEGRAM_COLLECTOR_IDS=2
+
+PR30_REVIEWED=PASS
+PR30_MERGED=YES
+PR30_PRODUCTION_DOCS_SYNC=PASS
+SOURCE_19_20_EXISTING_NOTIFICATION_ROWS_DIAGNOSTIC=PASS
+SOURCE_19_OWNER_CANDIDATE_NOTIFICATION=sent
+SOURCE_20_OWNER_CANDIDATE_NOTIFICATION=sent
 ```
 
 The bounded planner contract remained:
@@ -286,7 +293,7 @@ SOURCE_20_FRESH_WITHIN_10_DAYS=YES
 SOURCE_20_LIFECYCLE=candidate
 ```
 
-No source/business mutation accompanied the probe:
+That specific access/freshness probe made no source/business mutation and sent no notification:
 
 ```text
 OWNER_NOTIFICATIONS_SENT=0
@@ -298,19 +305,55 @@ SOURCE_19_20_LIFECYCLE_DECISION=NONE
 
 Access/freshness is distinct from lifecycle approval, Telegram membership, live-update readiness, Owner notification and persistent collection.
 
+## Existing Owner notification rows — proven
+
+A newly authorized bounded notification proof stopped in its read-only PRELIVE because durable terminal rows already existed for both targets:
+
+```text
+SOURCE_19_20_NOTIFICATION_PRELIVE=FAIL_PREEXISTING_DURABLE_ROWS
+PRE_TARGET_OWNER_NOTIFICATION_COUNT=2
+PRE_TARGET_ANY_RECIPIENT_NOTIFICATION_COUNT=2
+TELEGRAM_NETWORK_ATTEMPTED=NO
+CHECKPOINT_2_AUTHORIZED=NO
+BOT_SEND_ATTEMPTS=0
+OWNER_NOTIFICATIONS_SENT_BY_THIS_GATE=0
+NOTIFICATION_PROOF_AUTHORIZATION_CONSUMED=NO
+NOTIFICATION_PROOF_AUTHORIZATION_RETIRED_DUE_PREEXISTING_SENT_ROWS=YES
+LIVE_CHECKPOINT_2_EXECUTED=NO
+LIVE_CHECKPOINT_2_RETIRED=YES
+RETRY_OR_LATE_CHECKPOINT2_ALLOWED=NO
+```
+
+The separate read-only diagnostic established:
+
+```text
+SOURCE_19_OWNER_CANDIDATE_NOTIFICATION=sent
+SOURCE_20_OWNER_CANDIDATE_NOTIFICATION=sent
+SOURCE_19_20_OWNER_NOTIFICATION_TO_CURRENT_OWNER=PROVEN
+DURABLE_AT_MOST_ONCE_MARKERS_PRESENT=YES
+REPEAT_NOTIFICATION_NEEDED=NO
+REPEAT_NOTIFICATION_AUTHORIZED=NO
+ROW_ORIGIN_EXACT_COMMAND_PROVABLE_FROM_SCHEMA=NO
+ROW_ORIGIN_DIRECTLY_PERSISTED=NO
+ATTRIBUTION_CLASS=TEMPORAL/STRUCTURAL_INFERENCE
+```
+
+The timestamps, nearby collector-`2` governor sequence and durable scan state are strongly compatible with the standard candidate-notification flow, but the schema does not persist the exact command, run, actor, process, collector FK or governor-event FK. Notification delivery is separate from lifecycle approval, membership, live-update readiness, Owner review, personalized opportunity delivery and recurring automation. Sources `19` and `20` remain `candidate` and unjoined.
+
 ## Current gate
 
 ```text
-CURRENT_GATE=CANONICAL_DOCS_RECONCILIATION_AFTER_COLLECTOR_1_CLEANUP
+CURRENT_GATE=CANONICAL_DOCS_RECONCILIATION_AFTER_SOURCE_19_20_NOTIFICATION_DIAGNOSTIC
 NEXT_GATE=INDEPENDENT_REVIEW_OF_EXACT_DOCS_HEAD
 NEW_LIVE_ACTION_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
+CANDIDATE_NOTIFICATION_RECURRING_AUTOMATION_AUTHORIZED=NO
 ```
 
 ## Required sequence from here
 
 ```text
-1. reconcile canonical docs after collector 1 controlled cleanup
+1. reconcile canonical docs with source 19/20 notification-row evidence
 2. independent review of the exact docs head
 3. Owner merge authorization
 4. merge the exact reviewed docs head
@@ -322,12 +365,11 @@ The next live/mutating gate is intentionally **not selected yet**. Reasonable fu
 
 ```text
 manual/reviewed lifecycle decision for source 19/20
-bounded Owner candidate-notification proof
 membership provisioning if/after a source is approved
 persistent runtime only much later
 ```
 
-None of those is authorized by this docs reconciliation.
+None of those is authorized by this docs reconciliation. The prior notification-proof live checkpoint is retired and must not be executed or retried.
 
 ## Operational source-of-truth rule
 
