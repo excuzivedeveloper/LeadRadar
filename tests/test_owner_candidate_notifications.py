@@ -54,7 +54,7 @@ class OwnerCandidateNotificationServiceTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("PROFILE_GATE_READY=YES", summary.as_lines())
         self.assertEqual(repository.last_gate["discovery_intent_id"], intent.id)
 
-    async def test_missing_owner_user_fails_closed_before_candidate_query_or_telegram(self):
+    async def test_missing_owner_user_fails_closed_before_query_or_telegram(self):
         repository = _Repository(candidates=[_source(20)])
         governor = _Governor()
 
@@ -116,6 +116,47 @@ class OwnerCandidateNotificationServiceTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(repository.reserved_source_ids, [30])
         self.assertEqual(len(governor.categories), 2)
         self.assertEqual(len(bot.calls), 1)
+
+    async def test_non_current_or_non_strong_relevance_never_reaches_telegram(self):
+        profile = _profile()
+        intent_id = build_profile_discovery_intent(profile).id
+        cases = {
+            "adequate": [(70, PROFILE_ID, intent_id, 3, "adequate")],
+            "weak": [(70, PROFILE_ID, intent_id, 3, "weak")],
+            "missing": [],
+            "historical_strong_current_weak": [
+                (70, PROFILE_ID, UUID(int=70), 2, "strong"),
+                (70, PROFILE_ID, intent_id, 3, "weak"),
+            ],
+            "historical_strong_without_current": [
+                (70, PROFILE_ID, UUID(int=70), 2, "strong"),
+            ],
+            "other_profile": [
+                (70, OTHER_PROFILE_ID, UUID(int=71), 3, "strong"),
+            ],
+            "old_revision": [
+                (70, PROFILE_ID, UUID(int=72), 2, "strong"),
+            ],
+        }
+
+        for label, rows in cases.items():
+            with self.subTest(label=label):
+                repository = _Repository(
+                    candidates=[_source(70)], relevance_rows=rows
+                )
+                governor = _Governor()
+                bot = _BotClient()
+                summary = await _service(repository).run_once(
+                    config=_config(),
+                    collector_account_id=11,
+                    user_client=_UserClient(message_date=NOW),
+                    bot_client=bot,
+                    governor=governor,
+                )
+                self.assertEqual(summary.candidates_considered, 0)
+                self.assertEqual(governor.categories, [])
+                self.assertEqual(repository.reserved_source_ids, [])
+                self.assertEqual(bot.calls, [])
 
     async def test_relevance_filter_is_applied_before_limit(self):
         profile = _profile()
@@ -664,9 +705,11 @@ class _Repository:
                 ) in self.relevance_rows
             )
         ]
-        after_cursor = (
-            [source for source in unnotified if self._cursor is None or source.id > self._cursor]
-        )
+        after_cursor = [
+            source
+            for source in unnotified
+            if self._cursor is None or source.id > self._cursor
+        ]
         selected = after_cursor[:limit]
         if not selected and self._cursor is not None:
             selected = unnotified[:limit]
@@ -734,7 +777,13 @@ class _UserRepository:
     def __init__(self, *, owner_exists: bool) -> None:
         self.owner_exists = owner_exists
 
-    async def get_by_identity(self, _connection, *, platform: str, external_user_id: str):
+    async def get_by_identity(
+        self,
+        _connection,
+        *,
+        platform: str,
+        external_user_id: str,
+    ):
         if not self.owner_exists:
             raise UserNotFound("missing owner")
         assert platform == "telegram"
