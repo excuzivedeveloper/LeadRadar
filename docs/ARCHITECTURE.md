@@ -1,8 +1,8 @@
 # LeadRadar — Current Architecture
 
 **Status:** CANONICAL  
-**Last verified:** 2026-09-11
-**Implementation baseline:** `81a675b72ed4c1229cedad28e5d2e1f56bac1f66`
+**Last verified:** 2026-09-12
+**Implementation baseline:** `b3bb1f6266fe3f7dd17cd81329dc6689ceadcfe2`
 
 ## Purpose
 
@@ -169,6 +169,11 @@ review.
 Eligibility is intentionally narrow:
 
 ```text
+configured Owner Telegram identity resolves to a PostgreSQL user
+exactly one active + primary + confirmed SearchProfile belongs to that user
+build_profile_discovery_intent(current_profile) identifies the current intent
+source_profile_relevance matches source + profile + intent + profile revision
+source_profile_relevance.relevance_class=strong
 platform=telegram
 lifecycle_status=candidate
 safe direct t.me channel URL available
@@ -176,6 +181,14 @@ latest Telegram message exists
 latest_message_at >= now - 10 days
 no prior owner_source_candidate_notifications row for (Owner, source_id)
 ```
+
+Owner/profile resolution and the persisted exact-intent `strong` predicate are
+applied before the candidate page limit and before any Telegram request. A
+missing Owner user, missing or ambiguous current profile, missing current
+relevance row, `adequate`/`weak` current row, historical strong row, other
+profile, or old revision fails closed. Notification selection does not create
+an intent row, recalculate relevance, run discovery/audit/AI, or mutate source
+lifecycle state.
 
 The freshness check uses actual Telegram message activity fetched with the
 dedicated collector account through `TelegramRequestGovernor` categories
@@ -186,8 +199,9 @@ non-candidate, or already-attempted sources are skipped.
 
 Candidate backlog scanning uses durable keyset progress in
 `owner_source_candidate_notification_scan_state`, keyed by Owner recipient. Each
-one-shot pass considers a bounded page of unnotified candidate `source_id`s
-after the last scanned id, then wraps back to the beginning after exhaustion.
+one-shot pass considers a bounded page of current-intent strong, unnotified
+candidate `source_id`s after the last scanned id, then wraps back to the
+beginning after exhaustion.
 This prevents a stale top page from starving deeper candidates while still
 allowing stale, empty, or temporarily unresolvable candidates to be reprobed on
 a later pass.
@@ -218,6 +232,11 @@ The card contains source identity, language display (`RU`, `EN`, or
 button to open the channel. It does not approve, reject, join, leave, delete,
 score, audit, or change lifecycle state. Candidate promotion and Telegram
 membership remain separate manual/reviewed gates.
+
+A strong candidate card is not lifecycle approval, Telegram membership, Source
+Audit evidence, or personalized opportunity delivery. Historical source
+`19`/`20` sent rows predate the strong-relevance selector and are not proof that
+this gate was applied retroactively.
 
 ### Telegram membership prerequisite
 

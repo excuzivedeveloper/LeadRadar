@@ -2,7 +2,7 @@
 
 **Status:** CANONICAL / ACTIVE  
 **Last verified:** 2026-09-12
-**Implementation baseline:** `81a675b72ed4c1229cedad28e5d2e1f56bac1f66`
+**Implementation baseline:** `b3bb1f6266fe3f7dd17cd81329dc6689ceadcfe2`
 **Latest verified production evidence head:** `b660bdd633137f13dae5a8524f14d36c0f5ecd05`
 
 This file defines execution order. Implemented capability does not imply authorization to activate it.
@@ -343,8 +343,13 @@ The timestamps, nearby collector-`2` governor sequence and durable scan state ar
 ## Current gate
 
 ```text
-CURRENT_GATE=CANONICAL_DOCS_RECONCILIATION_AFTER_SOURCE_19_20_NOTIFICATION_DIAGNOSTIC
-NEXT_GATE=INDEPENDENT_REVIEW_OF_EXACT_DOCS_HEAD
+CURRENT_GATE=HIGH_RELEVANCE_OWNER_CANDIDATE_NOTIFICATION_IMPLEMENTATION
+IMPLEMENTATION_BASELINE=b3bb1f6266fe3f7dd17cd81329dc6689ceadcfe2
+OWNER_PROFILE_GATE=EXACT_ACTIVE_PRIMARY_CONFIRMED
+DISCOVERY_INTENT_GATE=CURRENT_DETERMINISTIC_INTENT
+OWNER_CANDIDATE_NOTIFICATION_RELEVANCE_GATE=strong_only
+RELEVANCE_FILTER_BEFORE_LIMIT=YES
+NEXT_GATE=INDEPENDENT_REVIEW_OF_EXACT_PR_HEAD
 NEW_LIVE_ACTION_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 CANDIDATE_NOTIFICATION_RECURRING_AUTOMATION_AUTHORIZED=NO
@@ -353,15 +358,17 @@ CANDIDATE_NOTIFICATION_RECURRING_AUTOMATION_AUTHORIZED=NO
 ## Required sequence from here
 
 ```text
-1. reconcile canonical docs with source 19/20 notification-row evidence
-2. independent review of the exact docs head
-3. Owner merge authorization
-4. merge the exact reviewed docs head
-5. docs-only production sync / exact-head reconciliation as required
-6. only then choose one new, separate Owner-authorized gate
+1. independent review of the exact high-relevance notification-gate PR head
+2. only after review PASS: Owner merge authorization
+3. merge the exact reviewed PR head
+4. separate production sync authorization
+5. exact-head post-sync verification with persistent runtime still stopped
+6. separate bounded one-shot candidate-notification canary design/authorization
+7. only after bounded proof: decide whether recurring automation is warranted
 ```
 
-The next live/mutating gate is intentionally **not selected yet**. Reasonable future candidates remain independent choices:
+No live notification canary is authorized by this implementation PR. Future
+lifecycle and membership actions remain independent choices:
 
 ```text
 manual/reviewed lifecycle decision for source 19/20
