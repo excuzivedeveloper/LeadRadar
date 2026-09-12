@@ -4,6 +4,7 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 import unittest
+from uuid import UUID
 
 import sqlalchemy as sa
 from sqlalchemy.exc import IntegrityError
@@ -12,6 +13,10 @@ from freelancer_bot.config import RuntimeConfig
 from freelancer_bot.owner_candidate_notifications import (
     OwnerCandidateNotificationService,
 )
+from freelancer_bot.profile_discovery import (
+    ProfileDiscoveryIntentRepository,
+    build_profile_discovery_intent,
+)
 from freelancer_bot.persistence.database import Database
 from freelancer_bot.persistence.owner_candidate_notifications import (
     OwnerSourceCandidateNotificationRepository,
@@ -19,8 +24,13 @@ from freelancer_bot.persistence.owner_candidate_notifications import (
 )
 from freelancer_bot.persistence.schema import (
     owner_source_candidate_notifications,
+    profile_discovery_intents,
+    search_profiles,
+    source_profile_relevance,
     sources,
+    users,
 )
+from freelancer_bot.persistence.search_profiles import SearchProfileRepository
 from freelancer_bot.persistence.source_repository import SourceStatus
 from freelancer_bot.telegram_request_governor import TelegramRequestCategory
 from postgres_support import TEST_DATABASE_URL, migrate_to_head, temporary_database
@@ -29,6 +39,8 @@ from postgres_support import TEST_DATABASE_URL, migrate_to_head, temporary_datab
 NOW = datetime(2026, 9, 8, 12, 0, tzinfo=timezone.utc)
 OWNER_ID = 7000001
 OTHER_OWNER_ID = 7000002
+OWNER_USER_ID = UUID("10000000-0000-0000-0000-000000000001")
+PROFILE_ID = UUID("20000000-0000-0000-0000-000000000001")
 
 
 @unittest.skipUnless(TEST_DATABASE_URL, "TEST_DATABASE_URL is not configured")
@@ -39,6 +51,39 @@ class OwnerCandidateNotificationsPostgresTest(unittest.IsolatedAsyncioTestCase):
         migrate_to_head(self.database_url)
         self.database = Database(self.database_url, pool_size=6, max_overflow=8)
         self.repository = OwnerSourceCandidateNotificationRepository()
+
+    async def asyncSetUp(self) -> None:
+        async with self.database.transaction() as connection:
+            await connection.execute(
+                users.insert().values(
+                    id=OWNER_USER_ID,
+                    platform="telegram",
+                    external_user_id=str(OWNER_ID),
+                )
+            )
+            await connection.execute(
+                search_profiles.insert().values(
+                    id=PROFILE_ID,
+                    user_id=OWNER_USER_ID,
+                    schema_version="search_profile.v1",
+                    parser_version="search-profile-parser.v1",
+                    roles=[_term("Python developer")],
+                    skills=[_term("FastAPI")],
+                    categories=[_term("backend development")],
+                    semantic_text_original="python backend developer",
+                    semantic_text_normalized="python backend developer",
+                    confirmation_status="confirmed",
+                    confirmed_at=NOW,
+                    revision=3,
+                    is_active=True,
+                    is_primary=True,
+                    activated_at=NOW,
+                )
+            )
+            profile = await SearchProfileRepository().get(connection, PROFILE_ID)
+            intent = build_profile_discovery_intent(profile)
+            await ProfileDiscoveryIntentRepository().ensure(connection, intent)
+            self.intent_id = intent.id
 
     async def asyncTearDown(self) -> None:
         await self.database.close()
@@ -82,6 +127,27 @@ class OwnerCandidateNotificationsPostgresTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(first.sent, 0)
         self.assertEqual(second.sent, 1)
         self.assertEqual(bot.sent_source_urls, ["https://t.me/pg_fresh_11"])
+
+    async def test_relevance_filter_precedes_page_limit(self):
+        async with self.database.transaction() as connection:
+            for index in range(1, 11):
+                await _insert_source(
+                    connection,
+                    handle=f"@pg_weak_{index}",
+                    relevance_class="weak",
+                )
+            strong_id = await _insert_source(connection, handle="@pg_strong_11")
+            candidates = await self.repository.list_unnotified_candidates(
+                connection,
+                recipient_chat_id=OWNER_ID,
+                search_profile_id=PROFILE_ID,
+                discovery_intent_id=self.intent_id,
+                profile_revision=3,
+                relevance_class="strong",
+                limit=5,
+            )
+
+        self.assertEqual([source.id for source in candidates], [strong_id])
 
     async def test_stale_candidate_remains_reprobe_eligible_after_wrap(self):
         async with self.database.transaction() as connection:
@@ -170,6 +236,10 @@ class OwnerCandidateNotificationsPostgresTest(unittest.IsolatedAsyncioTestCase):
             candidates = await recreated.list_unnotified_candidates(
                 connection,
                 recipient_chat_id=OWNER_ID,
+                search_profile_id=PROFILE_ID,
+                discovery_intent_id=self.intent_id,
+                profile_revision=3,
+                relevance_class="strong",
                 limit=10,
             )
 
@@ -384,7 +454,12 @@ def _config() -> RuntimeConfig:
     return RuntimeConfig(_env_file=None, owner_telegram_user_id=OWNER_ID)
 
 
-async def _insert_source(connection, *, handle: str) -> int:
+async def _insert_source(
+    connection,
+    *,
+    handle: str,
+    relevance_class: str = "strong",
+) -> int:
     source_id = await connection.scalar(
         sources.insert()
         .values(
@@ -398,7 +473,35 @@ async def _insert_source(connection, *, handle: str) -> int:
         )
         .returning(sources.c.id)
     )
+    intent_id = await connection.scalar(
+        sa.select(profile_discovery_intents.c.id).where(
+            profile_discovery_intents.c.search_profile_id == PROFILE_ID,
+            profile_discovery_intents.c.profile_revision == 3,
+        )
+    )
+    await connection.execute(
+        source_profile_relevance.insert().values(
+            source_id=source_id,
+            search_profile_id=PROFILE_ID,
+            discovery_intent_id=intent_id,
+            profile_revision=3,
+            relevance_score=("0.90000" if relevance_class == "strong" else "0.10000"),
+            relevance_class=relevance_class,
+            evidence_categories=["direct_profession"],
+            last_evaluated_at=NOW,
+            version="source-profile-relevance.v2",
+        )
+    )
     return int(source_id)
+
+
+def _term(value: str) -> dict[str, str]:
+    return {
+        "value": value,
+        "normalized_value": value.casefold(),
+        "origin": "explicit",
+        "evidence": value,
+    }
 
 
 async def _insert_notification(

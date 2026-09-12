@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 import unittest
+from uuid import UUID
 
 from freelancer_bot.config import RuntimeConfig
 from freelancer_bot.owner_candidate_notifications import (
@@ -11,20 +12,163 @@ from freelancer_bot.owner_candidate_notifications import (
     telegram_candidate_address,
     telegram_source_url,
 )
+from freelancer_bot.profile_discovery import build_profile_discovery_intent
 from freelancer_bot.persistence.owner_candidate_notifications import (
     OwnerSourceCandidateNotificationReservation,
     OwnerSourceCandidateReservationResult,
     OwnerSourceCandidateReservationStatus,
 )
 from freelancer_bot.persistence.source_repository import SourceRecord, SourceStatus
+from freelancer_bot.persistence.search_profiles import (
+    SearchProfileConfirmationStatus,
+    UserNotFound,
+)
 from freelancer_bot.telegram_request_governor import TelegramRequestCategory
 
 
 NOW = datetime(2026, 9, 8, 12, 0, tzinfo=timezone.utc)
 OWNER_ID = 7000001
+OWNER_USER_ID = UUID("10000000-0000-0000-0000-000000000001")
+PROFILE_ID = UUID("20000000-0000-0000-0000-000000000001")
+OTHER_PROFILE_ID = UUID("20000000-0000-0000-0000-000000000002")
 
 
 class OwnerCandidateNotificationServiceTest(unittest.IsolatedAsyncioTestCase):
+    async def test_profile_gate_observability_binds_current_owner_intent(self):
+        repository = _Repository(candidates=[])
+
+        summary = await _service(repository).run_once(
+            config=_config(),
+            collector_account_id=11,
+            user_client=_UserClient(message_date=NOW),
+            bot_client=_BotClient(),
+            governor=_Governor(),
+        )
+
+        intent = build_profile_discovery_intent(_profile())
+        self.assertTrue(summary.profile_gate_ready)
+        self.assertEqual(summary.profile_id, PROFILE_ID)
+        self.assertEqual(summary.profile_revision, 3)
+        self.assertEqual(summary.discovery_intent_id, intent.id)
+        self.assertEqual(summary.relevance_gate, "strong")
+        self.assertIn("PROFILE_GATE_READY=YES", summary.as_lines())
+        self.assertEqual(repository.last_gate["discovery_intent_id"], intent.id)
+
+    async def test_missing_owner_user_fails_closed_before_candidate_query_or_telegram(self):
+        repository = _Repository(candidates=[_source(20)])
+        governor = _Governor()
+
+        summary = await _service(repository, owner_exists=False).run_once(
+            config=_config(),
+            collector_account_id=11,
+            user_client=_UserClient(message_date=NOW),
+            bot_client=_BotClient(),
+            governor=governor,
+        )
+
+        self.assertFalse(summary.profile_gate_ready)
+        self.assertEqual(repository.list_calls, 0)
+        self.assertEqual(governor.categories, [])
+
+    async def test_missing_or_ambiguous_current_profile_fails_closed(self):
+        for profiles in ((), (_profile(), _profile(profile_id=OTHER_PROFILE_ID))):
+            repository = _Repository(candidates=[_source(21)])
+            governor = _Governor()
+            summary = await _service(repository, profiles=profiles).run_once(
+                config=_config(),
+                collector_account_id=11,
+                user_client=_UserClient(message_date=NOW),
+                bot_client=_BotClient(),
+                governor=governor,
+            )
+            self.assertFalse(summary.profile_gate_ready)
+            self.assertEqual(repository.list_calls, 0)
+            self.assertEqual(governor.categories, [])
+
+    async def test_only_exact_current_strong_relevance_reaches_telegram(self):
+        profile = _profile()
+        intent_id = build_profile_discovery_intent(profile).id
+        sources = [_source(source_id) for source_id in range(30, 36)]
+        rows = [
+            (30, PROFILE_ID, intent_id, 3, "strong"),
+            (31, PROFILE_ID, intent_id, 3, "adequate"),
+            (32, PROFILE_ID, intent_id, 3, "weak"),
+            (32, PROFILE_ID, UUID(int=32), 2, "strong"),
+            (33, PROFILE_ID, UUID(int=33), 2, "strong"),
+            (34, OTHER_PROFILE_ID, intent_id, 3, "strong"),
+            (35, PROFILE_ID, UUID(int=35), 3, "strong"),
+        ]
+        repository = _Repository(candidates=sources, relevance_rows=rows)
+        governor = _Governor()
+        bot = _BotClient()
+
+        summary = await _service(repository).run_once(
+            config=_config(),
+            collector_account_id=11,
+            user_client=_UserClient(message_date=NOW),
+            bot_client=bot,
+            governor=governor,
+            limit=1,
+        )
+
+        self.assertEqual(summary.candidates_considered, 1)
+        self.assertEqual(summary.sent, 1)
+        self.assertEqual(repository.reserved_source_ids, [30])
+        self.assertEqual(len(governor.categories), 2)
+        self.assertEqual(len(bot.calls), 1)
+
+    async def test_relevance_filter_is_applied_before_limit(self):
+        profile = _profile()
+        intent_id = build_profile_discovery_intent(profile).id
+        sources = [_source(source_id) for source_id in range(40, 52)]
+        rows = [
+            *(
+                (source.id, PROFILE_ID, intent_id, 3, "weak")
+                for source in sources[:-1]
+            ),
+            (sources[-1].id, PROFILE_ID, intent_id, 3, "strong"),
+        ]
+        repository = _Repository(candidates=sources, relevance_rows=rows)
+
+        summary = await _service(repository).run_once(
+            config=_config(),
+            collector_account_id=11,
+            user_client=_UserClient(message_date=NOW),
+            bot_client=_BotClient(),
+            governor=_Governor(),
+            limit=1,
+        )
+
+        self.assertEqual(summary.candidates_considered, 1)
+        self.assertEqual(repository.reserved_source_ids, [51])
+
+    async def test_cursor_wrap_finds_newly_strong_candidate_behind_cursor(self):
+        profile = _profile()
+        intent_id = build_profile_discovery_intent(profile).id
+        behind = _source(50, handle="@behind_cursor")
+        first_source = _source(60, handle="@first_cursor")
+        repository = _Repository(
+            candidates=[behind, first_source],
+            relevance_rows=[(60, PROFILE_ID, intent_id, 3, "strong")],
+        )
+        service = _service(repository)
+
+        first = await service.run_once(
+            config=_config(), collector_account_id=11,
+            user_client=_UserClient(message_date=NOW), bot_client=_BotClient(),
+            governor=_Governor(), limit=1,
+        )
+        repository.relevance_rows.append((50, PROFILE_ID, intent_id, 3, "strong"))
+        second = await service.run_once(
+            config=_config(), collector_account_id=11,
+            user_client=_UserClient(message_date=NOW), bot_client=_BotClient(),
+            governor=_Governor(), limit=1,
+        )
+
+        self.assertEqual(first.sent, 1)
+        self.assertEqual(second.sent, 1)
+        self.assertEqual(repository.reserved_source_ids, [60, 50])
+
     async def test_fresh_candidate_at_ten_days_sends_once_with_url_button(self):
         source = _source(
             1,
@@ -408,10 +552,19 @@ class OwnerCandidateNotificationServiceTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(address.url, "https://t.me/canonical_handle")
 
 
-def _service(repository: _Repository) -> OwnerCandidateNotificationService:
+def _service(
+    repository: _Repository,
+    *,
+    owner_exists: bool = True,
+    profiles=None,
+) -> OwnerCandidateNotificationService:
     return OwnerCandidateNotificationService(
         _Database(),
         repository=repository,
+        user_repository=_UserRepository(owner_exists=owner_exists),
+        search_profile_repository=_SearchProfileRepository(
+            profiles=(_profile(),) if profiles is None else profiles
+        ),
         clock=lambda: NOW,
         button_factory=lambda label, url: ("url", label, url),
     )
@@ -464,9 +617,12 @@ class _Repository:
         candidates: list[SourceRecord],
         reserve_status: OwnerSourceCandidateReservationStatus
         | None = OwnerSourceCandidateReservationStatus.RESERVED,
+        relevance_rows=None,
     ) -> None:
         self.candidates = list(candidates)
         self.reserve_status = reserve_status
+        self.relevance_rows = relevance_rows
+        self.last_gate = None
         self.list_calls = 0
         self.reserved_source_ids: list[int] = []
         self.sent_ids: list[int] = []
@@ -475,12 +631,38 @@ class _Repository:
         self._next_id = 1
         self._cursor: int | None = None
 
-    async def list_unnotified_candidates(self, _connection, *, recipient_chat_id: int, limit: int):
+    async def list_unnotified_candidates(
+        self,
+        _connection,
+        *,
+        recipient_chat_id: int,
+        search_profile_id,
+        discovery_intent_id,
+        profile_revision: int,
+        relevance_class: str,
+        limit: int,
+    ):
         self.list_calls += 1
+        self.last_gate = {
+            "search_profile_id": search_profile_id,
+            "discovery_intent_id": discovery_intent_id,
+            "profile_revision": profile_revision,
+            "relevance_class": relevance_class,
+        }
         unnotified = [
             source
             for source in self.candidates
             if source.id not in self._attempted_source_ids
+            and (
+                self.relevance_rows is None
+                or (
+                    source.id,
+                    search_profile_id,
+                    discovery_intent_id,
+                    profile_revision,
+                    relevance_class,
+                ) in self.relevance_rows
+            )
         ]
         after_cursor = (
             [source for source in unnotified if self._cursor is None or source.id > self._cursor]
@@ -546,6 +728,44 @@ class _Repository:
         failed_at: datetime,
     ) -> None:
         self.failed_ids.append(notification_id)
+
+
+class _UserRepository:
+    def __init__(self, *, owner_exists: bool) -> None:
+        self.owner_exists = owner_exists
+
+    async def get_by_identity(self, _connection, *, platform: str, external_user_id: str):
+        if not self.owner_exists:
+            raise UserNotFound("missing owner")
+        assert platform == "telegram"
+        assert external_user_id == str(OWNER_ID)
+        return SimpleNamespace(id=OWNER_USER_ID)
+
+
+class _SearchProfileRepository:
+    def __init__(self, *, profiles) -> None:
+        self.profiles = tuple(profiles)
+
+    async def list_for_user(self, _connection, *, user_id):
+        assert user_id == OWNER_USER_ID
+        return self.profiles
+
+
+def _profile(*, profile_id=PROFILE_ID, revision: int = 3):
+    term = lambda value: SimpleNamespace(value=value)
+    return SimpleNamespace(
+        id=profile_id,
+        user_id=OWNER_USER_ID,
+        revision=revision,
+        roles=(term("Python developer"),),
+        skills=(term("FastAPI"),),
+        categories=(term("backend development"),),
+        semantic_text_normalized="python backend developer",
+        preferences=SimpleNamespace(languages=(), geographies=(), work_modes=()),
+        confirmation_status=SearchProfileConfirmationStatus.CONFIRMED,
+        is_active=True,
+        is_primary=True,
+    )
 
 
 class _Governor:
