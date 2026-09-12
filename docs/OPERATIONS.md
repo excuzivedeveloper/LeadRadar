@@ -1,9 +1,9 @@
 # LeadRadar — Production Operations
 
 **Status:** CANONICAL  
-**Last verified:** 2026-09-11
+**Last verified:** 2026-09-12
 **Implementation baseline:** `81a675b72ed4c1229cedad28e5d2e1f56bac1f66`
-**Current production repository head:** `f39eb215526c9ff18bd2227ccf0f3cd40304407f`
+**Current production repository head:** `c89e473fdd8895aefb7a0fac3a863468d56ab56e`
 
 This document is the operational source of truth for the current LeadRadar production environment. Fresh exact-head server evidence outranks this document; if later evidence disagrees, stop and reconcile docs before designing a new live task.
 
@@ -18,7 +18,7 @@ python=./.venv/bin/python
 python_version=3.14.7
 bare_python=ABSENT
 alembic_current=20260908_0042
-production_head=f39eb215526c9ff18bd2227ccf0f3cd40304407f
+production_head=c89e473fdd8895aefb7a0fac3a863468d56ab56e
 implementation_baseline=81a675b72ed4c1229cedad28e5d2e1f56bac1f66
 ```
 
@@ -399,7 +399,7 @@ NOVELTY_IMPROVED=NO
 
 Compared with PR23, search results rose `7 -> 19` and Telegram-like matches rose `6 -> 18`, while unique candidates stayed `4 -> 4` and new candidates stayed `0 -> 0`. Do not claim buyer-habitat/adjacent improved novelty or found a new source.
 
-## 12. Telegram collector identity contract and current anomaly
+## 12. Telegram collector identity and controlled cleanup
 
 Initial PRELIVE found:
 
@@ -421,9 +421,24 @@ COLLECTOR_ACCOUNT_MUTATION_PERFORMED=NO
 DELTA_TELEGRAM_OPERATION_EVENTS=0
 ```
 
-Collector `1` remains active. Treat it as a stale/legacy active-row anomaly pending a separate controlled cleanup decision. Do not infer its exact historical Telegram-user origin from the current evidence.
+The initial two-active-row state above is historical evidence. After PR29 was reviewed, merged and synced to production, Owner separately authorized one explicit mutation through the verified repository API:
 
-A future cleanup is an **explicit mutation** and requires its own Owner authorization. This docs reconciliation does not authorize it.
+```text
+PRODUCTION_HEAD=c89e473fdd8895aefb7a0fac3a863468d56ab56e
+REPOSITORY_API=CollectorAccountRepository.set_active
+UPDATED_COLLECTOR_ID=1
+COLLECTOR_1_IS_ACTIVE=NO
+COLLECTOR_2_IS_ACTIVE=YES
+ACTIVE_TELEGRAM_COLLECTOR_COUNT=1
+ACTIVE_TELEGRAM_COLLECTOR_IDS=2
+COLLECTOR_1_CLEANUP_COMPLETED=YES
+COLLECTOR_1_CLEANUP_RESULT=PASS
+COLLECTOR_1_CLEANUP_AUTHORIZATION_CONSUMED=YES
+```
+
+Collector `1` was deactivated, not deleted. Its repository-maintained `updated_at` changed as expected; its semantic state and all dependent operation-state, operation-event, Telegram-validation, raw-message and source-access surfaces remained unchanged. Collector `2` remained unchanged and is still the previously proven current session identity / historical production collector. The cleanup made no Telegram, Web or AI request and performed no source lifecycle mutation, notification, join/leave request, service restart, runtime-env change or persistent-runtime start.
+
+Do not infer collector `1`'s exact historical Telegram-user origin from this cleanup. The cleanup authorization is consumed and does not authorize another mutation.
 
 ## 13. Bounded Telegram source access/freshness evidence
 
@@ -534,6 +549,9 @@ PR27_PRODUCTION_SYNCED=YES
 PR27_POST_SYNC_VERIFICATION=PASS
 PR27_TECHNICAL_PRELIVE=PASS
 PR27_BOUNDED_WEB_CANARY=PASS
+PR29_REVIEWED=PASS
+PR29_MERGED=YES
+PR29_PRODUCTION_DOCS_SYNC=PASS
 PROFILE_DISCOVERY_INTENT_VERSION=profile-discovery-intent.v2
 PERSISTED_V2_COUNT=1
 CURRENT_V2_CONFLICT_PRESENT=NO
@@ -542,9 +560,13 @@ NON_DIRECT_ONLY_LIVE_YIELD_PROVEN=NO
 NOVELTY_IMPROVED=NO
 CURRENT_TELETHON_SESSION_COLLECTOR_ACCOUNT_ID=2
 CURRENT_SESSION_BINDING_PROVEN=YES
-DUPLICATE_ACTIVE_COLLECTOR_ROWS_PRESENT=YES
-ACTIVE_COLLECTOR_IDS=1,2
-COLLECTOR_1_CLEANUP_COMPLETED=NO
+COLLECTOR_1_CLEANUP_AUTHORIZATION_CONSUMED=YES
+COLLECTOR_1_CLEANUP_COMPLETED=YES
+COLLECTOR_1_CLEANUP_RESULT=PASS
+COLLECTOR_1_IS_ACTIVE=NO
+COLLECTOR_2_IS_ACTIVE=YES
+ACTIVE_TELEGRAM_COLLECTOR_COUNT=1
+ACTIVE_COLLECTOR_IDS=2
 SOURCE_19_BOUNDED_TELEGRAM_ACCESS_FRESHNESS=PASS
 SOURCE_20_BOUNDED_TELEGRAM_ACCESS_FRESHNESS=PASS
 SOURCE_19_LIFECYCLE=candidate
@@ -561,7 +583,7 @@ The successful bounded gates do not authorize a repeat or a new operation.
 Required next ordering:
 
 ```text
-1. docs reconciliation
+1. docs reconciliation after collector 1 controlled cleanup
 2. independent review
 3. Owner merge authorization
 4. merge reviewed docs head
@@ -569,7 +591,7 @@ Required next ordering:
 6. then choose the next separate Owner-authorized gate
 ```
 
-The next gate has not been selected. Collector-1 cleanup, source lifecycle decisions, Owner candidate notification proof, membership provisioning and persistent runtime remain separate future choices.
+The next gate has not been selected. Source lifecycle decisions, Owner candidate notification proof, membership provisioning and persistent runtime remain separate future choices.
 
 ## 17. Documentation precedence for operations
 

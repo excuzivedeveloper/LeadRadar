@@ -1,16 +1,16 @@
 # LeadRadar — Active Plan
 
 **Status:** CANONICAL / ACTIVE  
-**Last verified:** 2026-09-11
+**Last verified:** 2026-09-12
 **Implementation baseline:** `81a675b72ed4c1229cedad28e5d2e1f56bac1f66`
-**Current repository / deployed docs head:** `f39eb215526c9ff18bd2227ccf0f3cd40304407f`
+**Current repository / deployed docs head:** `c89e473fdd8895aefb7a0fac3a863468d56ab56e`
 
 This file defines execution order. Implemented capability does not imply authorization to activate it.
 
 ## Current production baseline
 
 ```text
-PRODUCTION_HEAD=f39eb215526c9ff18bd2227ccf0f3cd40304407f
+PRODUCTION_HEAD=c89e473fdd8895aefb7a0fac3a863468d56ab56e
 IMPLEMENTATION_BASELINE=81a675b72ed4c1229cedad28e5d2e1f56bac1f66
 BRANCH=main
 TRACKED_WORKTREE=CLEAN
@@ -67,6 +67,12 @@ PR27_ANGLE_ATTRIBUTION_READBACK=PASS
 CURRENT_SESSION_TELEGRAM_IDENTITY_GATE=PASS
 CURRENT_TELETHON_SESSION_COLLECTOR_ACCOUNT_ID=2
 SOURCE_19_20_BOUNDED_TELEGRAM_ACCESS_FRESHNESS_PROBE=PASS
+
+PR29_REVIEWED=PASS
+PR29_MERGED=YES
+PR29_PRODUCTION_DOCS_SYNC=PASS
+COLLECTOR_1_CONTROLLED_CLEANUP=PASS
+ACTIVE_TELEGRAM_COLLECTOR_IDS=2
 ```
 
 The bounded planner contract remained:
@@ -206,7 +212,7 @@ SOURCE_20_SUPPORT=mixed_direct_and_non_direct
 
 No lifecycle decision has been made for either source.
 
-## Telegram collector identity and duplicate active rows
+## Telegram collector identity and controlled cleanup
 
 Initial Telegram PRELIVE found two active collector rows:
 
@@ -230,7 +236,23 @@ COLLECTOR_ACCOUNT_MUTATION_PERFORMED=NO
 DELTA_TELEGRAM_OPERATION_EVENTS=0
 ```
 
-Collector `1` remains `is_active=true`. Its exact historical Telegram-user origin is not proven.
+At the identity-only gate, collector `1` was still `is_active=true`; its exact historical Telegram-user origin was not proven.
+
+After PR29 was reviewed, merged and synced to production, Owner separately authorized one controlled repository-API cleanup. It completed successfully:
+
+```text
+PRODUCTION_HEAD=c89e473fdd8895aefb7a0fac3a863468d56ab56e
+REPOSITORY_API=CollectorAccountRepository.set_active
+COLLECTOR_1_CONTROLLED_CLEANUP=PASS
+COLLECTOR_1_CLEANUP_AUTHORIZATION_CONSUMED=YES
+COLLECTOR_1_CLEANUP_COMPLETED=YES
+COLLECTOR_1_IS_ACTIVE=NO
+COLLECTOR_2_IS_ACTIVE=YES
+ACTIVE_TELEGRAM_COLLECTOR_COUNT=1
+ACTIVE_TELEGRAM_COLLECTOR_IDS=2
+```
+
+Collector `1` was deactivated, not deleted. Its operation-state row and historical references remain persisted. Collector `2` was not recreated and its proven session binding did not change. No Telegram, source, Web, AI, service or persistent-runtime action accompanied the cleanup.
 
 ## Bounded Telegram source access/freshness — completed
 
@@ -279,7 +301,7 @@ Access/freshness is distinct from lifecycle approval, Telegram membership, live-
 ## Current gate
 
 ```text
-CURRENT_GATE=CANONICAL_DOCS_RECONCILIATION_AFTER_PR27_WEB_TELEGRAM_EVIDENCE
+CURRENT_GATE=CANONICAL_DOCS_RECONCILIATION_AFTER_COLLECTOR_1_CLEANUP
 NEXT_GATE=INDEPENDENT_REVIEW_OF_EXACT_DOCS_HEAD
 NEW_LIVE_ACTION_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
@@ -288,7 +310,7 @@ PERSISTENT_RUNTIME_AUTHORIZED=NO
 ## Required sequence from here
 
 ```text
-1. reconcile canonical docs with the completed PR27 Web canary and bounded Telegram evidence
+1. reconcile canonical docs after collector 1 controlled cleanup
 2. independent review of the exact docs head
 3. Owner merge authorization
 4. merge the exact reviewed docs head
@@ -299,7 +321,6 @@ PERSISTENT_RUNTIME_AUTHORIZED=NO
 The next live/mutating gate is intentionally **not selected yet**. Reasonable future candidates remain independent choices:
 
 ```text
-controlled cleanup: collector 1 -> inactive
 manual/reviewed lifecycle decision for source 19/20
 bounded Owner candidate-notification proof
 membership provisioning if/after a source is approved

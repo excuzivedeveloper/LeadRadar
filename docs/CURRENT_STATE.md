@@ -1,9 +1,9 @@
 # LeadRadar — Current State
 
 **Status:** CANONICAL  
-**Snapshot date:** 2026-09-11
+**Snapshot date:** 2026-09-12
 **Implementation baseline:** `81a675b72ed4c1229cedad28e5d2e1f56bac1f66`
-**Current repository / deployed docs head:** `f39eb215526c9ff18bd2227ccf0f3cd40304407f`
+**Current repository / deployed docs head:** `c89e473fdd8895aefb7a0fac3a863468d56ab56e`
 
 ## Executive status
 
@@ -15,7 +15,7 @@ The subsequently authorized one-attempt PR27 bounded Web canary completed succes
 
 Angle attribution from persisted evidence proves that `buyer_habitat` / `adjacent` contributed live support to 3 of the 4 unique candidates. It does **not** prove a non-direct-only candidate and does **not** prove novelty improvement.
 
-A separately authorized Telegram identity-only gate proved that the currently configured Telethon collector session maps to `collector_accounts.id=2`, which also matches the historical production collector. Production currently contains two rows marked active, IDs `1` and `2`; code semantics allow this because collector-account `ensure()` is scoped to `(platform, external_account_id)` and does not deactivate older identities. Collector `1` has not been deactivated and is treated as a stale/legacy active-row anomaly pending a separate controlled cleanup decision.
+A separately authorized Telegram identity-only gate proved that the currently configured Telethon collector session maps to `collector_accounts.id=2`, which also matches the historical production collector. After PR29 was reviewed, merged and synced to production, a separate Owner-authorized controlled cleanup used `CollectorAccountRepository.set_active` to deactivate collector `1`. Collector `2` is now the sole active Telegram collector. Collector `1` was not deleted: it remains persisted for historical/FK continuity, and its operation state, events, validations, raw messages and source-access references were preserved.
 
 A later bounded Telegram source probe, explicitly guarded to collector `2`, proved public entity resolution, public-history readability and freshness for candidate sources `19` (`@phystechcareerchannel`) and `20` (`@juniors_rabota_jobs`). Both remain lifecycle `candidate`. This access/freshness evidence is not lifecycle approval, Telegram membership proof, live-update readiness, Owner notification, or authorization for persistent collection.
 
@@ -24,7 +24,7 @@ Persistent LeadRadar runtime remains unauthorized.
 ## Production contract
 
 ```text
-PRODUCTION_HEAD=f39eb215526c9ff18bd2227ccf0f3cd40304407f
+PRODUCTION_HEAD=c89e473fdd8895aefb7a0fac3a863468d56ab56e
 IMPLEMENTATION_BASELINE=81a675b72ed4c1229cedad28e5d2e1f56bac1f66
 BRANCH=main
 TRACKED_WORKTREE=CLEAN
@@ -302,7 +302,7 @@ SOURCE_ID=20 HANDLE=@juniors_rabota_jobs LIFECYCLE=candidate SUPPORT=mixed_direc
 
 Sources `19` and `20` were selected only as bounded Telegram access/freshness probe targets because they were current candidates with non-direct support. No lifecycle decision was made for either source.
 
-## Collector identity and duplicate-active-row state
+## Collector identity and controlled cleanup state
 
 Initial Telegram PRELIVE found:
 
@@ -314,7 +314,7 @@ DUPLICATE_ACTIVE_COLLECTOR_ROWS_PRESENT=YES
 
 Read-only diagnosis showed collector `1` had no operation events, validations or raw messages and only its operation-state FK footprint, while collector `2` carried the historical production activity. Exact-head code supports multiple active rows because `ApprovedTelegramSourceAdapter.list_for_session()` resolves `client.get_me()` and `CollectorAccountRepository.ensure(... active_on_create=True)` is scoped to `(platform, external_account_id)` without deactivating rows for other external IDs.
 
-A separately authorized identity-only gate proved:
+A separately authorized identity-only gate then proved:
 
 ```text
 CURRENT_SESSION_COLLECTOR_ACCOUNT_ID=2
@@ -327,7 +327,40 @@ DELTA_TELEGRAM_OPERATION_EVENTS=0
 COLLECTOR_1_CLEANUP_COMPLETED=NO
 ```
 
-Do not claim collector `1` has been deactivated or that its exact historical Telegram-user origin is known.
+The `COLLECTOR_1_CLEANUP_COMPLETED=NO` line above is historical identity-gate evidence. After PR29 production sync, Owner separately authorized one controlled cleanup. Pre-mutation evidence confirmed collector IDs `1` and `2` were active and collector `1` had no operation events, validations, raw messages or source-access references, while its one operation-state row remained present.
+
+The cleanup completed through the exact repository API without Telegram or other external work:
+
+```text
+PRODUCTION_HEAD=c89e473fdd8895aefb7a0fac3a863468d56ab56e
+REPOSITORY_API=CollectorAccountRepository.set_active
+UPDATED_COLLECTOR_ID=1
+COLLECTOR_1_PRE_IS_ACTIVE=YES
+COLLECTOR_1_IS_ACTIVE=NO
+COLLECTOR_2_IS_ACTIVE=YES
+ACTIVE_TELEGRAM_COLLECTOR_COUNT=1
+ACTIVE_TELEGRAM_COLLECTOR_IDS=2
+COLLECTOR_1_CLEANUP_COMPLETED=YES
+COLLECTOR_1_CLEANUP_RESULT=PASS
+DATABASE_TRANSACTION_COMMITTED=YES
+```
+
+Only collector `1`'s `is_active` and repository-maintained `updated_at` changed. Collector `2` and all five dependent-state surfaces for both collectors remained unchanged by SHA-256 comparison:
+
+```text
+OPERATION_STATE_UNCHANGED=YES
+OPERATION_EVENTS_UNCHANGED=YES
+TELEGRAM_VALIDATIONS_UNCHANGED=YES
+RAW_MESSAGES_UNCHANGED=YES
+SOURCE_COLLECTOR_ACCESS_UNCHANGED=YES
+TELEGRAM_REQUESTS_PERFORMED=NO
+WEB_REQUESTS_PERFORMED=NO
+AI_REQUESTS_PERFORMED=NO
+SERVICE_RESTARTS_PERFORMED=NO
+PERSISTENT_RUNTIME_STARTED=NO
+```
+
+Collector `1` was deactivated, not deleted. Its exact historical Telegram-user origin remains unproven. The cleanup did not issue a new Telegram `get_me()`; current collector `2` session binding remains supported by the earlier identity evidence.
 
 ## Bounded Telegram source access/freshness evidence
 
@@ -391,9 +424,11 @@ Completed one-attempt Web/Telegram gates have consumed their authorizations. The
 PR27_WEB_CANARY_AUTHORIZATION_CONSUMED=YES
 IDENTITY_ONLY_TELEGRAM_GATE_AUTHORIZATION_CONSUMED=YES
 SOURCE_19_20_BOUNDED_TELEGRAM_PROBE_AUTHORIZATION_CONSUMED=YES
+COLLECTOR_1_CLEANUP_AUTHORIZATION_CONSUMED=YES
+COLLECTOR_1_CLEANUP_COMPLETED=YES
+NEW_LIVE_ACTION_AUTHORIZED=NO
 NEW_WEB_CANARY_AUTHORIZED=NO
 NEW_TELEGRAM_SOURCE_PROBE_AUTHORIZED=NO
-COLLECTOR_1_CLEANUP_AUTHORIZED=NO
 SOURCE_19_20_LIFECYCLE_MUTATION_AUTHORIZED=NO
 OWNER_CANDIDATE_NOTIFICATION_AUTHORIZED=NO
 SOURCE_19_20_MEMBERSHIP_PROVISIONING_AUTHORIZED=NO
@@ -410,7 +445,7 @@ PERSISTENT_RUNTIME_AUTHORIZED=NO
 The next required sequence is documentation-only governance, not another live action:
 
 ```text
-1. canonical docs reconciliation after PR27 Web + Telegram evidence
+1. canonical docs reconciliation after collector 1 controlled cleanup
 2. independent review of the exact docs head
 3. Owner merge authorization
 4. merge the exact reviewed docs head
@@ -418,6 +453,6 @@ The next required sequence is documentation-only governance, not another live ac
 6. only then choose a new, separate Owner-authorized gate
 ```
 
-The next live/mutating gate has **not** been selected. Possible later gates remain separate decisions: controlled cleanup of collector `1`; manual/reviewed lifecycle decision for source `19`/`20`; bounded Owner candidate-notification proof; membership provisioning if/after approval; persistent runtime much later.
+The next live/mutating gate has **not** been selected. Possible later gates remain separate decisions: manual/reviewed lifecycle decision for source `19`/`20`; bounded Owner candidate-notification proof; membership provisioning if/after approval; persistent runtime much later.
 
 Fresh exact-head server evidence remains higher authority than code/CLI, which remains higher authority than canonical docs, which remains higher authority than historical reports.
