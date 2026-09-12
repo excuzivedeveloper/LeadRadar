@@ -1,9 +1,9 @@
 # LeadRadar — Current Deployment
 
 **Status:** CANONICAL  
-**Snapshot date:** 2026-09-11
+**Snapshot date:** 2026-09-12
 **Deployment code baseline:** `81a675b72ed4c1229cedad28e5d2e1f56bac1f66`
-**Repository/server head:** `f39eb215526c9ff18bd2227ccf0f3cd40304407f`
+**Repository/server head:** `c89e473fdd8895aefb7a0fac3a863468d56ab56e`
 
 This document records the current shared-server LeadRadar layout and deployment boundaries. Exact operational commands live in [`OPERATIONS.md`](OPERATIONS.md). A docs-only repository head can be newer than the implementation baseline without changing deployed code behavior.
 
@@ -137,7 +137,7 @@ CURRENT_SESSION_MATCHES_HISTORICAL_PRODUCTION_COLLECTOR=YES
 CURRENT_SESSION_IS_BOT=NO
 ```
 
-Production also currently contains a stale/legacy active-row anomaly:
+The initial identity PRELIVE observed this now-historical state:
 
 ```text
 ACTIVE_TELEGRAM_COLLECTOR_COUNT=2
@@ -146,9 +146,21 @@ DUPLICATE_ACTIVE_COLLECTOR_ROWS_PRESENT=YES
 COLLECTOR_1_CLEANUP_COMPLETED=NO
 ```
 
-Collector `1` has not been deactivated. Its exact historical Telegram-user origin is not proven. Exact-head code can create this state because collector-account `ensure()` is scoped by `(platform, external_account_id)` and does not deactivate an older row for another external account.
+After PR29 was reviewed, merged and synced to production, a separate Owner-authorized controlled cleanup used `CollectorAccountRepository.set_active` to produce the current state:
 
-Session files are bearer credentials. Never print or copy session contents. Two LeadRadar processes must not use the same session concurrently. Collector-row cleanup is a database mutation and requires a separate explicit authorization.
+```text
+PRODUCTION_HEAD=c89e473fdd8895aefb7a0fac3a863468d56ab56e
+ACTIVE_TELEGRAM_COLLECTOR_COUNT=1
+ACTIVE_TELEGRAM_COLLECTOR_IDS=2
+COLLECTOR_1_IS_ACTIVE=NO
+COLLECTOR_2_IS_ACTIVE=YES
+COLLECTOR_1_CLEANUP_COMPLETED=YES
+COLLECTOR_1_CLEANUP_RESULT=PASS
+```
+
+Collector `1` was deactivated, not deleted. Its exact historical Telegram-user origin remains unproven. Its operation-state row and historical dependent references remain persisted and unchanged; collector `2` was not recreated and its session did not change. Exact-head code had allowed the pre-cleanup state because collector-account `ensure()` is scoped by `(platform, external_account_id)` and does not automatically deactivate an older row for another external account.
+
+Session files are bearer credentials. Never print or copy session contents. Two LeadRadar processes must not use the same session concurrently. The collector `1` cleanup authorization is consumed; any further collector-row mutation requires a new explicit authorization.
 
 The owner-only bot allowlist remains part of the deployment boundary; the numeric owner Telegram ID must not be recorded in canonical docs or reports.
 
@@ -242,7 +254,7 @@ Do not sync to a newer-than-authorized `origin/main` and do not use local merge/
 Current required order is:
 
 ```text
-1. docs reconciliation
+1. docs reconciliation after collector 1 controlled cleanup
 2. independent review
 3. Owner merge authorization
 4. merge reviewed docs head
@@ -250,7 +262,7 @@ Current required order is:
 6. choose the next separate Owner-authorized gate
 ```
 
-Collector `1` cleanup, source `19`/`20` lifecycle decisions, Owner candidate-notification proof, membership provisioning and persistent runtime are not authorized by this reconciliation.
+Source `19`/`20` lifecycle decisions, Owner candidate-notification proof, membership provisioning and persistent runtime are not authorized by this reconciliation.
 
 ## Shared-server boundary
 
