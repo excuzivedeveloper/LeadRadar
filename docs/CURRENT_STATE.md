@@ -3,37 +3,29 @@
 **Status:** CANONICAL  
 **Snapshot date:** 2026-09-11
 **Implementation baseline:** `81a675b72ed4c1229cedad28e5d2e1f56bac1f66`
-**Current deployed repository head:** `81a675b72ed4c1229cedad28e5d2e1f56bac1f66`
+**Current repository / deployed docs head:** `f39eb215526c9ff18bd2227ccf0f3cd40304407f`
 
 ## Executive status
 
-LeadRadar production is stable at the merged PR27 commit. PR23 restored SearXNG by preserving inherited engine/network definitions and disabling the exact unwanted engines. PR24 changed profile Web query rendering for `buyer_habitat` and `adjacent` without changing the bounded planner contract. PR27 versioned the immutable Profile Discovery Intent contract to `profile-discovery-intent.v2`.
+LeadRadar production is stable on the PR27 implementation baseline with later docs-only commits synchronized. PR23 restored SearXNG by preserving inherited engine/network definitions and disabling the exact unwanted engines. PR24 changed profile Web query rendering for `buyer_habitat` and `adjacent` without changing the bounded planner contract. PR27 versioned the immutable Profile Discovery Intent contract to `profile-discovery-intent.v2`.
 
-PR24 production sync, post-sync verification and full bounded offline Stage A all passed.
+PR24 production sync, post-sync verification and full bounded offline Stage A all passed. PR27 production sync, post-sync verification and the technical read-only PRELIVE for the repaired profile-discovery path also passed.
 
-PR25/PR26 documentation changes were carried by the PR27 production sync. PR27 production sync, post-sync verification, and the technical read-only PRELIVE for the repaired profile-discovery path all passed.
+The subsequently authorized one-attempt PR27 bounded Web canary completed successfully on exact production head `f39eb215526c9ff18bd2227ccf0f3cd40304407f`. It persisted the current v2 intent without conflict and completed 12/12 selected queries. It increased raw search/Telegram-like support versus PR23 but did **not** improve unique-candidate novelty: all four discovered candidates were already known.
 
-Current proven bounded planner fingerprint:
+Angle attribution from persisted evidence proves that `buyer_habitat` / `adjacent` contributed live support to 3 of the 4 unique candidates. It does **not** prove a non-direct-only candidate and does **not** prove novelty improvement.
 
-```text
-generated=36
-exact_duplicates=0
-near_duplicates=2
-executable=34
-selected=12
-selected_direct=4
-selected_buyer_habitat=4
-selected_adjacent=4
-```
+A separately authorized Telegram identity-only gate proved that the currently configured Telethon collector session maps to `collector_accounts.id=2`, which also matches the historical production collector. Production currently contains two rows marked active, IDs `1` and `2`; code semantics allow this because collector-account `ensure()` is scoped to `(platform, external_account_id)` and does not deactivate older identities. Collector `1` has not been deactivated and is treated as a stale/legacy active-row anomaly pending a separate controlled cleanup decision.
 
-PR24/PR27 live Web yield improvement is **not yet proven**. No live Web canary has been authorized or issued after the PR27 production sync. The technical PRELIVE passed without Web, Telegram, AI, database-write, service-restart, runtime-env, or persistent-runtime side effects.
+A later bounded Telegram source probe, explicitly guarded to collector `2`, proved public entity resolution, public-history readability and freshness for candidate sources `19` (`@phystechcareerchannel`) and `20` (`@juniors_rabota_jobs`). Both remain lifecycle `candidate`. This access/freshness evidence is not lifecycle approval, Telegram membership proof, live-update readiness, Owner notification, or authorization for persistent collection.
 
-Persistent LeadRadar runtime, Telegram candidate validation and unattended discovery remain unauthorized.
+Persistent LeadRadar runtime remains unauthorized.
 
 ## Production contract
 
 ```text
-PRODUCTION_HEAD=81a675b72ed4c1229cedad28e5d2e1f56bac1f66
+PRODUCTION_HEAD=f39eb215526c9ff18bd2227ccf0f3cd40304407f
+IMPLEMENTATION_BASELINE=81a675b72ed4c1229cedad28e5d2e1f56bac1f66
 BRANCH=main
 TRACKED_WORKTREE=CLEAN
 PYTHON_VERSION=3.14.7
@@ -133,14 +125,14 @@ sources.lifecycle_status
 candidate=candidate
 ```
 
-Verified read-only inventory snapshot from the operational-contract discovery:
+Latest bounded evidence snapshot:
 
 ```text
-DISCOVERY_RUN_COUNT=6
+DISCOVERY_RUN_COUNT=7
 SOURCE_COUNT=22
 CANDIDATE_COUNT=7
 OWNER_NOTIFICATION_COUNT=3
-TELEGRAM_OPERATION_EVENT_COUNT=203
+TELEGRAM_OPERATION_EVENT_COUNT=207
 AI_CALL_TELEMETRY_COUNT=51
 SOURCE_LIFECYCLE_EVENT_COUNT=24
 ```
@@ -169,9 +161,9 @@ BACKEND_FAILURES=0
 USEFUL_YIELD_ANGLE=direct_only
 ```
 
-This remains the comparison baseline for the next PR24 live run.
+This remains the comparison baseline for PR27 bounded Web evidence.
 
-## PR24 state
+## Historical PR24 live attempts
 
 ```text
 PR24_MERGED=YES
@@ -180,11 +172,10 @@ PR24_MERGE_COMMIT=1299e64f28886dffe3b4bb0ddc201952aa8a2a28
 PR24_PRODUCTION_SYNC=PASS
 PR24_POST_SYNC_VERIFICATION=PASS
 PR24_FULL_STAGE_A_OFFLINE=PASS
-PR24_LIVE_YIELD_IMPROVEMENT_PROVEN=NO
 PR24_WEB_CANARY_READ_ONLY_PRELIVE=PASS
 ```
 
-The attempted live command using `python -m freelancer_bot profile-discovery run ...` was rejected by the application CLI parser. Because the invocation was issued under a one-attempt authorization, that authorization is consumed even though actual Web execution did not begin.
+The first attempted live command used the wrong application CLI namespace and was rejected by parsing before Web work. Because the invocation itself was issued under a one-attempt authorization, that authorization was consumed.
 
 The subsequent correctly namespaced live invocation consumed a fresh authorization and failed before Web discovery run creation:
 
@@ -207,126 +198,226 @@ SECOND_WEB_ATTEMPT_PERFORMED=YES
 SECOND_WEB_ATTEMPT_AUTHORIZED=NO
 ```
 
-Root-cause evidence:
-
-```text
-DETERMINISTIC_ID_MATCH=YES
-DIFFERING_FIELD_COUNT=1
-DIFFERING_FIELDS=generated_web_queries
-ONLY_GENERATED_WEB_QUERIES_DIFFER=YES
-SOURCE_PROFILE_RELEVANCE_REF_COUNT=19
-DISCOVERY_RUN_INTENT_REF_COUNT=4
-PR24_QUERY_RENDERING_CONFLICT_HYPOTHESIS=SUPPORTED
-```
-
-The attempted run key is retired operationally despite no `discovery_runs` row:
+Root-cause evidence showed only `generated_web_queries` differed under the old deterministic v1 identity. Historical v1 rows remain immutable. The old run key is retired operationally:
 
 ```text
 RETIRED_RUN_KEY=owner-profile-web-pr24-bounded-20260911-v1
 RETIRED_RUN_KEY_STATUS=RETIRED_DO_NOT_REUSE
 ```
 
-## PR27 production sync and PRELIVE state
+## PR27 intent repair and bounded Web canary
+
+PR27 repaired the root cause by versioning the immutable Profile Discovery Intent contract to `profile-discovery-intent.v2`. The earlier read-only technical PRELIVE correctly observed no persisted v2 row yet:
 
 ```text
-PR27_REVIEWED=PASS
-PR27_REVIEWED_HEAD=c09f3a501cd554a931531b14e8fd84aeda94d90a
-PR27_MERGE_COMMIT=81a675b72ed4c1229cedad28e5d2e1f56bac1f66
-PR27_PRODUCTION_SYNC=PASS
-PR27_POST_SYNC_VERIFICATION=PASS
-PR27_TECHNICAL_PRELIVE=PASS
-PR25_PR26_DOCS_SYNCED_WITH_PR27=YES
-
-PR25_REVIEWED=PASS
-PR25_REVIEWED_HEAD=c0951e2e0400d1e3489bdb91b353b71e83139b5f
-PR25_MERGED=YES
-PR25_MERGE_COMMIT=da5eda8753f3bf48f14dfbcbeaa480159951a739
-PR25_PRODUCTION_DOCS_SYNC=CARRIED_BY_PR27
-```
-
-Technical PRELIVE repaired-path evidence:
-
-```text
-CHECKPOINT_4R=PASS
-PROFILE_ID=e3f2a0d1-3a46-4506-8a79-f4ed47400279
-PROFILE_REVISION=8
-PROFILE_ACTIVE=YES
-PROFILE_PRIMARY=YES
-PROFILE_CONFIRMATION_STATUS=confirmed
 CURRENT_INTENT_ID=b3f53d57-afd9-55e1-b822-77d687fe466d
-CURRENT_INTENT_VERSION=profile-discovery-intent.v2
-CURRENT_GENERATED_WEB_QUERY_COUNT=36
-PERSISTED_INTENT_ROW_COUNT=1
-PERSISTED_V1_COUNT=1
 HISTORICAL_V1_INTENT_ID=503e6238-1896-5d4a-84b1-004487d56c97
 CURRENT_V2_DISTINCT_FROM_V1=YES
 PERSISTED_V2_COUNT=0
-PERSISTED_V2_INTENT_ID=NONE
 CURRENT_V2_CONFLICT_PRESENT=NO
 ```
 
-This is expected safe Case A: historical v1 remains immutable, current v2 has a distinct deterministic identity, and the read-only PRELIVE observed `PERSISTED_V2_COUNT=0`. Code deployment and read-only PRELIVE did not persist v2. A later authorized path that calls `ProfileDiscoveryIntentRepository.ensure(...)` may persist the current v2 row, including profile activation or Profile Discovery.
-
-Technical PRELIVE gate evidence:
+That PRELIVE fact is historical. The later authorized live canary persisted the v2 row and completed successfully:
 
 ```text
-PARSER_ONLY=PASS
-PROPOSED_RUN_KEY=owner-profile-web-pr27-bounded-20260911-v1
-RUN_KEY_UNUSED=YES
+PR27_BOUNDED_WEB_CANARY=PASS
+PRODUCTION_HEAD=f39eb215526c9ff18bd2227ccf0f3cd40304407f
+RUN_KEY=owner-profile-web-pr27-bounded-20260911-v1
+DISCOVERY_RUN_ID=6a529712-6a7f-44a4-bd39-c8b23d25d44b
+LIVE_COMMAND_EXIT_CODE=0
+DISCOVERY_RUN_STATUS=completed
+GENERATED_QUERY_COUNT=36
+EXECUTABLE_QUERY_COUNT=34
+SELECTED_QUERY_COUNT=12
+EXECUTED_QUERY_COUNT=12
+SELECTED_DIRECT=4
+SELECTED_BUYER_HABITAT=4
+SELECTED_ADJACENT=4
+SEARCH_RESULTS_CONSIDERED=19
+TELEGRAM_LIKE_CANDIDATES=18
+UNIQUE_CANDIDATES=4
+KNOWN_CANDIDATES=4
+NEW_CANDIDATES=0
+DISCOVERY_RUN_RESULT_COUNT=4
+DISCOVERY_RUN_MATERIALIZED_COUNT=4
+CREATED_RESULT_COUNT=0
+EXISTING_RESULT_COUNT=4
+PERSISTED_V2_COUNT=1
+PERSISTED_V2_INTENT_ID=b3f53d57-afd9-55e1-b822-77d687fe466d
+CURRENT_V2_ID_MATCH=YES
+CURRENT_V2_CONTENT_MATCH=YES
+CURRENT_V2_CONFLICT_PRESENT=NO
 SEARXNG_EFFECTIVE_STATE=READY
-PROVIDER_HEALTH_BLOCKER=NO
-PROVIDER_HEALTH_GATE=PASS
-BASELINE_COUNTERS_CAPTURED=YES
-DISCOVERY_RUN_COUNT=6
-SOURCE_COUNT=22
-CANDIDATE_COUNT=7
-OWNER_NOTIFICATION_COUNT=3
-TELEGRAM_OPERATION_EVENT_COUNT=203
-AI_CALL_TELEMETRY_COUNT=51
-SOURCE_LIFECYCLE_EVENT_COUNT=24
-DB_WRITES_PERFORMED=NO
-WEB_REQUESTS_PERFORMED=NO
-TELEGRAM_REQUESTS_PERFORMED=NO
-AI_REQUESTS_PERFORMED=NO
+FLOOD_OR_BACKEND_FAILURE=NONE
+AUTHORIZATION_CONSUMED=YES
+RETRY_ALLOWED=NO
 ```
+
+Product interpretation:
+
+```text
+PR27_WEB_CANARY=PASS
+PR27_V2_INTENT_PERSISTENCE=PASS
+LIVE_WEB_EXECUTION=PASS
+NOVELTY_IMPROVED=NO
+NEW_CANDIDATES=0
+```
+
+Persisted angle attribution:
+
+```text
+DIRECT_QUERY_ATTEMPTS=4
+DIRECT_RAW_SEARCH_RESULTS=7
+BUYER_HABITAT_QUERY_ATTEMPTS=4
+BUYER_HABITAT_RAW_SEARCH_RESULTS=6
+ADJACENT_QUERY_ATTEMPTS=4
+ADJACENT_RAW_SEARCH_RESULTS=6
+DIRECT_TELEGRAM_LIKE_MATCHES=6
+BUYER_HABITAT_TELEGRAM_LIKE_MATCHES=6
+ADJACENT_TELEGRAM_LIKE_MATCHES=6
+DIRECT_UNIQUE_CANDIDATE_SUPPORT=4
+BUYER_HABITAT_UNIQUE_CANDIDATE_SUPPORT=3
+ADJACENT_UNIQUE_CANDIDATE_SUPPORT=3
+DIRECT_ONLY_CANDIDATES=1
+MIXED_DIRECT_AND_NON_DIRECT_CANDIDATES=3
+NON_DIRECT_ONLY_CANDIDATES=0
+NON_DIRECT_SUPPORTED_UNIQUE_CANDIDATES=3
+NON_DIRECT_LIVE_YIELD_PROVEN=YES
+NON_DIRECT_ONLY_LIVE_YIELD_PROVEN=NO
+NOVELTY_IMPROVED=NO
+```
+
+Compared with PR23, PR27 considered 12 more search results and 12 more Telegram-like matches, but unique candidates remained 4 and new candidates remained 0. Do not claim search-quality or novelty improvement beyond the proven support attribution.
+
+## Current Web-canary source evidence
+
+The four materialized results were existing sources:
+
+```text
+SOURCE_ID=16 HANDLE=@job_python LIFECYCLE=approved SUPPORT=mixed_direct_and_non_direct RELEVANCE=weak SCORE=0.11000
+SOURCE_ID=18 HANDLE=@ru_pythonjobs LIFECYCLE=candidate SUPPORT=direct_only RELEVANCE=strong SCORE=0.85000
+SOURCE_ID=19 HANDLE=@phystechcareerchannel LIFECYCLE=candidate SUPPORT=mixed_direct_and_non_direct RELEVANCE=weak SCORE=0.07000
+SOURCE_ID=20 HANDLE=@juniors_rabota_jobs LIFECYCLE=candidate SUPPORT=mixed_direct_and_non_direct RELEVANCE=weak SCORE=0.07000
+```
+
+Sources `19` and `20` were selected only as bounded Telegram access/freshness probe targets because they were current candidates with non-direct support. No lifecycle decision was made for either source.
+
+## Collector identity and duplicate-active-row state
+
+Initial Telegram PRELIVE found:
+
+```text
+ACTIVE_TELEGRAM_COLLECTOR_COUNT=2
+ACTIVE_TELEGRAM_COLLECTOR_IDS=1,2
+DUPLICATE_ACTIVE_COLLECTOR_ROWS_PRESENT=YES
+```
+
+Read-only diagnosis showed collector `1` had no operation events, validations or raw messages and only its operation-state FK footprint, while collector `2` carried the historical production activity. Exact-head code supports multiple active rows because `ApprovedTelegramSourceAdapter.list_for_session()` resolves `client.get_me()` and `CollectorAccountRepository.ensure(... active_on_create=True)` is scoped to `(platform, external_account_id)` without deactivating rows for other external IDs.
+
+A separately authorized identity-only gate proved:
+
+```text
+CURRENT_SESSION_COLLECTOR_ACCOUNT_ID=2
+CURRENT_SESSION_BINDING_PROVEN=YES
+CURRENT_SESSION_MATCHES_HISTORICAL_PRODUCTION_COLLECTOR=YES
+CURRENT_SESSION_IS_BOT=NO
+IDENTITY_ONLY_TELEGRAM_GATE=PASS
+COLLECTOR_ACCOUNT_MUTATION_PERFORMED=NO
+DELTA_TELEGRAM_OPERATION_EVENTS=0
+COLLECTOR_1_CLEANUP_COMPLETED=NO
+```
+
+Do not claim collector `1` has been deactivated or that its exact historical Telegram-user origin is known.
+
+## Bounded Telegram source access/freshness evidence
+
+The separately authorized probe was guarded to collector `2` and issued exactly four governed source operations:
+
+```text
+BOUNDED_TELEGRAM_PROBE_EXECUTION=PASS
+LIVE_PROBE_EXIT_CODE=0
+IDENTITY_GUARD_COLLECTOR_2_MATCH=YES
+IDENTITY_GUARD_RESULT=PASS
+MAX_GOVERNED_SOURCE_OPERATIONS=4
+GOVERNED_SOURCE_OPERATIONS_ISSUED=4
+FLOODWAIT_OCCURRED=NO
+PRE_TELEGRAM_OPERATION_EVENT_COUNT=203
+POST_TELEGRAM_OPERATION_EVENT_COUNT=207
+DELTA_TELEGRAM_OPERATION_EVENTS=4
+NEW_OPERATION_EVENTS_ON_OTHER_COLLECTORS=0
+```
+
+Per-source results:
+
+```text
+SOURCE_19_HANDLE=@phystechcareerchannel
+SOURCE_19_ENTITY_RESOLVED=YES
+SOURCE_19_USERNAME_MATCH=YES
+SOURCE_19_HISTORY_READ=YES
+SOURCE_19_LATEST_MESSAGE_AT=2026-09-09T07:03:47+00:00
+SOURCE_19_AGE_DAYS=2
+SOURCE_19_FRESH_WITHIN_10_DAYS=YES
+SOURCE_19_ERROR_CLASS=NONE
+
+SOURCE_20_HANDLE=@juniors_rabota_jobs
+SOURCE_20_ENTITY_RESOLVED=YES
+SOURCE_20_USERNAME_MATCH=YES
+SOURCE_20_HISTORY_READ=YES
+SOURCE_20_LATEST_MESSAGE_AT=2026-09-11T07:08:01+00:00
+SOURCE_20_AGE_DAYS=0
+SOURCE_20_FRESH_WITHIN_10_DAYS=YES
+SOURCE_20_ERROR_CLASS=NONE
+```
+
+Business/product state remained unchanged:
+
+```text
+SOURCE_19_LIFECYCLE=candidate
+SOURCE_20_LIFECYCLE=candidate
+OWNER_NOTIFICATION_SENT_FOR_19_20=NO
+SOURCE_19_20_JOIN_PERFORMED=NO
+SOURCE_19_20_LIFECYCLE_DECISION=NONE
+SOURCE_VALIDATION_SERVICE_CALLED=NO
+LIFECYCLE_TRANSITIONS_PERFORMED=NO
+```
+
+Public-history readability is **not** proof of Telegram membership or live-update readiness.
 
 ## Current authorization state
 
+Completed one-attempt Web/Telegram gates have consumed their authorizations. They do not authorize another live action.
+
 ```text
+PR27_WEB_CANARY_AUTHORIZATION_CONSUMED=YES
+IDENTITY_ONLY_TELEGRAM_GATE_AUTHORIZATION_CONSUMED=YES
+SOURCE_19_20_BOUNDED_TELEGRAM_PROBE_AUTHORIZATION_CONSUMED=YES
+NEW_WEB_CANARY_AUTHORIZED=NO
+NEW_TELEGRAM_SOURCE_PROBE_AUTHORIZED=NO
+COLLECTOR_1_CLEANUP_AUTHORIZED=NO
+SOURCE_19_20_LIFECYCLE_MUTATION_AUTHORIZED=NO
+OWNER_CANDIDATE_NOTIFICATION_AUTHORIZED=NO
+SOURCE_19_20_MEMBERSHIP_PROVISIONING_AUTHORIZED=NO
 PERSISTENT_SOURCE_DISCOVERY_AUTHORIZED=NO
 TELEGRAM_DISCOVERY_AUTHORIZED=NO
 SOURCE_AUDIT_AUTHORIZED=NO
 AUTO_APPROVE_AUTHORIZED=NO
 AUTO_JOIN_AUTHORIZED=NO
-TELEGRAM_CANDIDATE_VALIDATION_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
-NEW_PR24_WEB_CANARY_AUTHORIZED=NO
-NEW_PR27_WEB_CANARY_AUTHORIZED=NO
-WEB_DISCOVERY_EXECUTED_AFTER_PR27_SYNC=NO
 ```
 
 ## Next gate
 
-The next step is canonical documentation reconciliation after PR27 production sync and technical PRELIVE. Technical PRELIVE pass is not live Web authorization.
+The next required sequence is documentation-only governance, not another live action:
 
 ```text
-CANONICAL_DOCS_RECONCILIATION_AFTER_PR27_PRELIVE
--> independent review of exact docs head
--> Owner merge authorization
--> merge exact reviewed head
--> separate docs-only production sync authorization
--> minimum final read-only live-gate refresh
--> confirm exact production HEAD / clean worktree / runtime stopped
--> confirm proposed run key remains unused
--> confirm provider health remains non-blocking
--> confirm exact future argv remains valid if code changed
--> fresh explicit one-attempt Owner authorization
--> exactly one bounded Web-only canary
--> no retry under the same authorization
--> compare non-direct yield and novelty against PR23
--> only then decide whether Telegram validation is justified
+1. canonical docs reconciliation after PR27 Web + Telegram evidence
+2. independent review of the exact docs head
+3. Owner merge authorization
+4. merge the exact reviewed docs head
+5. docs-only production sync / exact-head reconciliation as required
+6. only then choose a new, separate Owner-authorized gate
 ```
 
-Provider-health preflight must follow runtime semantics: `UNAVAILABLE` blocks; an active `BACKOFF` with `backoff_until > now` blocks; an expired `BACKOFF` is effectively `DEGRADED` and is not a blocker by itself; `DEGRADED` alone is not a blocker; `READY` passes.
+The next live/mutating gate has **not** been selected. Possible later gates remain separate decisions: controlled cleanup of collector `1`; manual/reviewed lifecycle decision for source `19`/`20`; bounded Owner candidate-notification proof; membership provisioning if/after approval; persistent runtime much later.
 
-Useful owner delivery and persistent unattended operation remain later gates.
+Fresh exact-head server evidence remains higher authority than code/CLI, which remains higher authority than canonical docs, which remains higher authority than historical reports.

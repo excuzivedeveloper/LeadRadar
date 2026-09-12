@@ -3,9 +3,9 @@
 **Status:** CANONICAL  
 **Snapshot date:** 2026-09-11
 **Deployment code baseline:** `81a675b72ed4c1229cedad28e5d2e1f56bac1f66`
-**Repository/server head:** `81a675b72ed4c1229cedad28e5d2e1f56bac1f66`
+**Repository/server head:** `f39eb215526c9ff18bd2227ccf0f3cd40304407f`
 
-This document records the current shared-server LeadRadar layout and deployment boundaries. Exact operational commands live in [`OPERATIONS.md`](OPERATIONS.md).
+This document records the current shared-server LeadRadar layout and deployment boundaries. Exact operational commands live in [`OPERATIONS.md`](OPERATIONS.md). A docs-only repository head can be newer than the implementation baseline without changing deployed code behavior.
 
 ## Server layout
 
@@ -93,7 +93,7 @@ bot=not running
 persistent_runtime_authorized=NO
 ```
 
-No persistent runtime should be started implicitly by a SearXNG, documentation, database-read, or bounded Web-discovery task.
+No persistent runtime should be started implicitly by a SearXNG, documentation, database-read, bounded Web-discovery or bounded Telegram-validation task.
 
 ## Current safety flags
 
@@ -112,7 +112,7 @@ DATABASE_URL=configured
 
 These values are production state, not `.env.example` completeness claims.
 
-## Telegram identities and sessions
+## Telegram identities, sessions and collector-account rows
 
 Runtime session directory:
 
@@ -120,7 +120,7 @@ Runtime session directory:
 /opt/leadradar/runtime/sessions/
 ```
 
-Accepted identity separation:
+Accepted identity separation remains:
 
 ```text
 dedicated Telegram account -> collector
@@ -128,7 +128,27 @@ owner main Telegram account -> bot user/recipient
 Telegram bot -> separate bot identity
 ```
 
-Session files are bearer credentials. Never print or copy session contents. Two LeadRadar processes must not use the same session concurrently.
+A separately authorized identity-only production gate proved that the currently configured Telethon collector session resolves to:
+
+```text
+CURRENT_SESSION_COLLECTOR_ACCOUNT_ID=2
+CURRENT_SESSION_BINDING_PROVEN=YES
+CURRENT_SESSION_MATCHES_HISTORICAL_PRODUCTION_COLLECTOR=YES
+CURRENT_SESSION_IS_BOT=NO
+```
+
+Production also currently contains a stale/legacy active-row anomaly:
+
+```text
+ACTIVE_TELEGRAM_COLLECTOR_COUNT=2
+ACTIVE_TELEGRAM_COLLECTOR_IDS=1,2
+DUPLICATE_ACTIVE_COLLECTOR_ROWS_PRESENT=YES
+COLLECTOR_1_CLEANUP_COMPLETED=NO
+```
+
+Collector `1` has not been deactivated. Its exact historical Telegram-user origin is not proven. Exact-head code can create this state because collector-account `ensure()` is scoped by `(platform, external_account_id)` and does not deactivate an older row for another external account.
+
+Session files are bearer credentials. Never print or copy session contents. Two LeadRadar processes must not use the same session concurrently. Collector-row cleanup is a database mutation and requires a separate explicit authorization.
 
 The owner-only bot allowlist remains part of the deployment boundary; the numeric owner Telegram ID must not be recorded in canonical docs or reports.
 
@@ -143,38 +163,64 @@ sources.lifecycle_status
 candidate_value=candidate
 ```
 
-Current read-only inventory snapshot:
+Latest bounded inventory evidence includes:
 
 ```text
 SOURCE_COUNT=22
 CANDIDATE_COUNT=7
 OWNER_NOTIFICATION_COUNT=3
+TELEGRAM_OPERATION_EVENT_COUNT=207
 ```
 
-These counts will naturally change; the schema field names and lifecycle semantics are the contract.
+Counts are snapshots, not invariants.
 
-## Current PR27 state
+The PR27 Web canary materialized four existing sources. Two current candidates with non-direct support were then explicitly chosen for a separate bounded Telegram access/freshness probe:
 
 ```text
-PR24_MERGED=YES
-PR24_PRODUCTION_SYNCED=YES
-PR24_POST_SYNC_VERIFICATION=PASS
-PR24_STAGE_A_OFFLINE=PASS
-PR24_LIVE_YIELD_IMPROVEMENT_PROVEN=NO
-PR27_MERGED=YES
-PR27_PRODUCTION_SYNCED=YES
-PR27_POST_SYNC_VERIFICATION=PASS
-PR27_TECHNICAL_PRELIVE=PASS
-PROFILE_DISCOVERY_INTENT_VERSION=profile-discovery-intent.v2
+SOURCE_19_HANDLE=@phystechcareerchannel
+SOURCE_19_LIFECYCLE=candidate
+SOURCE_20_HANDLE=@juniors_rabota_jobs
+SOURCE_20_LIFECYCLE=candidate
 ```
 
-The first attempted PR24 live canary did not reach Web Discovery because the application CLI namespace was invoked instead of the operator CLI namespace. That failure is not evidence about SearXNG/provider performance or PR24 search quality.
+Through proven collector `2`, both sources resolved, matched their usernames, allowed public-history reads, and had a latest message within 10 days:
 
-PR27 production fast-forward passed without migration, dependency mutation,
-runtime env mutation, service restart, or persistent runtime activation. The
-technical PRELIVE was read-only and is not a deployment activation or live Web
-authorization. The verified operator entrypoint for the next profile Web run is
-documented in `OPERATIONS.md`.
+```text
+SOURCE_19_BOUNDED_TELEGRAM_ACCESS_FRESHNESS=PASS
+SOURCE_19_LATEST_MESSAGE_AT=2026-09-09T07:03:47+00:00
+SOURCE_20_BOUNDED_TELEGRAM_ACCESS_FRESHNESS=PASS
+SOURCE_20_LATEST_MESSAGE_AT=2026-09-11T07:08:01+00:00
+```
+
+This is **not** deployment membership evidence. Neither source was joined, approved, rejected or notified by that gate:
+
+```text
+SOURCE_19_20_JOIN_PERFORMED=NO
+SOURCE_19_20_LIFECYCLE_DECISION=NONE
+OWNER_NOTIFICATION_SENT_FOR_19_20=NO
+```
+
+Public-history readability and freshness must not be conflated with lifecycle approval, Telegram membership or live-update readiness.
+
+## Current PR27 live-evidence state
+
+The PR27 bounded Web canary has now completed successfully:
+
+```text
+PR27_BOUNDED_WEB_CANARY=PASS
+RUN_KEY=owner-profile-web-pr27-bounded-20260911-v1
+DISCOVERY_RUN_ID=6a529712-6a7f-44a4-bd39-c8b23d25d44b
+PROFILE_DISCOVERY_INTENT_VERSION=profile-discovery-intent.v2
+PERSISTED_V2_COUNT=1
+CURRENT_V2_CONFLICT_PRESENT=NO
+NON_DIRECT_LIVE_YIELD_PROVEN=YES
+NON_DIRECT_ONLY_LIVE_YIELD_PROVEN=NO
+NOVELTY_IMPROVED=NO
+```
+
+The canary considered 19 search results and 18 Telegram-like matches, but yielded the same four unique known candidates as the PR23 comparison baseline and no new candidates. Buyer-habitat/adjacent contributed real live support to 3/4 candidates; no non-direct-only candidate was proven.
+
+The one-attempt Web authorization is consumed and does not permit a retry. The later identity-only and source-probe Telegram authorizations are also consumed. No new live or mutating production action is currently authorized.
 
 ## Promotion rules
 
@@ -190,6 +236,21 @@ Before production checkout changes:
 8. keep activation/restart as a separate authorization unless explicitly included.
 
 Do not sync to a newer-than-authorized `origin/main` and do not use local merge/rebase/destructive reset.
+
+## Next deployment-related gate
+
+Current required order is:
+
+```text
+1. docs reconciliation
+2. independent review
+3. Owner merge authorization
+4. merge reviewed docs head
+5. docs-only production sync / exact-head reconciliation as required
+6. choose the next separate Owner-authorized gate
+```
+
+Collector `1` cleanup, source `19`/`20` lifecycle decisions, Owner candidate-notification proof, membership provisioning and persistent runtime are not authorized by this reconciliation.
 
 ## Shared-server boundary
 
