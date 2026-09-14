@@ -2,7 +2,7 @@
 
 **Status:** CANONICAL  
 **Last verified:** 2026-09-12
-**Implementation baseline:** `81a675b72ed4c1229cedad28e5d2e1f56bac1f66`
+**Implementation baseline:** `b3bb1f6266fe3f7dd17cd81329dc6689ceadcfe2`
 **Latest verified production evidence head:** `b660bdd633137f13dae5a8524f14d36c0f5ecd05`
 
 This document is the operational source of truth for the current LeadRadar production environment. Fresh exact-head server evidence outranks this document; if later evidence disagrees, stop and reconcile docs before designing a new live task.
@@ -229,6 +229,21 @@ telegram_collector_operation_events
 ai_call_telemetry
 source_lifecycle_events
 ```
+
+The bounded Owner candidate-notification selector at the implementation
+baseline is fail closed and requires the configured Owner's exact active,
+primary, confirmed PostgreSQL SearchProfile and its deterministic current
+Profile Discovery Intent. Candidate SQL requires an exact
+`source_profile_relevance` row for that profile, intent, revision, and
+`relevance_class=strong` before applying `LIMIT`. Weak, adequate, historical,
+other-profile, old-revision, and missing-current-relevance rows cause no
+Telegram probe, reservation, or send. The durable recipient/source dedupe,
+cursor wrap, 10-day Telegram activity boundary, safe URL check, identity race
+guard, and open-only card remain unchanged.
+
+This implementation does not authorize a one-shot run, recurring schedule,
+Source Audit, discovery, AI, lifecycle mutation, membership action, or
+persistent runtime.
 
 Latest bounded evidence snapshot:
 

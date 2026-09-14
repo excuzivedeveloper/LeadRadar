@@ -2,7 +2,7 @@
 
 **Status:** CANONICAL  
 **Snapshot date:** 2026-09-12
-**Implementation baseline:** `81a675b72ed4c1229cedad28e5d2e1f56bac1f66`
+**Implementation baseline:** `b3bb1f6266fe3f7dd17cd81329dc6689ceadcfe2`
 **Latest verified production evidence head:** `b660bdd633137f13dae5a8524f14d36c0f5ecd05`
 
 ## Executive status
@@ -22,6 +22,21 @@ A later bounded Telegram source probe, explicitly guarded to collector `2`, prov
 A newly authorized Owner-notification proof then stopped safely in PRELIVE before Telegram because sources `19` and `20` already had durable terminal `sent` rows addressed to the current Owner. A separate read-only diagnostic proved those pre-existing rows and their internally consistent sent payloads. The exact creating command is not persisted; nearby collector-`2` governor events, scan state and timestamps are only `TEMPORAL/STRUCTURAL_INFERENCE`. No repeat notification is needed or authorized.
 
 Persistent LeadRadar runtime remains unauthorized.
+
+Repository implementation baseline `b3bb1f6266fe3f7dd17cd81329dc6689ceadcfe2`
+adds the review-pending high-relevance gate for future bounded Owner candidate
+notifications. It resolves the configured Owner to exactly one active,
+primary, confirmed profile, derives the current deterministic intent, and
+selects only exact current-intent `strong` relevance rows before `LIMIT` and
+before Telegram activity. Missing/ambiguous profile state and non-current or
+non-strong relevance fail closed. Existing freshness, URL, cursor, reservation,
+at-most-once, identity-race, and open-only card behavior is unchanged.
+
+This repository change is not yet reviewed, merged, synced, activated, or live
+validated. It does not alter the latest verified production evidence head or
+the historical notification facts below. In particular, source `19`/`20`
+terminal sent rows predate this relevance gate; the new selector was not
+retroactively applied to those sends.
 
 ## Production contract
 

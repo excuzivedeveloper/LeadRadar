@@ -7,21 +7,30 @@ import html
 import re
 from typing import Any
 from urllib.parse import urlparse
+from uuid import UUID
 
 from telethon import Button
 
 from .config import RuntimeConfig
+from .profile_discovery import build_profile_discovery_intent
 from .persistence.database import Database
 from .persistence.owner_candidate_notifications import (
     OwnerSourceCandidateNotificationRepository,
     OwnerSourceCandidateReservationStatus,
 )
 from .persistence.source_repository import SourceRecord, SourceStatus
+from .persistence.search_profiles import (
+    SearchProfileConfirmationStatus,
+    SearchProfileRepository,
+    UserNotFound,
+    UserRepository,
+)
 from .telegram_request_governor import TelegramRequestCategory, TelegramRequestGovernor
 
 
 MAX_OWNER_CANDIDATE_NOTIFICATIONS_PER_PASS = 10
 FRESH_ACTIVITY_WINDOW = timedelta(days=10)
+OWNER_CANDIDATE_RELEVANCE_GATE = "strong"
 _TELEGRAM_HANDLE_RE = re.compile(r"^@?[a-zA-Z][a-zA-Z0-9_]{4,31}$")
 
 
@@ -35,6 +44,11 @@ class TelegramCandidateAddress:
 
 @dataclass
 class OwnerCandidateNotificationSummary:
+    profile_gate_ready: bool = False
+    profile_id: UUID | None = None
+    profile_revision: int | None = None
+    discovery_intent_id: UUID | None = None
+    relevance_gate: str = OWNER_CANDIDATE_RELEVANCE_GATE
     candidates_considered: int = 0
     activity_probes: int = 0
     fresh_within_10_days: int = 0
@@ -50,6 +64,11 @@ class OwnerCandidateNotificationSummary:
 
     def as_lines(self) -> tuple[str, ...]:
         return (
+            f"PROFILE_GATE_READY={'YES' if self.profile_gate_ready else 'NO'}",
+            f"PROFILE_ID={self.profile_id or 'NONE'}",
+            f"PROFILE_REVISION={self.profile_revision or 'NONE'}",
+            f"DISCOVERY_INTENT_ID={self.discovery_intent_id or 'NONE'}",
+            f"RELEVANCE_GATE={self.relevance_gate}",
             f"CANDIDATES_CONSIDERED={self.candidates_considered}",
             f"ACTIVITY_PROBES={self.activity_probes}",
             f"FRESH_WITHIN_10_DAYS={self.fresh_within_10_days}",
@@ -77,11 +96,17 @@ class OwnerCandidateNotificationService:
         database: Database,
         *,
         repository: OwnerSourceCandidateNotificationRepository | None = None,
+        user_repository: UserRepository | None = None,
+        search_profile_repository: SearchProfileRepository | None = None,
         clock: Callable[[], datetime] | None = None,
         button_factory: Callable[[str, str], Any] | None = None,
     ) -> None:
         self._database = database
         self._repository = repository or OwnerSourceCandidateNotificationRepository()
+        self._user_repository = user_repository or UserRepository()
+        self._search_profile_repository = (
+            search_profile_repository or SearchProfileRepository()
+        )
         self._clock = clock or (lambda: datetime.now(timezone.utc))
         self._button_factory = button_factory or Button.url
 
@@ -115,9 +140,41 @@ class OwnerCandidateNotificationService:
             return summary
 
         async with self._database.transaction() as connection:
+            try:
+                owner = await self._user_repository.get_by_identity(
+                    connection,
+                    platform="telegram",
+                    external_user_id=str(owner_chat_id),
+                )
+            except UserNotFound:
+                return summary
+            profiles = await self._search_profile_repository.list_for_user(
+                connection,
+                user_id=owner.id,
+            )
+            eligible_profiles = tuple(
+                profile
+                for profile in profiles
+                if profile.is_active
+                and profile.is_primary
+                and profile.confirmation_status
+                == SearchProfileConfirmationStatus.CONFIRMED
+            )
+            if len(eligible_profiles) != 1:
+                return summary
+            profile = eligible_profiles[0]
+            intent = build_profile_discovery_intent(profile)
+            summary.profile_gate_ready = True
+            summary.profile_id = profile.id
+            summary.profile_revision = profile.revision
+            summary.discovery_intent_id = intent.id
             candidates = await self._repository.list_unnotified_candidates(
                 connection,
                 recipient_chat_id=owner_chat_id,
+                search_profile_id=profile.id,
+                discovery_intent_id=intent.id,
+                profile_revision=profile.revision,
+                relevance_class=OWNER_CANDIDATE_RELEVANCE_GATE,
                 limit=limit,
             )
         summary.candidates_considered = len(candidates)

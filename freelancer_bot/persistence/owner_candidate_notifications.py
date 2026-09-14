@@ -6,6 +6,7 @@ from enum import Enum
 import re
 from typing import Any
 from urllib.parse import urlparse
+from uuid import UUID
 
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -14,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from .schema import (
     owner_source_candidate_notification_scan_state,
     owner_source_candidate_notifications,
+    source_profile_relevance,
     sources,
 )
 from .source_repository import (
@@ -53,16 +55,28 @@ class OwnerSourceCandidateNotificationRepository:
         connection: AsyncConnection,
         *,
         recipient_chat_id: int,
+        search_profile_id: UUID,
+        discovery_intent_id: UUID,
+        profile_revision: int,
+        relevance_class: str,
         limit: int,
     ) -> tuple[SourceRecord, ...]:
         if recipient_chat_id <= 0:
             raise ValueError("recipient_chat_id must be positive")
         if not 1 <= limit <= 100:
             raise ValueError("limit must be between 1 and 100")
+        if profile_revision < 1:
+            raise ValueError("profile_revision must be positive")
+        if relevance_class != "strong":
+            raise ValueError("candidate notification relevance_class must be strong")
         cursor = await self._scan_cursor(connection, recipient_chat_id)
         rows = await self._candidate_page(
             connection,
             recipient_chat_id=recipient_chat_id,
+            search_profile_id=search_profile_id,
+            discovery_intent_id=discovery_intent_id,
+            profile_revision=profile_revision,
+            relevance_class=relevance_class,
             after_source_id=cursor,
             limit=limit,
         )
@@ -70,6 +84,10 @@ class OwnerSourceCandidateNotificationRepository:
             rows = await self._candidate_page(
                 connection,
                 recipient_chat_id=recipient_chat_id,
+                search_profile_id=search_profile_id,
+                discovery_intent_id=discovery_intent_id,
+                profile_revision=profile_revision,
+                relevance_class=relevance_class,
                 after_source_id=None,
                 limit=limit,
             )
@@ -87,6 +105,10 @@ class OwnerSourceCandidateNotificationRepository:
         connection: AsyncConnection,
         *,
         recipient_chat_id: int,
+        search_profile_id: UUID,
+        discovery_intent_id: UUID,
+        profile_revision: int,
+        relevance_class: str,
         after_source_id: int | None,
         limit: int,
     ):
@@ -97,11 +119,22 @@ class OwnerSourceCandidateNotificationRepository:
                 owner_source_candidate_notifications.c.source_id == sources.c.id,
             )
         )
+        current_relevance = sa.exists(
+            sa.select(1).where(
+                source_profile_relevance.c.source_id == sources.c.id,
+                source_profile_relevance.c.search_profile_id == search_profile_id,
+                source_profile_relevance.c.discovery_intent_id
+                == discovery_intent_id,
+                source_profile_relevance.c.profile_revision == profile_revision,
+                source_profile_relevance.c.relevance_class == relevance_class,
+            )
+        )
         statement = (
             _select_sources(True)
             .where(
                 sources.c.platform == "telegram",
                 sources.c.lifecycle_status == SourceStatus.CANDIDATE.value,
+                current_relevance,
                 ~notified,
             )
             .order_by(sources.c.id)
