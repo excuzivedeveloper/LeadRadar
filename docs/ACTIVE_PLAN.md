@@ -1,17 +1,17 @@
 # LeadRadar — Active Plan
 
 **Status:** CANONICAL / ACTIVE  
-**Last verified:** 2026-09-12
+**Last verified:** 2026-09-14
 **Implementation baseline:** `b3bb1f6266fe3f7dd17cd81329dc6689ceadcfe2`
-**Latest verified production evidence head:** `b660bdd633137f13dae5a8524f14d36c0f5ecd05`
+**Latest verified production evidence head:** `a232cf564a57f8761af7394ea4e5607fd8b8ac6d`
 
 This file defines execution order. Implemented capability does not imply authorization to activate it.
 
 ## Current production baseline
 
 ```text
-LATEST_VERIFIED_PRODUCTION_EVIDENCE_HEAD=b660bdd633137f13dae5a8524f14d36c0f5ecd05
-IMPLEMENTATION_BASELINE=81a675b72ed4c1229cedad28e5d2e1f56bac1f66
+LATEST_VERIFIED_PRODUCTION_EVIDENCE_HEAD=a232cf564a57f8761af7394ea4e5607fd8b8ac6d
+IMPLEMENTATION_BASELINE=b3bb1f6266fe3f7dd17cd81329dc6689ceadcfe2
 BRANCH=main
 TRACKED_WORKTREE=CLEAN
 ALEMBIC_CURRENT=20260908_0042
@@ -80,6 +80,15 @@ PR30_PRODUCTION_DOCS_SYNC=PASS
 SOURCE_19_20_EXISTING_NOTIFICATION_ROWS_DIAGNOSTIC=PASS
 SOURCE_19_OWNER_CANDIDATE_NOTIFICATION=sent
 SOURCE_20_OWNER_CANDIDATE_NOTIFICATION=sent
+
+PR32_REVIEW=PASS
+PR32_REVIEWED_HEAD=e197a532ace1a79ac5c335b5ab220ee228eda637
+PR32_MERGED=YES
+PR32_MERGE_COMMIT=a232cf564a57f8761af7394ea4e5607fd8b8ac6d
+PR32_PRODUCTION_SYNC=PASS
+PR32_PRODUCTION_POSTVERIFY=PASS
+HIGH_RELEVANCE_GATE_SYNCED_TO_PRODUCTION=YES
+PR32_NOTIFICATION_CANARY=NO_SEND_STALE_OR_EMPTY
 ```
 
 The bounded planner contract remained:
@@ -340,16 +349,67 @@ ATTRIBUTION_CLASS=TEMPORAL/STRUCTURAL_INFERENCE
 
 The timestamps, nearby collector-`2` governor sequence and durable scan state are strongly compatible with the standard candidate-notification flow, but the schema does not persist the exact command, run, actor, process, collector FK or governor-event FK. Notification delivery is separate from lifecycle approval, membership, live-update readiness, Owner review, personalized opportunity delivery and recurring automation. Sources `19` and `20` remain `candidate` and unjoined.
 
+## PR32 production and canary evidence — completed
+
+The reviewed implementation was merged and synced without changing runtime
+`.env`. The first post-sync checkpoint was incomplete because of a verification
+gate defect; corrected checkpoint `3A` passed:
+
+```text
+CHECKPOINT_3=FAIL_INCOMPLETE
+BLOCKER_CLASS=VERIFICATION_GATE_DEFECT
+CHECKPOINT_3A=PASS
+EFFECTIVE_SEND_CATCH_UP=false
+```
+
+PRELIVE resolved current profile
+`e3f2a0d1-3a46-4506-8a79-f4ed47400279` revision `8`, deterministic intent
+`b3f53d57-afd9-55e1-b822-77d687fe466d`, and one exact current-strong,
+unnotified candidate. Read-only cursor wrap from `21` selected source `18`
+(`@ru_pythonjobs`) with no prior Owner notification row.
+
+The single authorized invocation reached the candidate and completed governed
+`entity_access` and `history`, but freshness suppressed delivery:
+
+```text
+PROFILE_GATE_READY=YES
+RELEVANCE_GATE=strong
+CANDIDATES_CONSIDERED=1
+ACTIVITY_PROBES=1
+FRESH_WITHIN_10_DAYS=0
+STALE_OR_EMPTY=1
+UNRESOLVABLE=0
+RESERVED=0
+SENT=0
+POST_SCAN_CURSOR=18
+DELTA_OWNER_NOTIFICATION_COUNT=0
+DELTA_COLLECTOR_2_OPERATION_EVENT_COUNT=2
+DELTA_SOURCE_LIFECYCLE_EVENT_COUNT=0
+CANARY_RESULT=NO_SEND_STALE_OR_EMPTY
+HIGH_RELEVANCE_GATE_LIVE_VALIDATED=NO
+STRONG_SELECTOR_LIVE_REACH_PROVEN=YES
+FILTER_BEFORE_TELEGRAM_PROVEN=YES
+OWNER_CARD_SEND_UNDER_PR32_PROVEN=NO
+AUTHORIZATION_CONSUMED=YES
+RETRY_ALLOWED=NO
+FINAL_PERSISTENT_RUNTIME=STOPPED
+```
+
+No exact latest-message timestamp is established: `STALE_OR_EMPTY=1` means
+either no usable timestamp or activity older than 10 days. This was not an
+entity-resolution failure. No reservation, Owner-card send, lifecycle mutation,
+Source Audit, AI, join/leave, or persistent runtime occurred.
+
 ## Current gate
 
 ```text
-CURRENT_GATE=HIGH_RELEVANCE_OWNER_CANDIDATE_NOTIFICATION_IMPLEMENTATION
+CURRENT_GATE=PR32_PRODUCTION_CANARY_DOCS_RECONCILIATION
 IMPLEMENTATION_BASELINE=b3bb1f6266fe3f7dd17cd81329dc6689ceadcfe2
 OWNER_PROFILE_GATE=EXACT_ACTIVE_PRIMARY_CONFIRMED
 DISCOVERY_INTENT_GATE=CURRENT_DETERMINISTIC_INTENT
 OWNER_CANDIDATE_NOTIFICATION_RELEVANCE_GATE=strong_only
 RELEVANCE_FILTER_BEFORE_LIMIT=YES
-NEXT_GATE=INDEPENDENT_REVIEW_OF_EXACT_PR_HEAD
+NEXT_GATE=INDEPENDENT_REVIEW_OF_EXACT_DOCS_HEAD
 NEW_LIVE_ACTION_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 CANDIDATE_NOTIFICATION_RECURRING_AUTOMATION_AUTHORIZED=NO
@@ -358,17 +418,27 @@ CANDIDATE_NOTIFICATION_RECURRING_AUTOMATION_AUTHORIZED=NO
 ## Required sequence from here
 
 ```text
-1. independent review of the exact high-relevance notification-gate PR head
-2. only after review PASS: Owner merge authorization
-3. merge the exact reviewed PR head
-4. separate production sync authorization
-5. exact-head post-sync verification with persistent runtime still stopped
-6. separate bounded one-shot candidate-notification canary design/authorization
-7. only after bounded proof: decide whether recurring automation is warranted
+1. reconcile canonical docs with PR32 production/canary evidence
+2. independent review of the exact docs head
+3. only after review PASS: Owner merge authorization
+4. merge the exact reviewed docs head
+5. separate docs-only production sync / exact-head reconciliation
+6. design and separately authorize BOUNDED_PROFILE_WEB_REPLENISHMENT
+7. read-only current-strong unnotified safe-candidate pool check
+8. only if a new exact candidate exists: separate notification canary authorization
+9. before recurring scheduling: design/review stale re-probe cooldown/backoff
+10. recurring 3h/max5 and persistent runtime remain unauthorized
 ```
 
-No live notification canary is authorized by this implementation PR. Future
-lifecycle and membership actions remain independent choices:
+Do not retry the consumed PR32 canary. The replenishment gate keeps
+`relevance_class=strong`; it does not permit Telegram, Owner send, lifecycle
+mutation, Source Audit, AI, or persistent runtime. Its purpose is to run fresh
+bounded profile Web Discovery for the same active confirmed profile/current
+intent and attempt to materialize or re-evaluate additional current-strong
+candidates. Exact Web bounds and a run key must be designed from fresh
+exact-head preflight after this docs change is reviewed, merged, and synced.
+
+Future lifecycle and membership actions remain independent choices:
 
 ```text
 manual/reviewed lifecycle decision for source 19/20

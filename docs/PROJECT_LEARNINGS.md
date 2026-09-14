@@ -1,13 +1,13 @@
 # LeadRadar — Project Learnings
 
 **Status:** CANONICAL  
-**Last verified:** 2026-09-12
+**Last verified:** 2026-09-14
 
 This file records operational lessons that should shape future implementation, review and server work. Read it immediately after `docs/DOCUMENTATION_INDEX.md`.
 
 ## Current lessons
 
-- **Implementation state and production repository head are separate facts.** A docs-only commit can advance repository/server `HEAD` without changing the implementation baseline. Record both when they differ; current implementation baseline is `81a675b72ed4c1229cedad28e5d2e1f56bac1f66`, while the latest verified production evidence was captured at repository head `b660bdd633137f13dae5a8524f14d36c0f5ecd05`.
+- **Implementation state and production repository head are separate facts.** A docs-only commit can advance repository/server `HEAD` without changing the implementation baseline. Record both when they differ; the high-relevance notification implementation baseline is `b3bb1f6266fe3f7dd17cd81329dc6689ceadcfe2`, while the latest verified production evidence was captured at repository head `a232cf564a57f8761af7394ea4e5607fd8b8ac6d`.
 - **Fresh exact-head server evidence outranks canonical docs.** Prefer fresh exact-head production evidence first, then exact code/CLI behavior, then canonical docs, then historical reports. Reconcile stale docs before using them to design another live task.
 - **A successful bounded Web run is not automatically a search-quality or novelty improvement.** PR27 increased considered search results from 7 to 19 and Telegram-like matches from 6 to 18 versus PR23, while unique candidates stayed 4 and new candidates stayed 0. Report observed deltas, not a stronger product conclusion.
 - **Angle support and source discovery are different measurements.** PR27 proved `buyer_habitat`/`adjacent` live support for 3/4 unique candidates, but produced zero non-direct-only candidates. `NON_DIRECT_LIVE_YIELD_PROVEN=YES` must not be rewritten as “non-direct found new sources” or “novelty improved.”
@@ -21,6 +21,8 @@ This file records operational lessons that should shape future implementation, r
 - **A failed notification PRELIVE can reveal completed product state without consuming live authorization.** The source `19`/`20` notification PRELIVE stopped before Telegram when durable terminal `sent` rows already existed. The planned live checkpoint is retired for that objective, but its authorization was not consumed by a network attempt.
 - **Durable notification rows prove delivery persistence, not their exact creating command.** The schema records recipient/source identity and terminal status but not run ID, actor, process ID, command name, collector FK or governor-event FK. Nearby collector-`2` governor events, scan state and timestamps are only `TEMPORAL/STRUCTURAL_INFERENCE`, not direct attribution.
 - **Candidate notification is narrower than personalized opportunity delivery.** Existing `sent` candidate-source cards prove notification delivery to the current Owner. They do not prove Owner review, lifecycle approval, membership, live collection readiness or useful end-to-end personalized opportunity delivery.
+- **A terminal no-send canary can prove selector and suppression paths without proving delivery.** The PR32 canary resolved the current Owner profile and intent, selected exact current-strong source `18`, completed governed entity/history access, and then reported `STALE_OR_EMPTY=1`. It proved freshness suppression and zero reservation/send, not an exact latest-message timestamp, reservation behavior, bot delivery, or end-to-end high-relevance notification success.
+- **Cursor wrap plus no stale marker creates recurring re-probe risk.** Stale/empty candidates intentionally remain unnotified so they can become fresh later. With a one-source current-strong pool, cursor wrap can select the same stale/empty source on every later pass; a reviewed bounded cooldown/backoff policy is required before recurring candidate notifications.
 - **Governor deltas are useful attribution evidence.** The bounded source probe issued exactly four governed operations and produced exactly four new operation events on collector `2`, with zero events on other collectors. Before/after event counts can prove which collector actually performed bounded external work without exposing secret session data.
 - **A completed one-attempt authorization stays consumed after success.** Successful completion of the PR27 Web canary does not authorize a retry; successful identity/source probes do not authorize another Telegram action. Every later live or mutating gate requires its own explicit Owner authorization.
 - **Production commands must come from the verified operational contract, not memory or analogy.** Before a new command family is used on production, verify its actual module entrypoint, `--help`, runtime interpreter, DB API, schema names and required env loading at the exact target commit.
