@@ -1301,6 +1301,57 @@ owner_source_candidate_notification_scan_state = sa.Table(
     ),
 )
 
+owner_source_candidate_probe_state = sa.Table(
+    "owner_source_candidate_probe_state",
+    metadata,
+    sa.Column("recipient_chat_id", sa.BigInteger(), primary_key=True),
+    sa.Column(
+        "source_id",
+        sa.BigInteger(),
+        sa.ForeignKey("sources.id", ondelete="RESTRICT"),
+        primary_key=True,
+    ),
+    sa.Column(
+        "search_profile_id",
+        UUID(as_uuid=True),
+        sa.ForeignKey("search_profiles.id", ondelete="RESTRICT"),
+        nullable=False,
+    ),
+    sa.Column(
+        "discovery_intent_id",
+        UUID(as_uuid=True),
+        sa.ForeignKey("profile_discovery_intents.id", ondelete="RESTRICT"),
+        nullable=False,
+    ),
+    sa.Column("profile_revision", sa.Integer(), nullable=False),
+    sa.Column("last_outcome", sa.String(32), nullable=False),
+    sa.Column("consecutive_outcomes", sa.Integer(), nullable=False),
+    sa.Column("last_probed_at", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("next_probe_at", sa.DateTime(timezone=True), nullable=False),
+    sa.Column(
+        "created_at",
+        sa.DateTime(timezone=True),
+        nullable=False,
+        server_default=sa.func.now(),
+    ),
+    sa.Column(
+        "updated_at",
+        sa.DateTime(timezone=True),
+        nullable=False,
+        server_default=sa.func.now(),
+    ),
+    sa.CheckConstraint("recipient_chat_id <> 0", name="recipient_chat_id_nonzero"),
+    sa.CheckConstraint("profile_revision >= 1", name="profile_revision_positive"),
+    sa.CheckConstraint(
+        "consecutive_outcomes >= 1", name="consecutive_outcomes_positive"
+    ),
+    sa.CheckConstraint(
+        "last_outcome IN ('stale_or_empty', 'unresolvable')",
+        name="last_outcome_valid",
+    ),
+    sa.CheckConstraint("next_probe_at > last_probed_at", name="next_after_last"),
+)
+
 sa.Index(
     "ix_owner_source_candidate_notifications_source",
     owner_source_candidate_notifications.c.source_id,
@@ -1309,6 +1360,11 @@ sa.Index(
     "ix_owner_source_candidate_notifications_status_attempted",
     owner_source_candidate_notifications.c.status,
     owner_source_candidate_notifications.c.attempted_at,
+)
+sa.Index(
+    "ix_owner_source_candidate_probe_state_recipient_next_probe",
+    owner_source_candidate_probe_state.c.recipient_chat_id,
+    owner_source_candidate_probe_state.c.next_probe_at,
 )
 
 collector_accounts = sa.Table(

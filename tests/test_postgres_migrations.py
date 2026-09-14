@@ -38,6 +38,31 @@ class PostgresMigrationTest(unittest.TestCase):
             command.check(config)
             self.assertEqual(_domain_tables(database_url), EXPECTED_TABLES)
 
+    def test_owner_candidate_probe_state_migration_is_empty_and_narrowly_reversible(self):
+        with temporary_database() as database_url:
+            config = alembic_config(database_url)
+            command.upgrade(config, "20260908_0042")
+            before = _domain_tables(database_url)
+            self.assertNotIn("owner_source_candidate_probe_state", before)
+
+            command.upgrade(config, "20260914_0043")
+            after = _domain_tables(database_url)
+            self.assertEqual(after - before, {"owner_source_candidate_probe_state"})
+            engine = sa.create_engine(database_url)
+            try:
+                with engine.connect() as connection:
+                    count = connection.scalar(
+                        sa.text("SELECT count(*) FROM owner_source_candidate_probe_state")
+                    )
+                self.assertEqual(count, 0)
+            finally:
+                engine.dispose()
+
+            command.downgrade(config, "20260908_0042")
+            downgraded = _domain_tables(database_url)
+            self.assertEqual(downgraded, before)
+            self.assertIn("owner_source_candidate_notifications", downgraded)
+
     def test_trial_entitlement_migration_backfills_existing_trial_start(self):
         with temporary_database() as database_url:
             config = alembic_config(database_url)
@@ -455,6 +480,7 @@ EXPECTED_TABLES = {
     "opportunity_evidence_shadow_traces",
     "owner_source_candidate_notification_scan_state",
     "owner_source_candidate_notifications",
+    "owner_source_candidate_probe_state",
     "opportunities",
     "opportunity_analysis_links",
     "opportunity_lifecycle_events",

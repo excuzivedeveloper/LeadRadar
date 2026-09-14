@@ -2,16 +2,16 @@
 
 **Status:** CANONICAL / ACTIVE  
 **Last verified:** 2026-09-14
-**Implementation baseline:** `b3bb1f6266fe3f7dd17cd81329dc6689ceadcfe2`
-**Latest verified production evidence head:** `a232cf564a57f8761af7394ea4e5607fd8b8ac6d`
+**Implementation baseline:** cooldown/backoff PR based on `437c9dcc4b35846b6ce828258272814e06a79d13`
+**Latest verified production evidence head:** `437c9dcc4b35846b6ce828258272814e06a79d13`
 
 This file defines execution order. Implemented capability does not imply authorization to activate it.
 
 ## Current production baseline
 
 ```text
-LATEST_VERIFIED_PRODUCTION_EVIDENCE_HEAD=a232cf564a57f8761af7394ea4e5607fd8b8ac6d
-IMPLEMENTATION_BASELINE=b3bb1f6266fe3f7dd17cd81329dc6689ceadcfe2
+LATEST_VERIFIED_PRODUCTION_EVIDENCE_HEAD=437c9dcc4b35846b6ce828258272814e06a79d13
+IMPLEMENTATION_BASE=437c9dcc4b35846b6ce828258272814e06a79d13
 BRANCH=main
 TRACKED_WORKTREE=CLEAN
 ALEMBIC_CURRENT=20260908_0042
@@ -89,7 +89,43 @@ PR32_PRODUCTION_SYNC=PASS
 PR32_PRODUCTION_POSTVERIFY=PASS
 HIGH_RELEVANCE_GATE_SYNCED_TO_PRODUCTION=YES
 PR32_NOTIFICATION_CANARY=NO_SEND_STALE_OR_EMPTY
+PR33_PRODUCTION_DOCS_SYNC=PASS
+BOUNDED_PROFILE_WEB_REPLENISHMENT=PASS_NEW_STRONG
+REPLENISHMENT_RUN_KEY=owner-profile-web-replenishment-20260914-v1
+REPLENISHMENT_DISCOVERY_RUN_ID=0d7ff4de-1845-418e-8b1b-3b78d8ae0b06
+REPLENISHMENT_DISCOVERY_RUN_STATUS=completed
+NEW_CURRENT_STRONG_CANDIDATE_SOURCE_IDS=23,24,26
+SOURCE_23_NOTIFICATION_CANARY=NO_SEND_STALE_OR_EMPTY
+SOURCE_24_NOTIFICATION_CANARY=NO_SEND_STALE_OR_EMPTY
+SOURCE_26_NOTIFICATION_CANARY=PASS_SENT
+POST_SCAN_CURSOR=26
+OWNER_NOTIFICATION_COUNT=4
+HIGH_RELEVANCE_GATE_LIVE_VALIDATED=YES
+OWNER_CARD_SEND_UNDER_PR32_PROVEN=YES
 ```
+
+## Current implementation gate
+
+```text
+COOLDOWN_BACKOFF_IMPLEMENTED=YES
+MIGRATION_ADDED=20260914_0043
+PRODUCTION_MIGRATION_CURRENT=20260908_0042
+RECURRING_NOTIFICATION_AUTOMATION_AUTHORIZED=NO
+PERSISTENT_RUNTIME_AUTHORIZED=NO
+```
+
+Execution order:
+
+1. independent review of the exact cooldown implementation head;
+2. Owner merge authorization, then merge that exact reviewed head;
+3. separate production sync and migration authorization;
+4. read-only exact-state PRELIVE verification;
+5. separately authorize one bounded stale/unresolvable probe to create real state;
+6. prove read-only that an immediate selector pass excludes it before Telegram;
+7. only then discuss a recurring 3-hour/max-5 policy.
+
+No step above currently authorizes production work, recurring scheduling, or a
+persistent LeadRadar runtime.
 
 The bounded planner contract remained:
 
@@ -414,14 +450,14 @@ it did not execute a live non-strong negative-control case.
 ## Current gate
 
 ```text
-CURRENT_GATE=PR32_PRODUCTION_CANARY_DOCS_RECONCILIATION
-IMPLEMENTATION_BASELINE=b3bb1f6266fe3f7dd17cd81329dc6689ceadcfe2
+CURRENT_GATE=COOLDOWN_IMPLEMENTATION_INDEPENDENT_REVIEW
+IMPLEMENTATION_BASE=437c9dcc4b35846b6ce828258272814e06a79d13
 OWNER_PROFILE_GATE=EXACT_ACTIVE_PRIMARY_CONFIRMED
 DISCOVERY_INTENT_GATE=CURRENT_DETERMINISTIC_INTENT
 OWNER_CANDIDATE_NOTIFICATION_RELEVANCE_GATE=strong_only
 RELEVANCE_FILTER_BEFORE_LIMIT=YES
-NEXT_GATE=INDEPENDENT_REVIEW_OF_EXACT_DOCS_HEAD
-NEXT_PRODUCT_GATE_AFTER_REVIEW_MERGE_SYNC=BOUNDED_PROFILE_WEB_REPLENISHMENT
+NEXT_GATE=INDEPENDENT_REVIEW_OF_EXACT_IMPLEMENTATION_HEAD
+NEXT_PRODUCT_GATE_AFTER_REVIEW_MERGE_SYNC=BOUNDED_COOLDOWN_VALIDATION
 NEW_LIVE_ACTION_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 CANDIDATE_NOTIFICATION_RECURRING_AUTOMATION_AUTHORIZED=NO
@@ -430,25 +466,20 @@ CANDIDATE_NOTIFICATION_RECURRING_AUTOMATION_AUTHORIZED=NO
 ## Required sequence from here
 
 ```text
-1. reconcile canonical docs with PR32 production/canary evidence
-2. independent review of the exact docs head
-3. only after review PASS: Owner merge authorization
-4. merge the exact reviewed docs head
-5. separate docs-only production sync / exact-head reconciliation
-6. design and separately authorize BOUNDED_PROFILE_WEB_REPLENISHMENT
-7. read-only current-strong unnotified safe-candidate pool check
-8. only if a new exact candidate exists: separate notification canary authorization
-9. before recurring scheduling: design/review stale re-probe cooldown/backoff
-10. recurring 3h/max5 and persistent runtime remain unauthorized
+1. independent review of the exact cooldown implementation head
+2. only after review PASS: Owner merge authorization
+3. merge the exact reviewed implementation head
+4. separate production sync and migration authorization
+5. read-only exact-state PRELIVE
+6. separately authorize one bounded stale/unresolvable probe
+7. read-only proof of immediate exact-binding exclusion before Telegram
+8. only then discuss recurring 3h/max5 scheduling
+9. persistent runtime remains unauthorized
 ```
 
-Do not retry the consumed PR32 canary. The replenishment gate keeps
-`relevance_class=strong`; it does not permit Telegram, Owner send, lifecycle
-mutation, Source Audit, AI, or persistent runtime. Its purpose is to run fresh
-bounded profile Web Discovery for the same active confirmed profile/current
-intent and attempt to materialize or re-evaluate additional current-strong
-candidates. Exact Web bounds and a run key must be designed from fresh
-exact-head preflight after this docs change is reviewed, merged, and synced.
+Do not retry consumed canaries. This implementation task permits no Telegram,
+Web, Owner send, lifecycle mutation, Source Audit, AI, migration, scheduler, or
+persistent runtime action.
 
 Future lifecycle and membership actions remain independent choices:
 

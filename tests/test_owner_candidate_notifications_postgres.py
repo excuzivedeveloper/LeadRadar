@@ -4,9 +4,11 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 import unittest
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import sqlalchemy as sa
+from alembic import command
+from sqlalchemy import create_engine
 from sqlalchemy.exc import IntegrityError
 
 from freelancer_bot.config import RuntimeConfig
@@ -20,10 +22,13 @@ from freelancer_bot.profile_discovery import (
 from freelancer_bot.persistence.database import Database
 from freelancer_bot.persistence.owner_candidate_notifications import (
     OwnerSourceCandidateNotificationRepository,
+    OwnerSourceCandidateProbeOutcome,
     OwnerSourceCandidateReservationStatus,
 )
 from freelancer_bot.persistence.schema import (
     owner_source_candidate_notifications,
+    owner_source_candidate_notification_scan_state,
+    owner_source_candidate_probe_state,
     profile_discovery_intents,
     search_profiles,
     source_profile_relevance,
@@ -33,7 +38,12 @@ from freelancer_bot.persistence.schema import (
 from freelancer_bot.persistence.search_profiles import SearchProfileRepository
 from freelancer_bot.persistence.source_repository import SourceStatus
 from freelancer_bot.telegram_request_governor import TelegramRequestCategory
-from postgres_support import TEST_DATABASE_URL, migrate_to_head, temporary_database
+from postgres_support import (
+    TEST_DATABASE_URL,
+    alembic_config,
+    migrate_to_head,
+    temporary_database,
+)
 
 
 NOW = datetime(2026, 9, 8, 12, 0, tzinfo=timezone.utc)
@@ -137,23 +147,269 @@ class OwnerCandidateNotificationsPostgresTest(unittest.IsolatedAsyncioTestCase):
                     relevance_class="weak",
                 )
             strong_id = await _insert_source(connection, handle="@pg_strong_11")
-            candidates = await self.repository.list_unnotified_candidates(
+            selection = await self.repository.list_unnotified_candidates(
                 connection,
                 recipient_chat_id=OWNER_ID,
                 search_profile_id=PROFILE_ID,
                 discovery_intent_id=self.intent_id,
                 profile_revision=3,
                 relevance_class="strong",
+                selection_now=NOW,
                 limit=5,
             )
 
-        self.assertEqual([source.id for source in candidates], [strong_id])
+        self.assertEqual([source.id for source in selection.candidates], [strong_id])
 
-    async def test_stale_candidate_remains_reprobe_eligible_after_wrap(self):
+    async def test_cooldown_precedes_limit_and_expiry_is_inclusive(self):
+        async with self.database.transaction() as connection:
+            cooling_id = await _insert_source(connection, handle="@pg_cooling_1")
+            eligible_id = await _insert_source(connection, handle="@pg_eligible_2")
+            await self.repository.record_probe_outcome(
+                connection,
+                recipient_chat_id=OWNER_ID,
+                source_id=cooling_id,
+                search_profile_id=PROFILE_ID,
+                discovery_intent_id=self.intent_id,
+                profile_revision=3,
+                outcome=OwnerSourceCandidateProbeOutcome.UNRESOLVABLE,
+                probed_at=NOW,
+            )
+            selection = await self.repository.list_unnotified_candidates(
+                connection,
+                recipient_chat_id=OWNER_ID,
+                search_profile_id=PROFILE_ID,
+                discovery_intent_id=self.intent_id,
+                profile_revision=3,
+                relevance_class="strong",
+                selection_now=NOW + timedelta(hours=1),
+                limit=1,
+            )
+
+        self.assertEqual([source.id for source in selection.candidates], [eligible_id])
+        self.assertEqual(selection.cooldown_suppressed, 1)
+
+        async with self.database.transaction() as connection:
+            await connection.execute(
+                sa.delete(owner_source_candidate_notification_scan_state).where(
+                    owner_source_candidate_notification_scan_state.c.recipient_chat_id
+                    == OWNER_ID
+                )
+            )
+            expired = await self.repository.list_unnotified_candidates(
+                connection,
+                recipient_chat_id=OWNER_ID,
+                search_profile_id=PROFILE_ID,
+                discovery_intent_id=self.intent_id,
+                profile_revision=3,
+                relevance_class="strong",
+                selection_now=NOW + timedelta(hours=6),
+                limit=1,
+            )
+        self.assertEqual([source.id for source in expired.candidates], [cooling_id])
+        self.assertEqual(expired.cooldown_suppressed, 0)
+
+    async def test_old_revision_and_intent_probe_state_do_not_suppress(self):
+        async with self.database.transaction() as connection:
+            revision_id = await _insert_source(connection, handle="@pg_old_rev")
+            intent_id = await _insert_source(connection, handle="@pg_old_intent")
+            old_intent_id = uuid4()
+            current_intent = (
+                await connection.execute(
+                    sa.select(profile_discovery_intents).where(
+                        profile_discovery_intents.c.id == self.intent_id
+                    )
+                )
+            ).mappings().one()
+            old_intent_values = dict(current_intent)
+            old_intent_values.update(
+                id=old_intent_id,
+                version="profile-discovery-intent.test-old",
+            )
+            await connection.execute(
+                profile_discovery_intents.insert().values(**old_intent_values)
+            )
+            await self.repository.record_probe_outcome(
+                connection,
+                recipient_chat_id=OWNER_ID,
+                source_id=revision_id,
+                search_profile_id=PROFILE_ID,
+                discovery_intent_id=self.intent_id,
+                profile_revision=2,
+                outcome=OwnerSourceCandidateProbeOutcome.STALE_OR_EMPTY,
+                probed_at=NOW,
+            )
+            await self.repository.record_probe_outcome(
+                connection,
+                recipient_chat_id=OWNER_ID,
+                source_id=intent_id,
+                search_profile_id=PROFILE_ID,
+                discovery_intent_id=old_intent_id,
+                profile_revision=3,
+                outcome=OwnerSourceCandidateProbeOutcome.STALE_OR_EMPTY,
+                probed_at=NOW,
+            )
+            selection = await self.repository.list_unnotified_candidates(
+                connection,
+                recipient_chat_id=OWNER_ID,
+                search_profile_id=PROFILE_ID,
+                discovery_intent_id=self.intent_id,
+                profile_revision=3,
+                relevance_class="strong",
+                selection_now=NOW + timedelta(hours=1),
+                limit=10,
+            )
+
+        self.assertEqual(
+            [source.id for source in selection.candidates],
+            [revision_id, intent_id],
+        )
+        self.assertEqual(selection.cooldown_suppressed, 0)
+
+    async def test_probe_backoff_resets_and_concurrent_updates_preserve_streak(self):
+        async with self.database.transaction() as connection:
+            source_id = await _insert_source(connection, handle="@pg_backoff")
+
+        async def record(outcome, probed_at, *, revision=3):
+            async with self.database.transaction() as connection:
+                return await OwnerSourceCandidateNotificationRepository().record_probe_outcome(
+                    connection,
+                    recipient_chat_id=OWNER_ID,
+                    source_id=source_id,
+                    search_profile_id=PROFILE_ID,
+                    discovery_intent_id=self.intent_id,
+                    profile_revision=revision,
+                    outcome=outcome,
+                    probed_at=probed_at,
+                )
+
+        first = await record(OwnerSourceCandidateProbeOutcome.UNRESOLVABLE, NOW)
+        second = await record(
+            OwnerSourceCandidateProbeOutcome.UNRESOLVABLE,
+            NOW + timedelta(hours=6),
+        )
+        third = await record(
+            OwnerSourceCandidateProbeOutcome.UNRESOLVABLE,
+            NOW + timedelta(hours=18),
+        )
+        fourth = await record(
+            OwnerSourceCandidateProbeOutcome.UNRESOLVABLE,
+            NOW + timedelta(hours=42),
+        )
+        fifth = await record(
+            OwnerSourceCandidateProbeOutcome.UNRESOLVABLE,
+            NOW + timedelta(hours=90),
+        )
+        probe_times = (
+            NOW,
+            NOW + timedelta(hours=6),
+            NOW + timedelta(hours=18),
+            NOW + timedelta(hours=42),
+            NOW + timedelta(hours=90),
+        )
+        self.assertEqual(
+            [
+                state.next_probe_at - at
+                for state, at in zip(
+                    (first, second, third, fourth, fifth),
+                    probe_times,
+                    strict=True,
+                )
+            ],
+            [timedelta(hours=value) for value in (6, 12, 24, 48, 48)],
+        )
+
+        changed = await record(
+            OwnerSourceCandidateProbeOutcome.STALE_OR_EMPTY,
+            NOW + timedelta(hours=138),
+        )
+        self.assertEqual(changed.consecutive_outcomes, 1)
+        rebound = await record(
+            OwnerSourceCandidateProbeOutcome.UNRESOLVABLE,
+            NOW + timedelta(hours=162),
+            revision=2,
+        )
+        self.assertEqual(rebound.consecutive_outcomes, 1)
+
+        concurrent_at = NOW + timedelta(hours=168)
+        one, two = await asyncio.gather(
+            record(
+                OwnerSourceCandidateProbeOutcome.UNRESOLVABLE,
+                concurrent_at,
+                revision=2,
+            ),
+            record(
+                OwnerSourceCandidateProbeOutcome.UNRESOLVABLE,
+                concurrent_at,
+                revision=2,
+            ),
+        )
+        self.assertEqual({one.consecutive_outcomes, two.consecutive_outcomes}, {2, 3})
+        async with self.database.connect() as connection:
+            row = (
+                await connection.execute(
+                    sa.select(owner_source_candidate_probe_state).where(
+                        owner_source_candidate_probe_state.c.recipient_chat_id
+                        == OWNER_ID,
+                        owner_source_candidate_probe_state.c.source_id == source_id,
+                    )
+                )
+            ).mappings().one()
+        self.assertEqual(row["consecutive_outcomes"], 3)
+
+    async def test_all_cooling_keeps_cursor_stable_and_makes_no_probe(self):
+        async with self.database.transaction() as connection:
+            source_id = await _insert_source(connection, handle="@pg_all_cooling")
+            await connection.execute(
+                owner_source_candidate_notification_scan_state.insert().values(
+                    recipient_chat_id=OWNER_ID,
+                    last_source_id=source_id,
+                    created_at=NOW,
+                    updated_at=NOW,
+                )
+            )
+            await self.repository.record_probe_outcome(
+                connection,
+                recipient_chat_id=OWNER_ID,
+                source_id=source_id,
+                search_profile_id=PROFILE_ID,
+                discovery_intent_id=self.intent_id,
+                profile_revision=3,
+                outcome=OwnerSourceCandidateProbeOutcome.STALE_OR_EMPTY,
+                probed_at=NOW,
+            )
+        governor = _Governor()
+        summary = await _service(self.database, self.repository).run_once(
+            config=_config(),
+            collector_account_id=11,
+            user_client=_MappedUserClient({source_id: NOW}),
+            bot_client=_BotClient(),
+            governor=governor,
+            limit=1,
+        )
+        async with self.database.connect() as connection:
+            cursor = await connection.scalar(
+                sa.select(owner_source_candidate_notification_scan_state.c.last_source_id)
+                .where(
+                    owner_source_candidate_notification_scan_state.c.recipient_chat_id
+                    == OWNER_ID
+                )
+            )
+        self.assertEqual(summary.candidates_considered, 0)
+        self.assertEqual(summary.cooldown_suppressed, 1)
+        self.assertEqual(summary.activity_probes, 0)
+        self.assertEqual(governor.category if hasattr(governor, "category") else None, None)
+        self.assertEqual(cursor, source_id)
+
+    async def test_stale_candidate_is_blocked_until_cooldown_expiry(self):
         async with self.database.transaction() as connection:
             source_id = await _insert_source(connection, handle="@pg_later_1")
 
-        service = _service(self.database, self.repository)
+        current_time = NOW
+        service = _service(
+            self.database,
+            self.repository,
+            clock=lambda: current_time,
+        )
         stale = await service.run_once(
             config=_config(),
             collector_account_id=11,
@@ -162,11 +418,21 @@ class OwnerCandidateNotificationsPostgresTest(unittest.IsolatedAsyncioTestCase):
             governor=_Governor(),
             limit=10,
         )
+        cooling_bot = _BotClient()
+        cooling = await service.run_once(
+            config=_config(),
+            collector_account_id=11,
+            user_client=_MappedUserClient({source_id: NOW}),
+            bot_client=cooling_bot,
+            governor=_Governor(),
+            limit=10,
+        )
+        current_time = NOW + timedelta(hours=24)
         fresh_bot = _BotClient()
         fresh = await service.run_once(
             config=_config(),
             collector_account_id=11,
-            user_client=_MappedUserClient({source_id: NOW}),
+            user_client=_MappedUserClient({source_id: current_time}),
             bot_client=fresh_bot,
             governor=_Governor(),
             limit=10,
@@ -174,7 +440,20 @@ class OwnerCandidateNotificationsPostgresTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(stale.stale_or_empty, 1)
         self.assertEqual(stale.reserved, 0)
+        self.assertEqual(cooling.cooldown_suppressed, 1)
+        self.assertEqual(cooling.activity_probes, 0)
         self.assertEqual(fresh.sent, 1)
+        async with self.database.connect() as connection:
+            state_count = await connection.scalar(
+                sa.select(sa.func.count())
+                .select_from(owner_source_candidate_probe_state)
+                .where(
+                    owner_source_candidate_probe_state.c.recipient_chat_id
+                    == OWNER_ID,
+                    owner_source_candidate_probe_state.c.source_id == source_id,
+                )
+            )
+        self.assertEqual(state_count, 0)
 
     async def test_persisted_dedupe_survives_repository_recreation_for_terminal_states(self):
         async with self.database.transaction() as connection:
@@ -226,6 +505,16 @@ class OwnerCandidateNotificationsPostgresTest(unittest.IsolatedAsyncioTestCase):
                 failure_code="test_send_failed",
                 failed_at=NOW,
             )
+            await self.repository.record_probe_outcome(
+                connection,
+                recipient_chat_id=OWNER_ID,
+                source_id=sent_source,
+                search_profile_id=PROFILE_ID,
+                discovery_intent_id=self.intent_id,
+                profile_revision=3,
+                outcome=OwnerSourceCandidateProbeOutcome.STALE_OR_EMPTY,
+                probed_at=NOW,
+            )
 
         self.assertEqual(
             reserved.status,
@@ -233,17 +522,18 @@ class OwnerCandidateNotificationsPostgresTest(unittest.IsolatedAsyncioTestCase):
         )
         recreated = OwnerSourceCandidateNotificationRepository()
         async with self.database.transaction() as connection:
-            candidates = await recreated.list_unnotified_candidates(
+            selection = await recreated.list_unnotified_candidates(
                 connection,
                 recipient_chat_id=OWNER_ID,
                 search_profile_id=PROFILE_ID,
                 discovery_intent_id=self.intent_id,
                 profile_revision=3,
                 relevance_class="strong",
+                selection_now=NOW,
                 limit=10,
             )
 
-        self.assertEqual(candidates, ())
+        self.assertEqual(selection.candidates, ())
 
     async def test_concurrent_reservation_allows_exactly_one_row(self):
         async with self.database.transaction() as connection:
@@ -441,11 +731,13 @@ class OwnerCandidateNotificationsPostgresTest(unittest.IsolatedAsyncioTestCase):
 def _service(
     database: Database,
     repository: OwnerSourceCandidateNotificationRepository,
+    *,
+    clock=None,
 ) -> OwnerCandidateNotificationService:
     return OwnerCandidateNotificationService(
         database,
         repository=repository,
-        clock=lambda: NOW,
+        clock=clock or (lambda: NOW),
         button_factory=lambda label, url: ("url", label, url),
     )
 

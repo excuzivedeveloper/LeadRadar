@@ -16,6 +16,7 @@ from .profile_discovery import build_profile_discovery_intent
 from .persistence.database import Database
 from .persistence.owner_candidate_notifications import (
     OwnerSourceCandidateNotificationRepository,
+    OwnerSourceCandidateProbeOutcome,
     OwnerSourceCandidateReservationStatus,
 )
 from .persistence.source_repository import SourceRecord, SourceStatus
@@ -50,10 +51,13 @@ class OwnerCandidateNotificationSummary:
     discovery_intent_id: UUID | None = None
     relevance_gate: str = OWNER_CANDIDATE_RELEVANCE_GATE
     candidates_considered: int = 0
+    cooldown_suppressed: int = 0
     activity_probes: int = 0
     fresh_within_10_days: int = 0
     stale_or_empty: int = 0
     unresolvable: int = 0
+    stale_cooldown_recorded: int = 0
+    unresolvable_cooldown_recorded: int = 0
     already_notified: int = 0
     reserved: int = 0
     sent: int = 0
@@ -70,10 +74,14 @@ class OwnerCandidateNotificationSummary:
             f"DISCOVERY_INTENT_ID={self.discovery_intent_id or 'NONE'}",
             f"RELEVANCE_GATE={self.relevance_gate}",
             f"CANDIDATES_CONSIDERED={self.candidates_considered}",
+            f"COOLDOWN_SUPPRESSED={self.cooldown_suppressed}",
             f"ACTIVITY_PROBES={self.activity_probes}",
             f"FRESH_WITHIN_10_DAYS={self.fresh_within_10_days}",
             f"STALE_OR_EMPTY={self.stale_or_empty}",
             f"UNRESOLVABLE={self.unresolvable}",
+            f"STALE_COOLDOWN_RECORDED={self.stale_cooldown_recorded}",
+            "UNRESOLVABLE_COOLDOWN_RECORDED="
+            f"{self.unresolvable_cooldown_recorded}",
             f"ALREADY_NOTIFIED={self.already_notified}",
             f"RESERVED={self.reserved}",
             f"SENT={self.sent}",
@@ -139,6 +147,7 @@ class OwnerCandidateNotificationService:
         if owner_chat_id is None:
             return summary
 
+        selection_now = _aware_utc(self._clock())
         async with self._database.transaction() as connection:
             try:
                 owner = await self._user_repository.get_by_identity(
@@ -168,15 +177,18 @@ class OwnerCandidateNotificationService:
             summary.profile_id = profile.id
             summary.profile_revision = profile.revision
             summary.discovery_intent_id = intent.id
-            candidates = await self._repository.list_unnotified_candidates(
+            selection = await self._repository.list_unnotified_candidates(
                 connection,
                 recipient_chat_id=owner_chat_id,
                 search_profile_id=profile.id,
                 discovery_intent_id=intent.id,
                 profile_revision=profile.revision,
                 relevance_class=OWNER_CANDIDATE_RELEVANCE_GATE,
+                selection_now=selection_now,
                 limit=limit,
             )
+        candidates = selection.candidates
+        summary.cooldown_suppressed = selection.cooldown_suppressed
         summary.candidates_considered = len(candidates)
 
         for source in candidates:
@@ -185,6 +197,15 @@ class OwnerCandidateNotificationService:
             address = telegram_candidate_address(source)
             if address is None:
                 summary.unresolvable += 1
+                await self._record_probe_outcome(
+                    recipient_chat_id=owner_chat_id,
+                    source_id=source.id,
+                    search_profile_id=profile.id,
+                    discovery_intent_id=intent.id,
+                    profile_revision=profile.revision,
+                    outcome=OwnerSourceCandidateProbeOutcome.UNRESOLVABLE,
+                )
+                summary.unresolvable_cooldown_recorded += 1
                 continue
 
             summary.activity_probes += 1
@@ -195,20 +216,55 @@ class OwnerCandidateNotificationService:
             )
             if probe.unresolvable:
                 summary.unresolvable += 1
+                await self._record_probe_outcome(
+                    recipient_chat_id=owner_chat_id,
+                    source_id=source.id,
+                    search_profile_id=profile.id,
+                    discovery_intent_id=intent.id,
+                    profile_revision=profile.revision,
+                    outcome=OwnerSourceCandidateProbeOutcome.UNRESOLVABLE,
+                )
+                summary.unresolvable_cooldown_recorded += 1
                 continue
             latest_message_at = probe.latest_message_at
             if latest_message_at is None:
                 summary.stale_or_empty += 1
+                await self._record_probe_outcome(
+                    recipient_chat_id=owner_chat_id,
+                    source_id=source.id,
+                    search_profile_id=profile.id,
+                    discovery_intent_id=intent.id,
+                    profile_revision=profile.revision,
+                    outcome=OwnerSourceCandidateProbeOutcome.STALE_OR_EMPTY,
+                )
+                summary.stale_cooldown_recorded += 1
                 continue
             latest_message_at = _aware_utc(latest_message_at)
             now = _aware_utc(self._clock())
             if latest_message_at < now - FRESH_ACTIVITY_WINDOW:
                 summary.stale_or_empty += 1
+                await self._record_probe_outcome(
+                    recipient_chat_id=owner_chat_id,
+                    source_id=source.id,
+                    search_profile_id=profile.id,
+                    discovery_intent_id=intent.id,
+                    profile_revision=profile.revision,
+                    outcome=OwnerSourceCandidateProbeOutcome.STALE_OR_EMPTY,
+                )
+                summary.stale_cooldown_recorded += 1
                 continue
             summary.fresh_within_10_days += 1
 
             attempted_at = now
             async with self._database.transaction() as connection:
+                await self._repository.clear_probe_state(
+                    connection,
+                    recipient_chat_id=owner_chat_id,
+                    source_id=source.id,
+                    search_profile_id=profile.id,
+                    discovery_intent_id=intent.id,
+                    profile_revision=profile.revision,
+                )
                 result = await self._repository.reserve(
                     connection,
                     source_id=source.id,
@@ -274,6 +330,28 @@ class OwnerCandidateNotificationService:
             summary.sent += 1
 
         return summary
+
+    async def _record_probe_outcome(
+        self,
+        *,
+        recipient_chat_id: int,
+        source_id: int,
+        search_profile_id: UUID,
+        discovery_intent_id: UUID,
+        profile_revision: int,
+        outcome: OwnerSourceCandidateProbeOutcome,
+    ) -> None:
+        async with self._database.transaction() as connection:
+            await self._repository.record_probe_outcome(
+                connection,
+                recipient_chat_id=recipient_chat_id,
+                source_id=source_id,
+                search_profile_id=search_profile_id,
+                discovery_intent_id=discovery_intent_id,
+                profile_revision=profile_revision,
+                outcome=outcome,
+                probed_at=_aware_utc(self._clock()),
+            )
 
     async def _latest_message_at(
         self,

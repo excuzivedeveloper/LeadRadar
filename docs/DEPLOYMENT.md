@@ -2,10 +2,22 @@
 
 **Status:** CANONICAL  
 **Snapshot date:** 2026-09-14
-**Deployment code baseline:** `b3bb1f6266fe3f7dd17cd81329dc6689ceadcfe2`
-**Latest verified production evidence head:** `a232cf564a57f8761af7394ea4e5607fd8b8ac6d`
+**Deployment code baseline:** `437c9dcc4b35846b6ce828258272814e06a79d13`
+**Latest verified production evidence head:** `437c9dcc4b35846b6ce828258272814e06a79d13`
 
 This document records the current shared-server LeadRadar layout and deployment boundaries. Exact operational commands live in [`OPERATIONS.md`](OPERATIONS.md). A docs-only repository head can be newer than the implementation baseline without changing deployed code behavior.
+
+The cooldown/backoff PR adds Alembic revision `20260914_0043` and a separate
+`owner_source_candidate_probe_state` table. It has not been deployed: production
+remains at `20260908_0042`. The migration creates an empty table with no inferred
+historical backfill. No scheduler, timer, service, runtime env, lifecycle, or
+membership configuration changes in this PR.
+
+Current fresh evidence includes a passed PR33 docs sync, bounded Web
+replenishment yielding current-strong candidates `23`, `24`, and `26`, stale
+no-send outcomes for `23`/`24`, and one durable sent card for `26`. Source `26`
+remains a candidate and its membership is unproven. Production scan cursor is
+`26`; total Owner candidate notification rows are `4`.
 
 ## Server layout
 
@@ -175,7 +187,8 @@ sources.lifecycle_status
 candidate_value=candidate
 ```
 
-Latest bounded inventory evidence includes:
+Historical bounded inventory evidence from the pre-replenishment checkpoint
+included:
 
 ```text
 SOURCE_COUNT=22
@@ -184,7 +197,11 @@ OWNER_NOTIFICATION_COUNT=3
 TELEGRAM_OPERATION_EVENT_COUNT=209
 ```
 
-Counts are snapshots, not invariants.
+These values belong only to that older checkpoint. Counts are snapshots, not
+invariants; in particular, the current proven `OWNER_NOTIFICATION_COUNT=4`
+supersedes the historical value above. No newer total `SOURCE_COUNT`,
+`CANDIDATE_COUNT`, or Telegram operation-event count is claimed without fresh
+measurement.
 
 The PR27 Web canary materialized four existing sources. Two current candidates with non-direct support were then explicitly chosen for a separate bounded Telegram access/freshness probe:
 
@@ -325,22 +342,36 @@ Do not sync to a newer-than-authorized `origin/main` and do not use local merge/
 Current required order is:
 
 ```text
-1. reconcile docs with PR32 production/canary evidence
-2. independent review and Owner merge authorization
-3. merge and separately sync the exact reviewed docs head
-4. design/authorize bounded profile Web replenishment from fresh preflight
-5. read-only current-strong unnotified safe-candidate pool check
-6. only for a new exact candidate, request a separate notification canary
-7. design/review stale re-probe cooldown before recurring notification work
+1. independent re-review of the exact follow-up head
+2. OWNER merge authorization
+3. merge the exact reviewed head
+4. separate OWNER-authorized production sync of the exact merge result
+5. apply and verify Alembic 20260914_0043 within that authorized sync/migration gate
+6. read-only PRELIVE: exact synced head, migration, current binding, cooldown baseline
+7. separately authorize one bounded stale/unresolvable probe to create probe state
+8. prove read-only that an immediate selector suppresses that binding before Telegram
+9. only after validation, discuss recurring 3h/max5 scheduling separately
 ```
 
-The current strong pool had one candidate and that candidate failed freshness.
+Known evidence is limited to the earlier stale/empty result for source `18`,
+then replenishment producing current-strong sources `23`, `24`, and `26`:
+sources `23` and `24` were stale/empty no-sends, while source `26` produced one
+durable sent Owner card. The scan cursor is `26` and the current proven Owner
+notification count is `4`. This does not establish the total current strong
+pool. Source `26` remains lifecycle `candidate`, and its membership is not
+proven.
+
+Implementation and test success are not production validation:
+
+```text
+COOLDOWN_BACKOFF_PRODUCTION_VALIDATED=NO
+RECURRING_NOTIFICATION_AUTOMATION_AUTHORIZED=NO
+PERSISTENT_RUNTIME_AUTHORIZED=NO
+```
+
 Keep `relevance_class=strong`; do not lower the threshold merely to produce a
-card. Replenishment permits no Telegram, Owner send, lifecycle mutation, Source
-Audit, AI, or persistent runtime, and requires later exact-head bounds/run-key
-design. Recurring candidate notification additionally requires a reviewed
-stale/unresolvable re-probe cooldown/backoff policy. Neither recurring
-automation nor persistent runtime is authorized.
+card. No production sync, migration, Telegram, Web, AI, scheduler, or runtime
+action is authorized by this documentation follow-up.
 
 ## Shared-server boundary
 
