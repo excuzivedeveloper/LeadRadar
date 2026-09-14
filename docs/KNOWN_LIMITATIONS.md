@@ -1,9 +1,9 @@
 # LeadRadar — Known Limitations and Validation Gaps
 
 **Status:** CANONICAL  
-**Last verified:** 2026-09-12
-**Implementation baseline:** `81a675b72ed4c1229cedad28e5d2e1f56bac1f66`
-**Latest verified production evidence head:** `b660bdd633137f13dae5a8524f14d36c0f5ecd05`
+**Last verified:** 2026-09-14
+**Implementation baseline:** `b3bb1f6266fe3f7dd17cd81329dc6689ceadcfe2`
+**Latest verified production evidence head:** `a232cf564a57f8761af7394ea4e5607fd8b8ac6d`
 
 This document distinguishes code that exists from behavior that has actually been validated in the current deployment.
 
@@ -38,11 +38,24 @@ SOURCE_19_20_OWNER_NOTIFICATION_TO_CURRENT_OWNER=PROVEN
 NOTIFICATION_PROOF_AUTHORIZATION_CONSUMED=NO
 LIVE_CHECKPOINT_2_RETIRED=YES
 SOURCE_19_20_JOIN_PERFORMED=NO
+PR32_REVIEW=PASS
+PR32_MERGED=YES
+PR32_PRODUCTION_SYNC=PASS
+PR32_PRODUCTION_POSTVERIFY=PASS
+HIGH_RELEVANCE_GATE_SYNCED_TO_PRODUCTION=YES
+PR32_NOTIFICATION_CANARY_RESULT=NO_SEND_STALE_OR_EMPTY
+PR32_NOTIFICATION_CANARY_AUTHORIZATION_CONSUMED=YES
+PR32_NOTIFICATION_CANARY_RETRY_ALLOWED=NO
+READY_FOR_RECURRING_NOTIFICATION_DECISION=NO
 CANDIDATE_NOTIFICATION_RECURRING_AUTOMATION_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 ```
 
-The immediate gate is canonical-docs reconciliation with the notification-row evidence, followed by independent review, Owner merge authorization and docs-only production synchronization/exact-head reconciliation as required. No next live or mutating gate is currently authorized.
+The immediate gate is canonical-docs reconciliation with PR32 production and
+canary evidence, followed by independent review, Owner merge authorization and
+separate docs-only production synchronization. The next later live gate is a
+separately designed/authorized bounded profile Web replenishment; no live
+command is authorized by this documentation work.
 
 Useful personalized opportunity delivery remains a later product limitation. The narrower fact now proven is durable delivery persistence for source-candidate cards for sources `19` and `20`; that does not establish end-to-end matched-opportunity delivery or Owner review/action.
 
@@ -55,27 +68,28 @@ Useful personalized opportunity delivery remains a later product limitation. The
 5. **P1 — Lifecycle approval and Telegram membership are separate gates.** PostgreSQL `APPROVED` status plus public-history readability still does not guarantee Telegram live-update delivery. A future source approval requires explicit membership provisioning before collection readiness can be claimed.
 6. **P1 — Telegram account/platform limits remain external.** FloodWait, ChannelsTooMuch, membership loss, source removal/rename and access changes can interrupt collection independently of PostgreSQL correctness.
 7. **P1 — Membership drift is not automatically reconciled.** Previously approved source membership was brought to 13/13, but there is no authorized automatic join/remediation mechanism. Sources `19` and `20` were not joined by the new bounded probe.
-8. **P1 — Candidate notification automation remains unauthorized.** Durable rows prove source `19`/`20` candidate cards were sent on 2026-09-08, but exact creating-command attribution is not persisted and no recurring schedule is authorized. The new proof PRELIVE stopped before Telegram because the terminal rows already existed; its obsolete live checkpoint is retired and must not be retried.
-9. **P1 — Legacy filter substring behavior can create false positives.** The accumulated stop-word matcher remains substring-based. It is intentionally preserved until enough shadow data supports a narrow redesign.
-10. **P1 — Current shadow sample is small.** Live path correctness is proven, but one successful natural shadow row is not enough to tune thresholds/keywords confidently.
-11. **P1 — OpenRouter model availability/cost are external.** `minimax/minimax-m3:free` availability, pricing and rate/free-tier limits can change outside the repository and must be reverified before further live validation or expanded use.
-12. **P1 — Opportunity Analysis has no separate enable switch.** Once the matching provider key is configured, full `--run` can process pending `opportunity.analysis.v1` jobs and make provider calls. `AI_REPLY_ENABLED` controls reply drafting only.
-13. **P1 — SearchProfile onboarding requires a configured AI route for its natural-language flow.** That route is not enabled yet.
-14. **P1 — At-least-once external delivery remains.** Telegram send and PostgreSQL confirmation cannot be one atomic transaction; idempotency reduces but cannot mathematically remove the crash window.
-15. **P2 — OpenRouter scope is currently Opportunity Analysis only.** It is not first-class support for onboarding, Source Audit, Telegram Chat Screening, reply drafting or source discovery.
-16. **P2 — Discovery/audit code is not autonomous deployment evidence.** Bounded PR27 Web execution is proven, but global/graph/chat discovery and Source Audit remain disabled. A successful bounded canary is not authorization for persistent discovery.
-17. **P2 — Billing/payment code is not configured production payment behavior.** Provider-neutral state/adapters exist, but current private single-owner deployment has not activated production billing.
-18. **P2 — Legacy V1 compatibility remains in the codebase.** SQLite/legacy components still exist even though PostgreSQL is V2 authority and legacy delivery is disabled.
-19. **P2 — Synthetic fixtures are not production-quality evidence.** Tests are necessary but do not substitute for bounded live validation.
-20. **P2 — PR14/PR15 OpportunityAnalysisV2 evidence-aware matching remains runtime shadow instrumentation only.** It is an observational evidence surface, not current matching or delivery policy.
-21. **P2 — Persistent runtime is intentionally absent.** No LeadRadar daemon is authorized, so unattended continuity/restart behavior is not yet proven.
-22. **P2 — PR21 Web-only provider evidence is a single historical sample.** The run ended after 5 of 12 selected queries due captcha/backoff, considered 12 search results, produced one weak new candidate, and is not enough to judge long-term source quality or novelty.
-23. **P2 — Historical PR22 SearXNG engine removal was unsafe.** PR22 exact-engine removal was merged and production-synced, but activation proved unsafe for the pinned image because dependent Brave variants still referenced `network: brave`; PR23 restored SearXNG by preserving inherited engine/network definitions and disabling exact unwanted engines with `disabled: true`.
-24. **P2 — Disabling those engines is not a guarantee against captcha/backoff.** It narrows known noisy defaults, but provider stability still depends on SearXNG defaults, upstream search behavior and local rate conditions.
-25. **P2 — One-shot query bounds do not bound autonomous discovery.** `--max-queries` bounds an explicit operator run; persistent Web discovery remains unauthorized and separately unproven.
-26. **P2 — Successful access/freshness probes do not validate the lifecycle service.** The source `19`/`20` gate intentionally did not call `SourceValidationService`; source and validation-table hashes remained unchanged. Treat it as access/freshness evidence only.
-27. **P2 — Historical inactive collector row `1` remains persisted.** The duplicate-active anomaly is resolved and collector `2` is the sole active row. Collector `1` remains inactive for historical/FK continuity; its dependent operation-state row and historical references were intentionally preserved. This is not a blocker by itself, and its exact historical Telegram-user origin remains unproven.
-28. **P2 — The next production gate is deliberately undecided.** Source `19`/`20` lifecycle decisions, membership provisioning, recurring notification automation and persistent runtime are separate future choices and none is authorized by the current docs work.
+8. **P1 — Candidate notification automation remains unauthorized.** PR32's bounded canary proved live current-profile/current-intent strong selection and freshness suppression, but produced no reservation or Owner card. Source `18` remains unnotified after `STALE_OR_EMPTY=1`; the consumed authorization cannot be retried. Historical source `19`/`20` sends predate the strong-only selector.
+9. **P1 — Recurring passes can repeatedly probe the same stale/empty strong candidate.** Stale/empty outcomes intentionally write no notification marker, and durable scanning wraps after exhaustion. With the observed one-source strong unnotified pool and cursor now at `18`, a later pass can wrap and select source `18` again. A bounded stale/unresolvable cooldown or backoff policy must be designed and reviewed before recurring 3-hour/max-5 scheduling.
+10. **P1 — Legacy filter substring behavior can create false positives.** The accumulated stop-word matcher remains substring-based. It is intentionally preserved until enough shadow data supports a narrow redesign.
+11. **P1 — Current shadow sample is small.** Live path correctness is proven, but one successful natural shadow row is not enough to tune thresholds/keywords confidently.
+12. **P1 — OpenRouter model availability/cost are external.** `minimax/minimax-m3:free` availability, pricing and rate/free-tier limits can change outside the repository and must be reverified before further live validation or expanded use.
+13. **P1 — Opportunity Analysis has no separate enable switch.** Once the matching provider key is configured, full `--run` can process pending `opportunity.analysis.v1` jobs and make provider calls. `AI_REPLY_ENABLED` controls reply drafting only.
+14. **P1 — SearchProfile onboarding requires a configured AI route for its natural-language flow.** That route is not enabled yet.
+15. **P1 — At-least-once external delivery remains.** Telegram send and PostgreSQL confirmation cannot be one atomic transaction; idempotency reduces but cannot mathematically remove the crash window.
+16. **P2 — OpenRouter scope is currently Opportunity Analysis only.** It is not first-class support for onboarding, Source Audit, Telegram Chat Screening, reply drafting or source discovery.
+17. **P2 — Discovery/audit code is not autonomous deployment evidence.** Bounded PR27 Web execution is proven, but global/graph/chat discovery and Source Audit remain disabled. A successful bounded canary is not authorization for persistent discovery.
+18. **P2 — Billing/payment code is not configured production payment behavior.** Provider-neutral state/adapters exist, but current private single-owner deployment has not activated production billing.
+19. **P2 — Legacy V1 compatibility remains in the codebase.** SQLite/legacy components still exist even though PostgreSQL is V2 authority and legacy delivery is disabled.
+20. **P2 — Synthetic fixtures are not production-quality evidence.** Tests are necessary but do not substitute for bounded live validation.
+21. **P2 — PR14/PR15 OpportunityAnalysisV2 evidence-aware matching remains runtime shadow instrumentation only.** It is an observational evidence surface, not current matching or delivery policy.
+22. **P2 — Persistent runtime is intentionally absent.** No LeadRadar daemon is authorized, so unattended continuity/restart behavior is not yet proven.
+23. **P2 — PR21 Web-only provider evidence is a single historical sample.** The run ended after 5 of 12 selected queries due captcha/backoff, considered 12 search results, produced one weak new candidate, and is not enough to judge long-term source quality or novelty.
+24. **P2 — Historical PR22 SearXNG engine removal was unsafe.** PR22 exact-engine removal was merged and production-synced, but activation proved unsafe for the pinned image because dependent Brave variants still referenced `network: brave`; PR23 restored SearXNG by preserving inherited engine/network definitions and disabling exact unwanted engines with `disabled: true`.
+25. **P2 — Disabling those engines is not a guarantee against captcha/backoff.** It narrows known noisy defaults, but provider stability still depends on SearXNG defaults, upstream search behavior and local rate conditions.
+26. **P2 — One-shot query bounds do not bound autonomous discovery.** `--max-queries` bounds an explicit operator run; persistent Web discovery remains unauthorized and separately unproven.
+27. **P2 — Successful access/freshness probes do not validate the lifecycle service.** The source `19`/`20` gate intentionally did not call `SourceValidationService`; source and validation-table hashes remained unchanged. Treat it as access/freshness evidence only.
+28. **P2 — Historical inactive collector row `1` remains persisted.** The duplicate-active anomaly is resolved and collector `2` is the sole active row. Collector `1` remains inactive for historical/FK continuity; its dependent operation-state row and historical references were intentionally preserved. This is not a blocker by itself, and its exact historical Telegram-user origin remains unproven.
+29. **P2 — Candidate supply is the immediate blocker.** The observed current-strong unnotified pool contained only source `18`, which failed freshness. Keep the strong threshold; the next later live gate is bounded profile Web replenishment followed by a read-only pool check. Exact bounds/run key and authorization remain pending.
 
 ## PR27 bounded Web evidence boundary
 
@@ -157,6 +171,26 @@ Read-only diagnosis proved terminal `sent` rows for sources `19` and `20`, addre
 Exact creating-command provenance is not persisted. The compatible notification timestamps, nearby collector-`2` governor events and durable scan state are explicitly `TEMPORAL/STRUCTURAL_INFERENCE`, not proof of an exact CLI command, process or direct event-row linkage.
 
 This narrow delivery proof does not establish Owner review, lifecycle approval, membership, live-update readiness, useful personalized opportunity delivery or recurring notification automation. Both sources remain lifecycle `candidate`, and no join or lifecycle decision occurred.
+
+## PR32 high-relevance canary boundary
+
+The PR32 one-shot canary proved live Owner-profile resolution, deterministic
+current-intent binding, exact strong-candidate selection, governed
+entity/history access, freshness suppression, and cursor advancement to source
+`18`. It ended `NO_SEND_STALE_OR_EMPTY` with zero reservation, notification-row
+delta, send, and lifecycle-event delta.
+
+`STALE_OR_EMPTY=1` does not reveal whether no usable latest-message timestamp
+existed or the latest activity was older than 10 days. It must not be rewritten
+as an exact timestamp or entity-resolution failure. PR32 did not live-prove the
+reservation path, `mark_sent`, bot send, Owner-card delivery, or complete
+high-relevance notification success. Its authorization is consumed and retry is
+forbidden.
+
+Because no stale marker was written and the cursor wraps, source `18` can be
+selected again if the pool remains unchanged. Recurring 3-hour/max-5 operation
+requires a reviewed bounded stale/unresolvable re-probe cooldown or backoff
+policy and remains unauthorized.
 
 ## What the historical membership investigation established
 

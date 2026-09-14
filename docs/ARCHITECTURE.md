@@ -1,7 +1,7 @@
 # LeadRadar — Current Architecture
 
 **Status:** CANONICAL  
-**Last verified:** 2026-09-12
+**Last verified:** 2026-09-14
 **Implementation baseline:** `b3bb1f6266fe3f7dd17cd81329dc6689ceadcfe2`
 
 ## Purpose
@@ -222,6 +222,12 @@ than a mutable handle. `sent`, `failed`, and ambiguous attempts are terminal for
 automatic notification: future passes do not retry them. Stale or empty probes
 do not write a row, allowing a candidate to become fresh later and then notify
 once.
+
+That retryability combines with normal cursor wrap: when the eligible
+current-strong pool contains only a stale/empty source, a later pass can wrap
+and probe the same source again. This is acceptable for occasional authorized
+one-shot checks, but recurring notification scheduling requires a separately
+designed and reviewed stale/unresolvable re-probe cooldown or backoff policy.
 
 Reservation outcomes are reported distinctly: true duplicate attempts increment
 `ALREADY_NOTIFIED`, while source disappearance, no-longer-candidate races, and

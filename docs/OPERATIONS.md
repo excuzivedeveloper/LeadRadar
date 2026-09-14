@@ -1,9 +1,9 @@
 # LeadRadar — Production Operations
 
 **Status:** CANONICAL  
-**Last verified:** 2026-09-12
+**Last verified:** 2026-09-14
 **Implementation baseline:** `b3bb1f6266fe3f7dd17cd81329dc6689ceadcfe2`
-**Latest verified production evidence head:** `b660bdd633137f13dae5a8524f14d36c0f5ecd05`
+**Latest verified production evidence head:** `a232cf564a57f8761af7394ea4e5607fd8b8ac6d`
 
 This document is the operational source of truth for the current LeadRadar production environment. Fresh exact-head server evidence outranks this document; if later evidence disagrees, stop and reconcile docs before designing a new live task.
 
@@ -18,8 +18,8 @@ python=./.venv/bin/python
 python_version=3.14.7
 bare_python=ABSENT
 alembic_current=20260908_0042
-latest_verified_production_evidence_head=b660bdd633137f13dae5a8524f14d36c0f5ecd05
-implementation_baseline=81a675b72ed4c1229cedad28e5d2e1f56bac1f66
+latest_verified_production_evidence_head=a232cf564a57f8761af7394ea4e5607fd8b8ac6d
+implementation_baseline=b3bb1f6266fe3f7dd17cd81329dc6689ceadcfe2
 ```
 
 Do not modify global Python for LeadRadar work.
@@ -252,7 +252,7 @@ DISCOVERY_RUN_COUNT=7
 SOURCE_COUNT=22
 CANDIDATE_COUNT=7
 OWNER_NOTIFICATION_COUNT=3
-TELEGRAM_OPERATION_EVENT_COUNT=207
+TELEGRAM_OPERATION_EVENT_COUNT=209
 AI_CALL_TELEMETRY_COUNT=51
 SOURCE_LIFECYCLE_EVENT_COUNT=24
 ```
@@ -595,7 +595,89 @@ CURRENT_OWNER_SCAN_UPDATED_AT=2026-09-08T14:27:48.912712+00:00
 
 Do not delete or reset the rows to force a repeat proof. A terminal `sent` row proves durable candidate-card delivery persistence, not lifecycle approval, membership, live-update readiness, Owner review, useful personalized opportunity delivery or recurring automation.
 
-## 15. Shared-host no-touch boundary
+## 15. PR32 high-relevance notification canary
+
+PR32 reviewed head `e197a532ace1a79ac5c335b5ab220ee228eda637`
+passed review and was merged as
+`a232cf564a57f8761af7394ea4e5607fd8b8ac6d`. Production sync and corrected
+post-verification passed. The checkpoint history remains:
+
+```text
+CHECKPOINT_3=FAIL_INCOMPLETE
+CHECKPOINT_3_BLOCKER_CLASS=VERIFICATION_GATE_DEFECT
+CHECKPOINT_3A=PASS
+EFFECTIVE_SEND_CATCH_UP=false
+RUNTIME_ENV_MODIFIED=NO
+```
+
+Read-only PRELIVE found one exact current-intent strong unnotified candidate.
+Cursor wrap from `21` selected source `18` (`@ru_pythonjobs`), with safe
+Telegram address and zero pre-existing target notification rows. The single
+authorized application-CLI invocation used notification limit `1` and exited
+`0`.
+
+```bash
+./.venv/bin/python -m freelancer_bot \
+  --owner-candidate-notifications \
+  --owner-candidate-notification-limit 1
+```
+
+```text
+PROFILE_GATE_READY=YES
+PROFILE_ID=e3f2a0d1-3a46-4506-8a79-f4ed47400279
+PROFILE_REVISION=8
+DISCOVERY_INTENT_ID=b3f53d57-afd9-55e1-b822-77d687fe466d
+RELEVANCE_GATE=strong
+CANDIDATES_CONSIDERED=1
+ACTIVITY_PROBES=1
+FRESH_WITHIN_10_DAYS=0
+STALE_OR_EMPTY=1
+UNRESOLVABLE=0
+RESERVED=0
+SENT=0
+FAILED=0
+POST_SCAN_CURSOR=18
+DELTA_OWNER_NOTIFICATION_COUNT=0
+POST_TARGET_NOTIFICATION_ROW_COUNT=0
+DELTA_COLLECTOR_2_OPERATION_EVENT_COUNT=2
+NEW_COLLECTOR_2_OPERATION_CATEGORIES=entity_access,history
+NEW_COLLECTOR_2_OPERATION_OUTCOMES=completed,completed
+FLOODWAIT_OCCURRED=NO
+DELTA_SOURCE_LIFECYCLE_EVENT_COUNT=0
+POST_SOURCE_18_LIFECYCLE=candidate
+FINAL_PERSISTENT_RUNTIME=STOPPED
+CANARY_RESULT=NO_SEND_STALE_OR_EMPTY
+HIGH_RELEVANCE_GATE_LIVE_VALIDATED=NO
+STRONG_SELECTOR_LIVE_REACH_PROVEN=YES
+OWNER_CARD_SEND_UNDER_PR32_PROVEN=NO
+AUTHORIZATION_CONSUMED=YES
+RETRY_ALLOWED=NO
+```
+
+Do not infer an exact latest-message timestamp. `STALE_OR_EMPTY=1` proves only
+that the probe produced no usable timestamp or activity older than the 10-day
+window. Completed entity/history operations and `UNRESOLVABLE=0` prove this was
+not entity-resolution failure. The canary did not exercise reservation,
+`mark_sent`, bot send, or successful Owner-card delivery.
+
+Evidence provenance is separate from the live result block:
+
+```text
+FILTER_BEFORE_TELEGRAM_CONTRACT_PROVEN_BY=CODE_TESTS_PRELIVE
+LIVE_CANARY_NEGATIVE_CONTROL_PERFORMED=NO
+```
+
+Implementation code, tests, and PRELIVE exact-selector inspection prove the
+before-Telegram filtering contract. The live invocation proved only that one
+selected strong candidate reached Telegram probing; it did not perform a live
+weak, adequate, or missing-current-relevance negative control.
+
+Stale/empty outcomes intentionally create no notification row. Combined with
+cursor wrap, this permits the same source to be reprobed by a later pass. Do not
+authorize recurring candidate notifications until a bounded stale/unresolvable
+re-probe cooldown or backoff policy is designed and reviewed.
+
+## 16. Shared-host no-touch boundary
 
 LeadRadar tasks must not modify unrelated host workloads:
 
@@ -613,7 +695,7 @@ unrelated databases
 
 Vaultwarden owns `127.0.0.1:8080`; LeadRadar SearXNG remains on `127.0.0.1:8888`.
 
-## 16. Production promotion contract
+## 17. Production promotion contract
 
 Before syncing a reviewed change to production:
 
@@ -632,7 +714,7 @@ Before syncing a reviewed change to production:
 
 Do not use local merge, rebase, destructive reset or a newer-than-authorized target.
 
-## 17. Current rollout and authorization state
+## 18. Current rollout and authorization state
 
 ```text
 PR24_MERGED=YES
@@ -651,6 +733,14 @@ PR29_PRODUCTION_DOCS_SYNC=PASS
 PR30_REVIEWED=PASS
 PR30_MERGED=YES
 PR30_PRODUCTION_DOCS_SYNC=PASS
+PR32_REVIEW=PASS
+PR32_MERGED=YES
+PR32_PRODUCTION_SYNC=PASS
+PR32_PRODUCTION_POSTVERIFY=PASS
+HIGH_RELEVANCE_GATE_SYNCED_TO_PRODUCTION=YES
+PR32_NOTIFICATION_CANARY_RESULT=NO_SEND_STALE_OR_EMPTY
+PR32_NOTIFICATION_CANARY_AUTHORIZATION_CONSUMED=YES
+PR32_NOTIFICATION_CANARY_RETRY_ALLOWED=NO
 PROFILE_DISCOVERY_INTENT_VERSION=profile-discovery-intent.v2
 PERSISTED_V2_COUNT=1
 CURRENT_V2_CONFLICT_PRESENT=NO
@@ -689,17 +779,21 @@ The successful bounded gates do not authorize a repeat or a new operation.
 Required next ordering:
 
 ```text
-1. docs reconciliation with source 19/20 notification-row evidence
-2. independent review
-3. Owner merge authorization
-4. merge reviewed docs head
-5. docs-only production sync / exact-head reconciliation as required
-6. then choose the next separate Owner-authorized gate
+1. reconcile docs with PR32 production/canary evidence
+2. independent review and Owner merge authorization
+3. merge and separately sync the exact reviewed docs head
+4. design/authorize bounded profile Web replenishment from fresh preflight
+5. read-only current-strong unnotified safe-candidate pool check
+6. only for a new exact candidate, request a separate notification canary
+7. design/review stale re-probe cooldown before recurring notification work
 ```
 
-The next gate has not been selected. Source lifecycle decisions, membership provisioning and persistent runtime remain separate future choices. The obsolete notification-proof checkpoint must not be retried.
+Keep the strong threshold. Replenishment permits no Telegram, Owner send,
+lifecycle mutation, Source Audit, AI, or persistent runtime. No live command or
+exact run key is authorized by this docs reconciliation. The PR32 notification
+canary must not be retried.
 
-## 18. Documentation precedence for operations
+## 19. Documentation precedence for operations
 
 For production commands, use this order:
 

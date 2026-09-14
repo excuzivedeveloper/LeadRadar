@@ -1,13 +1,13 @@
 # LeadRadar — Current State
 
 **Status:** CANONICAL  
-**Snapshot date:** 2026-09-12
+**Snapshot date:** 2026-09-14
 **Implementation baseline:** `b3bb1f6266fe3f7dd17cd81329dc6689ceadcfe2`
-**Latest verified production evidence head:** `b660bdd633137f13dae5a8524f14d36c0f5ecd05`
+**Latest verified production evidence head:** `a232cf564a57f8761af7394ea4e5607fd8b8ac6d`
 
 ## Executive status
 
-LeadRadar production is stable on the PR27 implementation baseline with later docs-only commits synchronized. PR23 restored SearXNG by preserving inherited engine/network definitions and disabling the exact unwanted engines. PR24 changed profile Web query rendering for `buyer_habitat` and `adjacent` without changing the bounded planner contract. PR27 versioned the immutable Profile Discovery Intent contract to `profile-discovery-intent.v2`.
+LeadRadar production is stable at merge commit `a232cf564a57f8761af7394ea4e5607fd8b8ac6d`. PR32 reviewed head `e197a532ace1a79ac5c335b5ab220ee228eda637` passed independent review, was merged and synced, and its post-sync verification passed after the initial incomplete checkpoint was corrected by checkpoint `3A`. The strong-only Owner candidate-notification selector is now deployed; persistent runtime remains stopped.
 
 PR24 production sync, post-sync verification and full bounded offline Stage A all passed. PR27 production sync, post-sync verification and the technical read-only PRELIVE for the repaired profile-discovery path also passed.
 
@@ -23,26 +23,20 @@ A newly authorized Owner-notification proof then stopped safely in PRELIVE befor
 
 Persistent LeadRadar runtime remains unauthorized.
 
-Repository implementation baseline `b3bb1f6266fe3f7dd17cd81329dc6689ceadcfe2`
-adds the review-pending high-relevance gate for future bounded Owner candidate
-notifications. It resolves the configured Owner to exactly one active,
-primary, confirmed profile, derives the current deterministic intent, and
-selects only exact current-intent `strong` relevance rows before `LIMIT` and
-before Telegram activity. Missing/ambiguous profile state and non-current or
-non-strong relevance fail closed. Existing freshness, URL, cursor, reservation,
-at-most-once, identity-race, and open-only card behavior is unchanged.
-
-This repository change is not yet reviewed, merged, synced, activated, or live
-validated. It does not alter the latest verified production evidence head or
-the historical notification facts below. In particular, source `19`/`20`
-terminal sent rows predate this relevance gate; the new selector was not
-retroactively applied to those sends.
+One separately authorized PR32 notification canary then selected exact current-
+strong candidate source `18` and completed governed entity/history requests.
+The freshness check returned `STALE_OR_EMPTY=1`, so no row was reserved and no
+Owner card was sent. This proves live selector reach and freshness suppression,
+not reservation, bot send, or end-to-end high-relevance notification success.
+The authorization is consumed and retry is forbidden. Historical source
+`19`/`20` sent rows predate this selector and remain unchanged.
 
 ## Production contract
 
 ```text
-LATEST_VERIFIED_PRODUCTION_EVIDENCE_HEAD=b660bdd633137f13dae5a8524f14d36c0f5ecd05
-IMPLEMENTATION_BASELINE=81a675b72ed4c1229cedad28e5d2e1f56bac1f66
+LATEST_VERIFIED_PRODUCTION_EVIDENCE_HEAD=a232cf564a57f8761af7394ea4e5607fd8b8ac6d
+PRODUCTION_HEAD=a232cf564a57f8761af7394ea4e5607fd8b8ac6d
+IMPLEMENTATION_BASELINE=b3bb1f6266fe3f7dd17cd81329dc6689ceadcfe2
 BRANCH=main
 TRACKED_WORKTREE=CLEAN
 PYTHON_VERSION=3.14.7
@@ -149,7 +143,7 @@ DISCOVERY_RUN_COUNT=7
 SOURCE_COUNT=22
 CANDIDATE_COUNT=7
 OWNER_NOTIFICATION_COUNT=3
-TELEGRAM_OPERATION_EVENT_COUNT=207
+TELEGRAM_OPERATION_EVENT_COUNT=209
 AI_CALL_TELEMETRY_COUNT=51
 SOURCE_LIFECYCLE_EVENT_COUNT=24
 ```
@@ -506,6 +500,116 @@ Both row payloads are consistent with terminal `sent` status, contain a Telegram
 
 Notification delivery did not approve either source, prove membership/live-update readiness, or prove that the Owner reviewed the cards. It also does not prove useful end-to-end personalized opportunity delivery or recurring notification automation.
 
+## PR32 production sync and bounded notification canary
+
+```text
+PR_NUMBER=32
+REVIEWED_HEAD=e197a532ace1a79ac5c335b5ab220ee228eda637
+MERGE_COMMIT=a232cf564a57f8761af7394ea4e5607fd8b8ac6d
+REVIEW=PASS
+PRODUCTION_SYNC=PASS
+PRODUCTION_POSTVERIFY=PASS
+HIGH_RELEVANCE_GATE_SYNCED_TO_PRODUCTION=YES
+CHECKPOINT_3=FAIL_INCOMPLETE
+CHECKPOINT_3_BLOCKER_CLASS=VERIFICATION_GATE_DEFECT
+CHECKPOINT_3A=PASS
+EFFECTIVE_SEND_CATCH_UP=false
+```
+
+The runtime `.env` was not modified. PRELIVE resolved profile
+`e3f2a0d1-3a46-4506-8a79-f4ed47400279` revision `8` and deterministic intent
+`b3f53d57-afd9-55e1-b822-77d687fe466d`. With scan cursor `21`, the exact
+current-strong unnotified pool contained one source and required read-only
+wrap; the next page selected source `18` (`@ru_pythonjobs`), a safe Telegram
+candidate with no prior Owner notification row. Collector `2` was ready.
+
+```text
+PRE_SCAN_CURSOR=21
+CURRENT_STRONG_UNNOTIFIED_POOL_COUNT=1
+READ_ONLY_CURSOR_WRAP_REQUIRED=YES
+READ_ONLY_NEXT_PAGE_COUNT=1
+NEXT_CANDIDATE_SOURCE_ID=18
+NEXT_CANDIDATE_HANDLE=@ru_pythonjobs
+NEXT_CANDIDATE_LIFECYCLE=candidate
+NEXT_CANDIDATE_PLATFORM=telegram
+NEXT_CANDIDATE_SAFE_TELEGRAM_ADDRESS=YES
+NEXT_CANDIDATE_PRE_OWNER_NOTIFICATION_COUNT=0
+ACTIVE_TELEGRAM_COLLECTOR_IDS=2
+COLLECTOR_OPERATION_STATUS=ready
+PRE_OWNER_NOTIFICATION_COUNT=3
+PRE_COLLECTOR_2_OPERATION_EVENT_COUNT=207
+PRE_SOURCE_LIFECYCLE_EVENT_COUNT=24
+PRELIVE_GATE=PASS
+LIVE_AUTHORIZATION_CONSUMED=NO
+```
+
+One authorized invocation completed with exit code `0`:
+
+```text
+PROFILE_GATE_READY=YES
+PROFILE_ID=e3f2a0d1-3a46-4506-8a79-f4ed47400279
+PROFILE_REVISION=8
+DISCOVERY_INTENT_ID=b3f53d57-afd9-55e1-b822-77d687fe466d
+RELEVANCE_GATE=strong
+CANDIDATES_CONSIDERED=1
+ACTIVITY_PROBES=1
+FRESH_WITHIN_10_DAYS=0
+STALE_OR_EMPTY=1
+UNRESOLVABLE=0
+ALREADY_NOTIFIED=0
+RESERVED=0
+SENT=0
+FAILED=0
+NO_LONGER_CANDIDATE=0
+IDENTITY_CHANGED=0
+SOURCE_NOT_FOUND=0
+POST_SCAN_CURSOR=18
+DELTA_OWNER_NOTIFICATION_COUNT=0
+POST_TARGET_NOTIFICATION_ROW_COUNT=0
+DELTA_COLLECTOR_2_OPERATION_EVENT_COUNT=2
+NEW_COLLECTOR_2_OPERATION_CATEGORIES=entity_access,history
+NEW_COLLECTOR_2_OPERATION_OUTCOMES=completed,completed
+FLOODWAIT_OCCURRED=NO
+DELTA_SOURCE_LIFECYCLE_EVENT_COUNT=0
+POST_SOURCE_18_LIFECYCLE=candidate
+POST_SOURCE_18_HANDLE=@ru_pythonjobs
+FINAL_PERSISTENT_RUNTIME=STOPPED
+FINAL_CONTINUITY_GATE=PASS
+CANARY_RESULT=NO_SEND_STALE_OR_EMPTY
+HIGH_RELEVANCE_GATE_LIVE_VALIDATED=NO
+STRONG_SELECTOR_LIVE_REACH_PROVEN=YES
+OWNER_CARD_SEND_UNDER_PR32_PROVEN=NO
+READY_FOR_RECURRING_NOTIFICATION_DECISION=NO
+AUTHORIZATION_CONSUMED=YES
+RETRY_ALLOWED=NO
+LIVE_INVOCATION_COUNT=1
+LIVE_COMMAND_EXIT_CODE=0
+```
+
+The service did not expose an exact latest-message timestamp. The supported
+interpretation is only that source `18` failed the 10-day freshness requirement
+because the probe yielded either no usable timestamp or activity older than the
+window. Completed entity/history operations plus `UNRESOLVABLE=0` exclude an
+entity-resolution failure. Reservation, `mark_sent`, bot delivery and full
+end-to-end notification remain unproven under PR32.
+
+Evidence provenance is separate from the live result block:
+
+```text
+FILTER_BEFORE_TELEGRAM_CONTRACT_PROVEN_BY=CODE_TESTS_PRELIVE
+LIVE_CANARY_NEGATIVE_CONTROL_PERFORMED=NO
+```
+
+PR32 code, tests, and PRELIVE exact-selector inspection prove that non-strong or
+missing-current-relevance candidates are excluded before Telegram. The live
+canary selected one strong candidate and did not run a weak, adequate, or
+missing-current-relevance negative control.
+
+Because stale/empty selection writes no notification marker and the cursor
+wraps, source `18` can be selected and probed again by a later pass if the pool
+does not change. Recurring notification work therefore requires a reviewed
+stale/unresolvable re-probe cooldown or backoff design first.
+
 ## Current authorization state
 
 Completed earlier one-attempt Web/Telegram gates consumed their authorizations. The later notification-proof PRELIVE made no Telegram attempt, so that authorization is unconsumed but retired as obsolete for this already-proven objective. Neither state authorizes another live action.
@@ -519,6 +623,8 @@ COLLECTOR_1_CLEANUP_COMPLETED=YES
 NOTIFICATION_PROOF_AUTHORIZATION_CONSUMED=NO
 NOTIFICATION_PROOF_AUTHORIZATION_RETIRED_DUE_PREEXISTING_SENT_ROWS=YES
 LIVE_CHECKPOINT_2_RETIRED=YES
+PR32_NOTIFICATION_CANARY_AUTHORIZATION_CONSUMED=YES
+PR32_NOTIFICATION_CANARY_RETRY_ALLOWED=NO
 NEW_LIVE_ACTION_AUTHORIZED=NO
 NEW_WEB_CANARY_AUTHORIZED=NO
 NEW_TELEGRAM_SOURCE_PROBE_AUTHORIZED=NO
@@ -536,17 +642,25 @@ PERSISTENT_RUNTIME_AUTHORIZED=NO
 
 ## Next gate
 
-The next required sequence is documentation-only governance, not another live action:
-
 ```text
-1. canonical docs reconciliation with source 19/20 notification-row evidence
-2. independent review of the exact docs head
-3. Owner merge authorization
-4. merge the exact reviewed docs head
-5. docs-only production sync / exact-head reconciliation as required
-6. only then choose a new, separate Owner-authorized gate
+NEXT_PRODUCT_GATE_AFTER_REVIEW_MERGE_SYNC=BOUNDED_PROFILE_WEB_REPLENISHMENT
 ```
 
-The next live/mutating gate has **not** been selected. Possible later gates remain separate decisions: manual/reviewed lifecycle decision for source `19`/`20`; membership provisioning if/after approval; persistent runtime much later. The obsolete notification-proof checkpoint must not be retried.
+```text
+1. reconcile canonical docs with PR32 production/canary evidence
+2. independent review of the exact docs head
+3. Owner merge authorization
+4. merge and separately sync the exact reviewed docs head
+5. design and separately authorize BOUNDED_PROFILE_WEB_REPLENISHMENT
+6. run a read-only current-strong unnotified safe-candidate pool check
+7. only if a new exact candidate exists, request a separate notification canary
+8. before any recurring scheduler, design/review stale re-probe cooldown/backoff
+```
+
+The replenishment gate must keep `relevance_class=strong` and use the same
+active confirmed profile/current deterministic intent. It permits no Telegram,
+Owner send, lifecycle mutation, Source Audit, AI, or persistent runtime. Exact
+Web bounds and a fresh run key must come from a later exact-head preflight; this
+docs reconciliation does not contain or authorize a live command.
 
 Fresh exact-head server evidence remains higher authority than code/CLI, which remains higher authority than canonical docs, which remains higher authority than historical reports.

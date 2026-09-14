@@ -1,9 +1,9 @@
 # LeadRadar — Current Deployment
 
 **Status:** CANONICAL  
-**Snapshot date:** 2026-09-12
-**Deployment code baseline:** `81a675b72ed4c1229cedad28e5d2e1f56bac1f66`
-**Latest verified production evidence head:** `b660bdd633137f13dae5a8524f14d36c0f5ecd05`
+**Snapshot date:** 2026-09-14
+**Deployment code baseline:** `b3bb1f6266fe3f7dd17cd81329dc6689ceadcfe2`
+**Latest verified production evidence head:** `a232cf564a57f8761af7394ea4e5607fd8b8ac6d`
 
 This document records the current shared-server LeadRadar layout and deployment boundaries. Exact operational commands live in [`OPERATIONS.md`](OPERATIONS.md). A docs-only repository head can be newer than the implementation baseline without changing deployed code behavior.
 
@@ -181,7 +181,7 @@ Latest bounded inventory evidence includes:
 SOURCE_COUNT=22
 CANDIDATE_COUNT=7
 OWNER_NOTIFICATION_COUNT=3
-TELEGRAM_OPERATION_EVENT_COUNT=207
+TELEGRAM_OPERATION_EVENT_COUNT=209
 ```
 
 Counts are snapshots, not invariants.
@@ -255,7 +255,55 @@ NOVELTY_IMPROVED=NO
 
 The canary considered 19 search results and 18 Telegram-like matches, but yielded the same four unique known candidates as the PR23 comparison baseline and no new candidates. Buyer-habitat/adjacent contributed real live support to 3/4 candidates; no non-direct-only candidate was proven.
 
-The one-attempt Web authorization is consumed and does not permit a retry. The later identity-only and source-probe Telegram authorizations are also consumed. No new live or mutating production action is currently authorized.
+The one-attempt Web authorization is consumed and does not permit a retry. The
+later identity-only and source-probe Telegram authorizations were also consumed.
+At that evidence checkpoint, no new live or mutating action was authorized.
+
+## PR32 deployment and notification-canary state
+
+```text
+PR32_REVIEWED_HEAD=e197a532ace1a79ac5c335b5ab220ee228eda637
+PR32_MERGE_COMMIT=a232cf564a57f8761af7394ea4e5607fd8b8ac6d
+PR32_REVIEW=PASS
+PR32_PRODUCTION_SYNC=PASS
+PR32_PRODUCTION_POSTVERIFY=PASS
+HIGH_RELEVANCE_GATE_SYNCED_TO_PRODUCTION=YES
+CHECKPOINT_3=FAIL_INCOMPLETE
+BLOCKER_CLASS=VERIFICATION_GATE_DEFECT
+CHECKPOINT_3A=PASS
+EFFECTIVE_SEND_CATCH_UP=false
+RUNTIME_ENV_MODIFIED=NO
+```
+
+One bounded authorized notification invocation selected source `18` through
+the exact current profile/intent `strong` gate and completed governed
+entity/history access. It terminated without delivery because the source was
+stale or had no usable latest-message timestamp:
+
+```text
+CANARY_RESULT=NO_SEND_STALE_OR_EMPTY
+CANDIDATES_CONSIDERED=1
+ACTIVITY_PROBES=1
+STALE_OR_EMPTY=1
+UNRESOLVABLE=0
+RESERVED=0
+SENT=0
+DELTA_OWNER_NOTIFICATION_COUNT=0
+POST_TARGET_NOTIFICATION_ROW_COUNT=0
+POST_SCAN_CURSOR=18
+DELTA_COLLECTOR_2_OPERATION_EVENT_COUNT=2
+DELTA_SOURCE_LIFECYCLE_EVENT_COUNT=0
+POST_SOURCE_18_LIFECYCLE=candidate
+AUTHORIZATION_CONSUMED=YES
+RETRY_ALLOWED=NO
+HIGH_RELEVANCE_GATE_LIVE_VALIDATED=NO
+READY_FOR_RECURRING_NOTIFICATION_DECISION=NO
+FINAL_PERSISTENT_RUNTIME=STOPPED
+```
+
+No exact latest-message timestamp is proven. No Owner card, reservation,
+lifecycle change, join/leave action, runtime-env edit, or persistent runtime
+occurred. Historical source `19`/`20` sent rows predate the strong-only selector.
 
 ## Promotion rules
 
@@ -277,15 +325,22 @@ Do not sync to a newer-than-authorized `origin/main` and do not use local merge/
 Current required order is:
 
 ```text
-1. docs reconciliation with source 19/20 notification-row evidence
-2. independent review
-3. Owner merge authorization
-4. merge reviewed docs head
-5. docs-only production sync / exact-head reconciliation as required
-6. choose the next separate Owner-authorized gate
+1. reconcile docs with PR32 production/canary evidence
+2. independent review and Owner merge authorization
+3. merge and separately sync the exact reviewed docs head
+4. design/authorize bounded profile Web replenishment from fresh preflight
+5. read-only current-strong unnotified safe-candidate pool check
+6. only for a new exact candidate, request a separate notification canary
+7. design/review stale re-probe cooldown before recurring notification work
 ```
 
-Source `19`/`20` lifecycle decisions, membership provisioning, recurring candidate-notification automation and persistent runtime are not authorized by this reconciliation. The pre-existing notification rows require no repeat send, and the retired live checkpoint must not be executed.
+The current strong pool had one candidate and that candidate failed freshness.
+Keep `relevance_class=strong`; do not lower the threshold merely to produce a
+card. Replenishment permits no Telegram, Owner send, lifecycle mutation, Source
+Audit, AI, or persistent runtime, and requires later exact-head bounds/run-key
+design. Recurring candidate notification additionally requires a reviewed
+stale/unresolvable re-probe cooldown/backoff policy. Neither recurring
+automation nor persistent runtime is authorized.
 
 ## Shared-server boundary
 
