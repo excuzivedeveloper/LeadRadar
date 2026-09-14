@@ -604,7 +604,7 @@ post-verification passed. The checkpoint history remains:
 
 ```text
 CHECKPOINT_3=FAIL_INCOMPLETE
-BLOCKER_CLASS=VERIFICATION_GATE_DEFECT
+CHECKPOINT_3_BLOCKER_CLASS=VERIFICATION_GATE_DEFECT
 CHECKPOINT_3A=PASS
 EFFECTIVE_SEND_CATCH_UP=false
 RUNTIME_ENV_MODIFIED=NO
@@ -649,7 +649,6 @@ FINAL_PERSISTENT_RUNTIME=STOPPED
 CANARY_RESULT=NO_SEND_STALE_OR_EMPTY
 HIGH_RELEVANCE_GATE_LIVE_VALIDATED=NO
 STRONG_SELECTOR_LIVE_REACH_PROVEN=YES
-FILTER_BEFORE_TELEGRAM_PROVEN=YES
 OWNER_CARD_SEND_UNDER_PR32_PROVEN=NO
 AUTHORIZATION_CONSUMED=YES
 RETRY_ALLOWED=NO
@@ -660,6 +659,18 @@ that the probe produced no usable timestamp or activity older than the 10-day
 window. Completed entity/history operations and `UNRESOLVABLE=0` prove this was
 not entity-resolution failure. The canary did not exercise reservation,
 `mark_sent`, bot send, or successful Owner-card delivery.
+
+Evidence provenance is separate from the live result block:
+
+```text
+FILTER_BEFORE_TELEGRAM_CONTRACT_PROVEN_BY=CODE_TESTS_PRELIVE
+LIVE_CANARY_NEGATIVE_CONTROL_PERFORMED=NO
+```
+
+Implementation code, tests, and PRELIVE exact-selector inspection prove the
+before-Telegram filtering contract. The live invocation proved only that one
+selected strong candidate reached Telegram probing; it did not perform a live
+weak, adequate, or missing-current-relevance negative control.
 
 Stale/empty outcomes intentionally create no notification row. Combined with
 cursor wrap, this permits the same source to be reprobed by a later pass. Do not

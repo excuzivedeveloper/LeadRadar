@@ -357,7 +357,7 @@ gate defect; corrected checkpoint `3A` passed:
 
 ```text
 CHECKPOINT_3=FAIL_INCOMPLETE
-BLOCKER_CLASS=VERIFICATION_GATE_DEFECT
+CHECKPOINT_3_BLOCKER_CLASS=VERIFICATION_GATE_DEFECT
 CHECKPOINT_3A=PASS
 EFFECTIVE_SEND_CATCH_UP=false
 ```
@@ -388,7 +388,6 @@ DELTA_SOURCE_LIFECYCLE_EVENT_COUNT=0
 CANARY_RESULT=NO_SEND_STALE_OR_EMPTY
 HIGH_RELEVANCE_GATE_LIVE_VALIDATED=NO
 STRONG_SELECTOR_LIVE_REACH_PROVEN=YES
-FILTER_BEFORE_TELEGRAM_PROVEN=YES
 OWNER_CARD_SEND_UNDER_PR32_PROVEN=NO
 AUTHORIZATION_CONSUMED=YES
 RETRY_ALLOWED=NO
@@ -400,6 +399,18 @@ either no usable timestamp or activity older than 10 days. This was not an
 entity-resolution failure. No reservation, Owner-card send, lifecycle mutation,
 Source Audit, AI, join/leave, or persistent runtime occurred.
 
+Evidence provenance is separate from the live result above:
+
+```text
+FILTER_BEFORE_TELEGRAM_CONTRACT_PROVEN_BY=CODE_TESTS_PRELIVE
+LIVE_CANARY_NEGATIVE_CONTROL_PERFORMED=NO
+```
+
+Code, tests, and exact-selector PRELIVE inspection prove that weak, adequate,
+and missing-current-relevance candidates are filtered before Telegram. The live
+canary proved only that one selected strong candidate reached Telegram probing;
+it did not execute a live non-strong negative-control case.
+
 ## Current gate
 
 ```text
@@ -410,6 +421,7 @@ DISCOVERY_INTENT_GATE=CURRENT_DETERMINISTIC_INTENT
 OWNER_CANDIDATE_NOTIFICATION_RELEVANCE_GATE=strong_only
 RELEVANCE_FILTER_BEFORE_LIMIT=YES
 NEXT_GATE=INDEPENDENT_REVIEW_OF_EXACT_DOCS_HEAD
+NEXT_PRODUCT_GATE_AFTER_REVIEW_MERGE_SYNC=BOUNDED_PROFILE_WEB_REPLENISHMENT
 NEW_LIVE_ACTION_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 CANDIDATE_NOTIFICATION_RECURRING_AUTOMATION_AUTHORIZED=NO

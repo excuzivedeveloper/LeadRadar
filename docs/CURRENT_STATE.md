@@ -511,7 +511,7 @@ PRODUCTION_SYNC=PASS
 PRODUCTION_POSTVERIFY=PASS
 HIGH_RELEVANCE_GATE_SYNCED_TO_PRODUCTION=YES
 CHECKPOINT_3=FAIL_INCOMPLETE
-BLOCKER_CLASS=VERIFICATION_GATE_DEFECT
+CHECKPOINT_3_BLOCKER_CLASS=VERIFICATION_GATE_DEFECT
 CHECKPOINT_3A=PASS
 EFFECTIVE_SEND_CATCH_UP=false
 ```
@@ -578,7 +578,6 @@ FINAL_CONTINUITY_GATE=PASS
 CANARY_RESULT=NO_SEND_STALE_OR_EMPTY
 HIGH_RELEVANCE_GATE_LIVE_VALIDATED=NO
 STRONG_SELECTOR_LIVE_REACH_PROVEN=YES
-FILTER_BEFORE_TELEGRAM_PROVEN=YES
 OWNER_CARD_SEND_UNDER_PR32_PROVEN=NO
 READY_FOR_RECURRING_NOTIFICATION_DECISION=NO
 AUTHORIZATION_CONSUMED=YES
@@ -593,6 +592,18 @@ because the probe yielded either no usable timestamp or activity older than the
 window. Completed entity/history operations plus `UNRESOLVABLE=0` exclude an
 entity-resolution failure. Reservation, `mark_sent`, bot delivery and full
 end-to-end notification remain unproven under PR32.
+
+Evidence provenance is separate from the live result block:
+
+```text
+FILTER_BEFORE_TELEGRAM_CONTRACT_PROVEN_BY=CODE_TESTS_PRELIVE
+LIVE_CANARY_NEGATIVE_CONTROL_PERFORMED=NO
+```
+
+PR32 code, tests, and PRELIVE exact-selector inspection prove that non-strong or
+missing-current-relevance candidates are excluded before Telegram. The live
+canary selected one strong candidate and did not run a weak, adequate, or
+missing-current-relevance negative control.
 
 Because stale/empty selection writes no notification marker and the cursor
 wraps, source `18` can be selected and probed again by a later pass if the pool
@@ -630,6 +641,10 @@ PERSISTENT_RUNTIME_AUTHORIZED=NO
 ```
 
 ## Next gate
+
+```text
+NEXT_PRODUCT_GATE_AFTER_REVIEW_MERGE_SYNC=BOUNDED_PROFILE_WEB_REPLENISHMENT
+```
 
 ```text
 1. reconcile canonical docs with PR32 production/canary evidence
