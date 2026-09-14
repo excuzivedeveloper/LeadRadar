@@ -2,10 +2,22 @@
 
 **Status:** CANONICAL  
 **Snapshot date:** 2026-09-14
-**Deployment code baseline:** `b3bb1f6266fe3f7dd17cd81329dc6689ceadcfe2`
-**Latest verified production evidence head:** `a232cf564a57f8761af7394ea4e5607fd8b8ac6d`
+**Deployment code baseline:** `437c9dcc4b35846b6ce828258272814e06a79d13`
+**Latest verified production evidence head:** `437c9dcc4b35846b6ce828258272814e06a79d13`
 
 This document records the current shared-server LeadRadar layout and deployment boundaries. Exact operational commands live in [`OPERATIONS.md`](OPERATIONS.md). A docs-only repository head can be newer than the implementation baseline without changing deployed code behavior.
+
+The cooldown/backoff PR adds Alembic revision `20260914_0043` and a separate
+`owner_source_candidate_probe_state` table. It has not been deployed: production
+remains at `20260908_0042`. The migration creates an empty table with no inferred
+historical backfill. No scheduler, timer, service, runtime env, lifecycle, or
+membership configuration changes in this PR.
+
+Current fresh evidence includes a passed PR33 docs sync, bounded Web
+replenishment yielding current-strong candidates `23`, `24`, and `26`, stale
+no-send outcomes for `23`/`24`, and one durable sent card for `26`. Source `26`
+remains a candidate and its membership is unproven. Production scan cursor is
+`26`; total Owner candidate notification rows are `4`.
 
 ## Server layout
 

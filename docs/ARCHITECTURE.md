@@ -2,7 +2,7 @@
 
 **Status:** CANONICAL  
 **Last verified:** 2026-09-14
-**Implementation baseline:** `b3bb1f6266fe3f7dd17cd81329dc6689ceadcfe2`
+**Implementation baseline:** cooldown/backoff PR based on `437c9dcc4b35846b6ce828258272814e06a79d13`
 
 ## Purpose
 
@@ -152,13 +152,10 @@ promotes provenance, weaker evidence cannot downgrade or overwrite stronger
 state, stronger contradictory evidence wins, and conflicting discovery evidence
 stays unresolved until seed, audit or operator evidence resolves it.
 
-Current deployment:
-
-```text
-15 total source rows
-13 APPROVED
-2 CANDIDATE
-```
+Exact source counts are runtime evidence rather than an architecture invariant.
+The latest bounded replenishment added source IDs `23`, `24`, and `26` to the
+current-strong candidate pool; source `26` remains lifecycle `candidate` and
+has no proven Telegram membership.
 
 ### Owner candidate notification aid
 
@@ -203,8 +200,24 @@ one-shot pass considers a bounded page of current-intent strong, unnotified
 candidate `source_id`s after the last scanned id, then wraps back to the
 beginning after exhaustion.
 This prevents a stale top page from starving deeper candidates while still
-allowing stale, empty, or temporarily unresolvable candidates to be reprobed on
-a later pass.
+allowing stale, empty, or temporarily unresolvable candidates to be reprobed
+after their bounded cooldown expires.
+
+The separate `owner_source_candidate_probe_state` table bounds those later
+re-probes without turning them into terminal notification attempts. Its primary
+key is `(recipient_chat_id, source_id)` and each row stores the exact
+SearchProfile, deterministic discovery intent, and profile revision binding.
+Only an exact current binding with `next_probe_at > selection_now` suppresses a
+source. This predicate is applied with strong relevance and terminal-notification
+exclusion before ordering and `LIMIT`, so cooling rows do not starve deeper
+candidates. Equality at the expiry boundary is eligible.
+
+Stale/empty outcomes use a fixed 24-hour cooldown. Consecutive unresolvable
+outcomes use deterministic 6, 12, 24, then capped 48-hour delays. Binding or
+outcome changes reset the streak to one. The PostgreSQL upsert increments the
+streak atomically under concurrent writers. A proven fresh outcome deletes its
+exact-binding probe state before reservation; `reserved`, `sent`, and `failed`
+notification rows remain the permanent recipient/source exclusion authority.
 
 For each notification attempt the probed Telegram identity and Owner URL come
 from one coherent address decision: a valid source handle wins and produces both
@@ -219,15 +232,11 @@ Each eligible source reserves one durable row in
 `RuntimeConfig.owner_telegram_user_id`. The row is unique by
 `(recipient_chat_id, source_id)`, so dedupe follows the source identity rather
 than a mutable handle. `sent`, `failed`, and ambiguous attempts are terminal for
-automatic notification: future passes do not retry them. Stale or empty probes
-do not write a row, allowing a candidate to become fresh later and then notify
-once.
-
-That retryability combines with normal cursor wrap: when the eligible
-current-strong pool contains only a stale/empty source, a later pass can wrap
-and probe the same source again. This is acceptable for occasional authorized
-one-shot checks, but recurring notification scheduling requires a separately
-designed and reviewed stale/unresolvable re-probe cooldown or backoff policy.
+automatic notification: future passes do not retry them. Stale/empty and
+unresolvable probes do not write a terminal notification row; they update the
+separate bounded probe-state row, allowing the candidate to become eligible
+later and then notify once. Recurring scheduling still requires separately
+authorized production validation and an explicit deployment decision.
 
 Reservation outcomes are reported distinctly: true duplicate attempts increment
 `ALREADY_NOTIFIED`, while source disappearance, no-longer-candidate races, and

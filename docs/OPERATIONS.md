@@ -2,10 +2,27 @@
 
 **Status:** CANONICAL  
 **Last verified:** 2026-09-14
-**Implementation baseline:** `b3bb1f6266fe3f7dd17cd81329dc6689ceadcfe2`
-**Latest verified production evidence head:** `a232cf564a57f8761af7394ea4e5607fd8b8ac6d`
+**Implementation baseline:** cooldown/backoff PR based on `437c9dcc4b35846b6ce828258272814e06a79d13`
+**Latest verified production evidence head:** `437c9dcc4b35846b6ce828258272814e06a79d13`
 
 This document is the operational source of truth for the current LeadRadar production environment. Fresh exact-head server evidence outranks this document; if later evidence disagrees, stop and reconcile docs before designing a new live task.
+
+## Pending cooldown deployment gate
+
+Production remains at repository head
+`437c9dcc4b35846b6ce828258272814e06a79d13` and Alembic revision
+`20260908_0042`. This PR adds `20260914_0043` and exact-binding candidate probe
+cooldowns, but no sync, migration, Telegram call, or runtime activation is
+authorized here.
+
+After review and merge, any production validation requires separate Owner
+authorization in this order: sync and migrate; read-only PRELIVE; one bounded
+stale/unresolvable probe; read-only proof that an immediate exact selector
+excludes it before Telegram. Recurring scheduling remains unauthorized.
+
+The one-shot summary exposes `COOLDOWN_SUPPRESSED`,
+`STALE_COOLDOWN_RECORDED`, and `UNRESOLVABLE_COOLDOWN_RECORDED`. It contains
+counts only and does not require logging candidate identities or message bodies.
 
 ## 1. Production layout
 
@@ -18,8 +35,8 @@ python=./.venv/bin/python
 python_version=3.14.7
 bare_python=ABSENT
 alembic_current=20260908_0042
-latest_verified_production_evidence_head=a232cf564a57f8761af7394ea4e5607fd8b8ac6d
-implementation_baseline=b3bb1f6266fe3f7dd17cd81329dc6689ceadcfe2
+latest_verified_production_evidence_head=437c9dcc4b35846b6ce828258272814e06a79d13
+implementation_base=437c9dcc4b35846b6ce828258272814e06a79d13
 ```
 
 Do not modify global Python for LeadRadar work.
@@ -672,10 +689,10 @@ before-Telegram filtering contract. The live invocation proved only that one
 selected strong candidate reached Telegram probing; it did not perform a live
 weak, adequate, or missing-current-relevance negative control.
 
-Stale/empty outcomes intentionally create no notification row. Combined with
-cursor wrap, this permits the same source to be reprobed by a later pass. Do not
-authorize recurring candidate notifications until a bounded stale/unresolvable
-re-probe cooldown or backoff policy is designed and reviewed.
+At the historical PR32 production head, stale/empty outcomes created no probe
+state and cursor wrap permitted later re-probe. Revision `20260914_0043` now
+implements bounded nonterminal state, but it must be separately synced,
+migrated, and production-validated before recurring notification discussion.
 
 ## 16. Shared-host no-touch boundary
 

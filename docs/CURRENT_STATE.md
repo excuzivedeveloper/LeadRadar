@@ -2,12 +2,53 @@
 
 **Status:** CANONICAL  
 **Snapshot date:** 2026-09-14
-**Implementation baseline:** `b3bb1f6266fe3f7dd17cd81329dc6689ceadcfe2`
-**Latest verified production evidence head:** `a232cf564a57f8761af7394ea4e5607fd8b8ac6d`
+**Implementation baseline:** cooldown/backoff PR based on `437c9dcc4b35846b6ce828258272814e06a79d13`
+**Latest verified production evidence head:** `437c9dcc4b35846b6ce828258272814e06a79d13`
 
 ## Executive status
 
-LeadRadar production is stable at merge commit `a232cf564a57f8761af7394ea4e5607fd8b8ac6d`. PR32 reviewed head `e197a532ace1a79ac5c335b5ab220ee228eda637` passed independent review, was merged and synced, and its post-sync verification passed after the initial incomplete checkpoint was corrected by checkpoint `3A`. The strong-only Owner candidate-notification selector is now deployed; persistent runtime remains stopped.
+PR33 production docs sync passed. A later bounded profile Web replenishment
+completed and added current-strong candidate sources `23`, `24`, and `26`.
+Notification canaries classified sources `23` and `24` as stale/empty without
+notification rows; source `26` sent one durable Owner card. Source `26` remains
+`candidate`, and neither lifecycle approval nor Telegram membership is proven.
+
+This PR implements durable exact-binding re-probe suppression in new Alembic
+revision `20260914_0043`. It does not change production, whose database remains
+at `20260908_0042`. Recurring notification automation and persistent runtime
+remain unauthorized.
+
+```text
+PR33_PRODUCTION_DOCS_SYNC=PASS
+PRODUCTION_HEAD=437c9dcc4b35846b6ce828258272814e06a79d13
+BOUNDED_PROFILE_WEB_REPLENISHMENT=PASS_NEW_STRONG
+REPLENISHMENT_RUN_KEY=owner-profile-web-replenishment-20260914-v1
+REPLENISHMENT_DISCOVERY_RUN_ID=0d7ff4de-1845-418e-8b1b-3b78d8ae0b06
+REPLENISHMENT_DISCOVERY_RUN_STATUS=completed
+NEW_CURRENT_STRONG_CANDIDATE_SOURCE_IDS=23,24,26
+SOURCE_23_HANDLE=backend_job_geeklink
+SOURCE_24_HANDLE=well_paid_job
+SOURCE_26_HANDLE=devkz_jobs
+SOURCE_23_NOTIFICATION_CANARY=NO_SEND_STALE_OR_EMPTY
+SOURCE_24_NOTIFICATION_CANARY=NO_SEND_STALE_OR_EMPTY
+SOURCE_26_NOTIFICATION_CANARY=PASS_SENT
+SOURCE_18_NOTIFICATION_ROW_COUNT=0
+SOURCE_23_NOTIFICATION_ROW_COUNT=0
+SOURCE_24_NOTIFICATION_ROW_COUNT=0
+SOURCE_26_NOTIFICATION_STATUS=sent
+POST_SCAN_CURSOR=26
+OWNER_NOTIFICATION_COUNT=4
+HIGH_RELEVANCE_GATE_LIVE_VALIDATED=YES
+OWNER_CARD_SEND_UNDER_PR32_PROVEN=YES
+SOURCE_26_LIFECYCLE=candidate
+SOURCE_26_MEMBERSHIP_PROVEN=NO
+COOLDOWN_BACKOFF_IMPLEMENTED=YES
+COOLDOWN_BACKOFF_PRODUCTION_VALIDATED=NO
+RECURRING_NOTIFICATION_AUTOMATION_AUTHORIZED=NO
+PERSISTENT_RUNTIME_AUTHORIZED=NO
+```
+
+LeadRadar production is stable at merge commit `437c9dcc4b35846b6ce828258272814e06a79d13`. PR32 reviewed head `e197a532ace1a79ac5c335b5ab220ee228eda637` passed independent review, was merged and synced, and its post-sync verification passed after the initial incomplete checkpoint was corrected by checkpoint `3A`. PR33 then reconciled the canonical production evidence. The strong-only Owner candidate-notification selector is deployed; persistent runtime remains stopped.
 
 PR24 production sync, post-sync verification and full bounded offline Stage A all passed. PR27 production sync, post-sync verification and the technical read-only PRELIVE for the repaired profile-discovery path also passed.
 
@@ -34,9 +75,9 @@ The authorization is consumed and retry is forbidden. Historical source
 ## Production contract
 
 ```text
-LATEST_VERIFIED_PRODUCTION_EVIDENCE_HEAD=a232cf564a57f8761af7394ea4e5607fd8b8ac6d
-PRODUCTION_HEAD=a232cf564a57f8761af7394ea4e5607fd8b8ac6d
-IMPLEMENTATION_BASELINE=b3bb1f6266fe3f7dd17cd81329dc6689ceadcfe2
+LATEST_VERIFIED_PRODUCTION_EVIDENCE_HEAD=437c9dcc4b35846b6ce828258272814e06a79d13
+PRODUCTION_HEAD=437c9dcc4b35846b6ce828258272814e06a79d13
+IMPLEMENTATION_BASE=437c9dcc4b35846b6ce828258272814e06a79d13
 BRANCH=main
 TRACKED_WORKTREE=CLEAN
 PYTHON_VERSION=3.14.7
@@ -605,10 +646,10 @@ missing-current-relevance candidates are excluded before Telegram. The live
 canary selected one strong candidate and did not run a weak, adequate, or
 missing-current-relevance negative control.
 
-Because stale/empty selection writes no notification marker and the cursor
-wraps, source `18` can be selected and probed again by a later pass if the pool
-does not change. Recurring notification work therefore requires a reviewed
-stale/unresolvable re-probe cooldown or backoff design first.
+At production head `437c9dcc4b35846b6ce828258272814e06a79d13`,
+stale/empty selection writes no notification marker, so sources `18`, `23`, and
+`24` are eligible again after cursor wrap. This PR implements the required
+nonterminal cooldown, but it is not yet deployed or production-validated.
 
 ## Current authorization state
 
@@ -643,24 +684,24 @@ PERSISTENT_RUNTIME_AUTHORIZED=NO
 ## Next gate
 
 ```text
-NEXT_PRODUCT_GATE_AFTER_REVIEW_MERGE_SYNC=BOUNDED_PROFILE_WEB_REPLENISHMENT
+NEXT_PRODUCT_GATE_AFTER_REVIEW_MERGE_SYNC=BOUNDED_COOLDOWN_VALIDATION
 ```
 
 ```text
-1. reconcile canonical docs with PR32 production/canary evidence
-2. independent review of the exact docs head
-3. Owner merge authorization
-4. merge and separately sync the exact reviewed docs head
-5. design and separately authorize BOUNDED_PROFILE_WEB_REPLENISHMENT
-6. run a read-only current-strong unnotified safe-candidate pool check
-7. only if a new exact candidate exists, request a separate notification canary
-8. before any recurring scheduler, design/review stale re-probe cooldown/backoff
+1. independently review the exact cooldown implementation head
+2. only after review PASS, request Owner merge authorization
+3. merge the exact reviewed head
+4. separately authorize production sync and migration to 20260914_0043
+5. run a read-only exact-state PRELIVE
+6. separately authorize one bounded stale/unresolvable probe
+7. prove by read-only selection that immediate re-probe is suppressed before Telegram
+8. only after that evidence, discuss recurring scheduling
 ```
 
-The replenishment gate must keep `relevance_class=strong` and use the same
-active confirmed profile/current deterministic intent. It permits no Telegram,
-Owner send, lifecycle mutation, Source Audit, AI, or persistent runtime. Exact
-Web bounds and a fresh run key must come from a later exact-head preflight; this
-docs reconciliation does not contain or authorize a live command.
+The later cooldown validation must keep `relevance_class=strong` and the exact
+active confirmed profile/current deterministic intent binding. This PR contains
+no authorization or command for production sync, migration, Telegram, Owner
+send, lifecycle mutation, Source Audit, Web, AI, scheduler, or persistent
+runtime work.
 
 Fresh exact-head server evidence remains higher authority than code/CLI, which remains higher authority than canonical docs, which remains higher authority than historical reports.

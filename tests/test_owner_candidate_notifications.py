@@ -15,6 +15,9 @@ from freelancer_bot.owner_candidate_notifications import (
 from freelancer_bot.profile_discovery import build_profile_discovery_intent
 from freelancer_bot.persistence.owner_candidate_notifications import (
     OwnerSourceCandidateNotificationReservation,
+    OwnerSourceCandidateProbeOutcome,
+    OwnerSourceCandidateProbeState,
+    OwnerSourceCandidateSelection,
     OwnerSourceCandidateReservationResult,
     OwnerSourceCandidateReservationStatus,
 )
@@ -248,10 +251,11 @@ class OwnerCandidateNotificationServiceTest(unittest.IsolatedAsyncioTestCase):
             [[("url", "📲 Открыть канал", "https://t.me/ru_jobs")]],
         )
 
-    async def test_stale_candidate_does_not_create_marker_and_can_become_fresh_later(self):
+    async def test_stale_candidate_is_blocked_until_cooldown_then_can_become_fresh(self):
         source = _source(2, handle="@later_fresh")
         repository = _Repository(candidates=[source])
-        service = _service(repository)
+        current_time = NOW
+        service = _service(repository, clock=lambda: current_time)
 
         stale = await service.run_once(
             config=_config(),
@@ -260,18 +264,90 @@ class OwnerCandidateNotificationServiceTest(unittest.IsolatedAsyncioTestCase):
             bot_client=_BotClient(),
             governor=_Governor(),
         )
-        fresh = await service.run_once(
+        cooling_governor = _Governor()
+        cooling = await service.run_once(
             config=_config(),
             collector_account_id=11,
             user_client=_UserClient(message_date=NOW - timedelta(days=1)),
+            bot_client=_BotClient(),
+            governor=cooling_governor,
+        )
+        current_time = NOW + timedelta(hours=24)
+        fresh = await service.run_once(
+            config=_config(),
+            collector_account_id=11,
+            user_client=_UserClient(message_date=current_time - timedelta(days=1)),
             bot_client=_BotClient(),
             governor=_Governor(),
         )
 
         self.assertEqual(stale.stale_or_empty, 1)
+        self.assertEqual(stale.stale_cooldown_recorded, 1)
         self.assertEqual(stale.reserved, 0)
+        self.assertEqual(cooling.candidates_considered, 0)
+        self.assertEqual(cooling.cooldown_suppressed, 1)
+        self.assertEqual(cooling_governor.categories, [])
         self.assertEqual(fresh.sent, 1)
         self.assertEqual(repository.reserved_source_ids, [2])
+        self.assertNotIn(2, repository.probe_states)
+
+    async def test_unresolvable_backoff_progresses_and_outcome_change_resets(self):
+        source = _source(27, handle="@missing_27")
+        repository = _Repository(candidates=[source])
+        current_time = NOW
+        service = _service(repository, clock=lambda: current_time)
+
+        for expected_hours in (6, 12, 24, 48, 48):
+            summary = await service.run_once(
+                config=_config(),
+                collector_account_id=11,
+                user_client=_UserClient(message_date=None, resolve_fails=True),
+                bot_client=_BotClient(),
+                governor=_Governor(),
+            )
+            self.assertEqual(summary.unresolvable_cooldown_recorded, 1)
+            state = repository.probe_states[source.id]
+            self.assertEqual(state["next_probe_at"], current_time + timedelta(hours=expected_hours))
+            current_time = state["next_probe_at"]
+
+        stale = await service.run_once(
+            config=_config(),
+            collector_account_id=11,
+            user_client=_UserClient(message_date=None),
+            bot_client=_BotClient(),
+            governor=_Governor(),
+        )
+        self.assertEqual(stale.stale_cooldown_recorded, 1)
+        self.assertEqual(repository.probe_states[source.id]["consecutive_outcomes"], 1)
+        self.assertEqual(
+            repository.probe_states[source.id]["next_probe_at"],
+            current_time + timedelta(hours=24),
+        )
+
+    async def test_old_binding_cooldown_does_not_suppress_current_binding(self):
+        source = _source(28, handle="@binding_28")
+        repository = _Repository(candidates=[source])
+        intent = build_profile_discovery_intent(_profile()).id
+        repository.probe_states[source.id] = {
+            "search_profile_id": PROFILE_ID,
+            "discovery_intent_id": intent,
+            "profile_revision": 2,
+            "last_outcome": OwnerSourceCandidateProbeOutcome.STALE_OR_EMPTY,
+            "consecutive_outcomes": 4,
+            "last_probed_at": NOW,
+            "next_probe_at": NOW + timedelta(days=1),
+        }
+
+        summary = await _service(repository).run_once(
+            config=_config(),
+            collector_account_id=11,
+            user_client=_UserClient(message_date=NOW),
+            bot_client=_BotClient(),
+            governor=_Governor(),
+        )
+
+        self.assertEqual(summary.cooldown_suppressed, 0)
+        self.assertEqual(summary.sent, 1)
 
     async def test_no_messages_does_not_notify_or_reserve(self):
         source = _source(13, handle="@empty_source")
@@ -478,7 +554,15 @@ class OwnerCandidateNotificationServiceTest(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(summary.unresolvable, 2)
+        self.assertEqual(summary.unresolvable_cooldown_recorded, 2)
         self.assertEqual(summary.activity_probes, 0)
+        self.assertEqual(
+            repository.recorded_probe_outcomes,
+            [
+                (5, OwnerSourceCandidateProbeOutcome.UNRESOLVABLE),
+                (6, OwnerSourceCandidateProbeOutcome.UNRESOLVABLE),
+            ],
+        )
         self.assertEqual(repository.reserved_source_ids, [])
 
     async def test_entity_resolution_failure_counts_unresolvable(self):
@@ -495,6 +579,7 @@ class OwnerCandidateNotificationServiceTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(summary.activity_probes, 1)
         self.assertEqual(summary.unresolvable, 1)
+        self.assertEqual(summary.unresolvable_cooldown_recorded, 1)
         self.assertEqual(summary.stale_or_empty, 0)
         self.assertEqual(repository.reserved_source_ids, [])
 
@@ -598,6 +683,7 @@ def _service(
     *,
     owner_exists: bool = True,
     profiles=None,
+    clock=None,
 ) -> OwnerCandidateNotificationService:
     return OwnerCandidateNotificationService(
         _Database(),
@@ -606,7 +692,7 @@ def _service(
         search_profile_repository=_SearchProfileRepository(
             profiles=(_profile(),) if profiles is None else profiles
         ),
-        clock=lambda: NOW,
+        clock=clock or (lambda: NOW),
         button_factory=lambda label, url: ("url", label, url),
     )
 
@@ -671,6 +757,9 @@ class _Repository:
         self._attempted_source_ids: set[int] = set()
         self._next_id = 1
         self._cursor: int | None = None
+        self.probe_states: dict[int, dict] = {}
+        self.recorded_probe_outcomes: list[tuple[int, OwnerSourceCandidateProbeOutcome]] = []
+        self.cleared_probe_source_ids: list[int] = []
 
     async def list_unnotified_candidates(
         self,
@@ -681,6 +770,7 @@ class _Repository:
         discovery_intent_id,
         profile_revision: int,
         relevance_class: str,
+        selection_now: datetime,
         limit: int,
     ):
         self.list_calls += 1
@@ -705,17 +795,91 @@ class _Repository:
                 ) in self.relevance_rows
             )
         ]
+        cooldown_suppressed = 0
+        eligible = []
+        for source in unnotified:
+            state = self.probe_states.get(source.id)
+            cooling = bool(
+                state
+                and state["search_profile_id"] == search_profile_id
+                and state["discovery_intent_id"] == discovery_intent_id
+                and state["profile_revision"] == profile_revision
+                and state["next_probe_at"] > selection_now
+            )
+            if cooling:
+                cooldown_suppressed += 1
+            else:
+                eligible.append(source)
         after_cursor = [
             source
-            for source in unnotified
+            for source in eligible
             if self._cursor is None or source.id > self._cursor
         ]
         selected = after_cursor[:limit]
         if not selected and self._cursor is not None:
-            selected = unnotified[:limit]
+            selected = eligible[:limit]
         if selected:
             self._cursor = selected[-1].id
-        return tuple(selected)
+        return OwnerSourceCandidateSelection(tuple(selected), cooldown_suppressed)
+
+    async def record_probe_outcome(
+        self,
+        _connection,
+        *,
+        recipient_chat_id: int,
+        source_id: int,
+        search_profile_id,
+        discovery_intent_id,
+        profile_revision: int,
+        outcome: OwnerSourceCandidateProbeOutcome,
+        probed_at: datetime,
+    ) -> OwnerSourceCandidateProbeState:
+        del recipient_chat_id
+        prior = self.probe_states.get(source_id)
+        same = bool(
+            prior
+            and prior["search_profile_id"] == search_profile_id
+            and prior["discovery_intent_id"] == discovery_intent_id
+            and prior["profile_revision"] == profile_revision
+            and prior["last_outcome"] is outcome
+        )
+        streak = prior["consecutive_outcomes"] + 1 if same else 1
+        if outcome is OwnerSourceCandidateProbeOutcome.STALE_OR_EMPTY:
+            delay = timedelta(hours=24)
+        else:
+            delay = timedelta(hours=(6, 12, 24, 48)[min(streak, 4) - 1])
+        next_probe_at = probed_at + delay
+        self.probe_states[source_id] = {
+            "search_profile_id": search_profile_id,
+            "discovery_intent_id": discovery_intent_id,
+            "profile_revision": profile_revision,
+            "last_outcome": outcome,
+            "consecutive_outcomes": streak,
+            "last_probed_at": probed_at,
+            "next_probe_at": next_probe_at,
+        }
+        self.recorded_probe_outcomes.append((source_id, outcome))
+        return OwnerSourceCandidateProbeState(streak, next_probe_at)
+
+    async def clear_probe_state(
+        self,
+        _connection,
+        *,
+        recipient_chat_id: int,
+        source_id: int,
+        search_profile_id,
+        discovery_intent_id,
+        profile_revision: int,
+    ) -> None:
+        del recipient_chat_id
+        state = self.probe_states.get(source_id)
+        if state and (
+            state["search_profile_id"] == search_profile_id
+            and state["discovery_intent_id"] == discovery_intent_id
+            and state["profile_revision"] == profile_revision
+        ):
+            del self.probe_states[source_id]
+        self.cleared_probe_source_ids.append(source_id)
 
     async def reserve(
         self,

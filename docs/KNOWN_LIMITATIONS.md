@@ -2,8 +2,8 @@
 
 **Status:** CANONICAL  
 **Last verified:** 2026-09-14
-**Implementation baseline:** `b3bb1f6266fe3f7dd17cd81329dc6689ceadcfe2`
-**Latest verified production evidence head:** `a232cf564a57f8761af7394ea4e5607fd8b8ac6d`
+**Implementation baseline:** cooldown/backoff PR based on `437c9dcc4b35846b6ce828258272814e06a79d13`
+**Latest verified production evidence head:** `437c9dcc4b35846b6ce828258272814e06a79d13`
 
 This document distinguishes code that exists from behavior that has actually been validated in the current deployment.
 
@@ -46,16 +46,28 @@ HIGH_RELEVANCE_GATE_SYNCED_TO_PRODUCTION=YES
 PR32_NOTIFICATION_CANARY_RESULT=NO_SEND_STALE_OR_EMPTY
 PR32_NOTIFICATION_CANARY_AUTHORIZATION_CONSUMED=YES
 PR32_NOTIFICATION_CANARY_RETRY_ALLOWED=NO
+PR33_PRODUCTION_DOCS_SYNC=PASS
+PRODUCTION_HEAD=437c9dcc4b35846b6ce828258272814e06a79d13
+BOUNDED_PROFILE_WEB_REPLENISHMENT=PASS_NEW_STRONG
+NEW_CURRENT_STRONG_CANDIDATE_SOURCE_IDS=23,24,26
+SOURCE_23_NOTIFICATION_CANARY=NO_SEND_STALE_OR_EMPTY
+SOURCE_24_NOTIFICATION_CANARY=NO_SEND_STALE_OR_EMPTY
+SOURCE_26_NOTIFICATION_CANARY=PASS_SENT
+POST_SCAN_CURSOR=26
+OWNER_NOTIFICATION_COUNT=4
+SOURCE_26_LIFECYCLE=candidate
+SOURCE_26_MEMBERSHIP_PROVEN=NO
+COOLDOWN_BACKOFF_IMPLEMENTED=YES
+COOLDOWN_BACKOFF_PRODUCTION_VALIDATED=NO
 READY_FOR_RECURRING_NOTIFICATION_DECISION=NO
 CANDIDATE_NOTIFICATION_RECURRING_AUTOMATION_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 ```
 
-The immediate gate is canonical-docs reconciliation with PR32 production and
-canary evidence, followed by independent review, Owner merge authorization and
-separate docs-only production synchronization. The next later live gate is a
-separately designed/authorized bounded profile Web replenishment; no live
-command is authorized by this documentation work.
+The immediate gate is independent review of this cooldown implementation. After
+an exact-head merge and separately authorized production sync/migration, the
+next live gate is a separately authorized bounded cooldown validation. Recurring
+notifications and persistent runtime remain unauthorized.
 
 Useful personalized opportunity delivery remains a later product limitation. The narrower fact now proven is durable delivery persistence for source-candidate cards for sources `19` and `20`; that does not establish end-to-end matched-opportunity delivery or Owner review/action.
 
@@ -69,7 +81,7 @@ Useful personalized opportunity delivery remains a later product limitation. The
 6. **P1 — Telegram account/platform limits remain external.** FloodWait, ChannelsTooMuch, membership loss, source removal/rename and access changes can interrupt collection independently of PostgreSQL correctness.
 7. **P1 — Membership drift is not automatically reconciled.** Previously approved source membership was brought to 13/13, but there is no authorized automatic join/remediation mechanism. Sources `19` and `20` were not joined by the new bounded probe.
 8. **P1 — Candidate notification automation remains unauthorized.** PR32's bounded canary proved live current-profile/current-intent strong selection and freshness suppression, but produced no reservation or Owner card. Source `18` remains unnotified after `STALE_OR_EMPTY=1`; the consumed authorization cannot be retried. Historical source `19`/`20` sends predate the strong-only selector.
-9. **P1 — Recurring passes can repeatedly probe the same stale/empty strong candidate.** Stale/empty outcomes intentionally write no notification marker, and durable scanning wraps after exhaustion. With the observed one-source strong unnotified pool and cursor now at `18`, a later pass can wrap and select source `18` again. A bounded stale/unresolvable cooldown or backoff policy must be designed and reviewed before recurring 3-hour/max-5 scheduling.
+9. **P1 — Durable cooldown is implemented but not production-validated.** Sources `18`, `23`, and `24` have stale/empty evidence and no terminal notification rows. Without this PR they are wrap-reprobe eligible. Revision `20260914_0043` and pre-limit exact-binding suppression now implement the bounded policy, but production remains at `0042`; recurring 3-hour/max-5 scheduling cannot be considered until a separately authorized bounded production validation proves immediate selector exclusion before Telegram.
 10. **P1 — Legacy filter substring behavior can create false positives.** The accumulated stop-word matcher remains substring-based. It is intentionally preserved until enough shadow data supports a narrow redesign.
 11. **P1 — Current shadow sample is small.** Live path correctness is proven, but one successful natural shadow row is not enough to tune thresholds/keywords confidently.
 12. **P1 — OpenRouter model availability/cost are external.** `minimax/minimax-m3:free` availability, pricing and rate/free-tier limits can change outside the repository and must be reverified before further live validation or expanded use.
