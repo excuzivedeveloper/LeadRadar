@@ -1,17 +1,17 @@
 # LeadRadar — Active Plan
 
 **Status:** CANONICAL / ACTIVE  
-**Last verified:** 2026-09-14
-**Implementation baseline:** PR34 production cooldown deployment at `d7f1248fdee62d6eee13e4256614ee15c4cc2846`
-**Latest verified production evidence head:** `d7f1248fdee62d6eee13e4256614ee15c4cc2846`
+**Last verified:** 2026-09-15
+**Implementation baseline:** PR35 production sync at `ab36df17334f8eff57fe475c8090a29a6ac1243c`
+**Latest verified production evidence head:** `ab36df17334f8eff57fe475c8090a29a6ac1243c`
 
 This file defines execution order. Implemented capability does not imply authorization to activate it.
 
 ## Current production baseline
 
 ```text
-LATEST_VERIFIED_PRODUCTION_EVIDENCE_HEAD=d7f1248fdee62d6eee13e4256614ee15c4cc2846
-IMPLEMENTATION_BASE=d7f1248fdee62d6eee13e4256614ee15c4cc2846
+LATEST_VERIFIED_PRODUCTION_EVIDENCE_HEAD=ab36df17334f8eff57fe475c8090a29a6ac1243c
+IMPLEMENTATION_BASE=ab36df17334f8eff57fe475c8090a29a6ac1243c
 BRANCH=main
 TRACKED_WORKTREE=CLEAN
 ALEMBIC_CURRENT=20260914_0043
@@ -125,15 +125,20 @@ POST_READ_ONLY_ELIGIBLE_PAGE_SOURCE_IDS=23,24
 COOLDOWN_BACKOFF_IMPLEMENTED=YES
 MIGRATION_DEPLOYED=20260914_0043
 COOLDOWN_BACKOFF_PRODUCTION_VALIDATED=YES
+RECURRING_NOTIFICATION_SCHEDULER_IMPLEMENTED=YES
+RECURRING_NOTIFICATION_AUTOMATION_DEPLOYED=NO
 RECURRING_NOTIFICATION_AUTOMATION_AUTHORIZED=NO
+RECURRING_NOTIFICATION_TIMER_ENABLED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
+PERSISTENT_RUNTIME=STOPPED
 ```
 
 PR34 completed independent review, merge, production sync, migration, read-only
 PRELIVE, one bounded source-`18` stale cooldown validation, and read-only proof
-that immediate re-selection is suppressed before Telegram. The next stage is a
-separately reviewed recurring-notification design. No current step authorizes
-recurring scheduling or a persistent LeadRadar runtime.
+that immediate re-selection is suppressed before Telegram. PR36 implements the
+repository scheduling layer for independent review only. No current step
+authorizes installing/enabling the timer, running the notification CLI live, or
+starting a persistent LeadRadar runtime.
 
 The bounded planner contract remained:
 
@@ -458,14 +463,17 @@ it did not execute a live non-strong negative-control case.
 ## Current gate
 
 ```text
-CURRENT_GATE=RECURRING_NOTIFICATION_DESIGN_REVIEW
-IMPLEMENTATION_BASE=d7f1248fdee62d6eee13e4256614ee15c4cc2846
+CURRENT_GATE=INDEPENDENT_REVIEW_OF_PR36_RECURRING_TIMER
+IMPLEMENTATION_BASE=ab36df17334f8eff57fe475c8090a29a6ac1243c
 OWNER_PROFILE_GATE=EXACT_ACTIVE_PRIMARY_CONFIRMED
 DISCOVERY_INTENT_GATE=CURRENT_DETERMINISTIC_INTENT
 OWNER_CANDIDATE_NOTIFICATION_RELEVANCE_GATE=strong_only
 RELEVANCE_FILTER_BEFORE_LIMIT=YES
 COOLDOWN_BACKOFF_PRODUCTION_VALIDATED=YES
-NEXT_GATE=SEPARATELY_REVIEWED_RECURRING_NOTIFICATION_DESIGN
+RECURRING_NOTIFICATION_SCHEDULER_IMPLEMENTED=YES
+RECURRING_NOTIFICATION_AUTOMATION_DEPLOYED=NO
+RECURRING_NOTIFICATION_TIMER_ENABLED=NO
+NEXT_GATE=INDEPENDENT_REVIEW_OF_PR36_RECURRING_TIMER
 NEW_LIVE_ACTION_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 CANDIDATE_NOTIFICATION_RECURRING_AUTOMATION_AUTHORIZED=NO
@@ -474,18 +482,21 @@ CANDIDATE_NOTIFICATION_RECURRING_AUTOMATION_AUTHORIZED=NO
 ## Required sequence from here
 
 ```text
-1. design the recurring notification policy for independent review
-2. preserve current profile/current intent/profile revision binding
-3. preserve strong-only selection and pre-LIMIT cooldown suppression
-4. preserve durable at-most-once notification dedupe
-5. preserve silence when nothing is eligible
-6. request separate Owner authorization before any recurring production automation
-7. persistent runtime remains unauthorized
+1. independent review of the exact PR36 scheduler artifacts and docs
+2. Owner merge authorization
+3. merge exact reviewed head
+4. separate production git sync authorization
+5. read-only PRELIVE of exact unit files, ExecStart, calendar, env path and project Python
+6. separate Owner authorization to install units, daemon-reload and enable the timer
+7. prove timer enabled/active and service initially inactive
+8. observe one real scheduled timer fire
+9. verify bounded pass summary and durable DB/Telegram side effects
+10. persistent runtime remains unauthorized
 ```
 
-Do not retry consumed canaries. This docs reconciliation permits no Telegram,
-Web, Owner send, lifecycle mutation, Source Audit, AI, migration, scheduler,
-recurring automation, or persistent runtime action.
+Do not retry consumed canaries. PR36 permits no Telegram, Web, Owner send,
+lifecycle mutation, Source Audit, AI, migration, production systemd mutation,
+timer enabling, recurring production automation, or persistent runtime action.
 
 Future lifecycle and membership actions remain independent choices:
 
@@ -517,7 +528,7 @@ Once source quality, lifecycle decisions, membership and delivery behavior have 
 ```text
 every 3 hours
 one bounded pass
-max 5 candidate cards per pass
+max 5 candidates considered per pass
 current profile/current intent
 strong only
 durable at-most-once notification dedupe
@@ -525,6 +536,6 @@ durable cooldown suppression
 silence if nothing eligible
 ```
 
-This target is not implemented as recurring production automation, not
-deployed, and not authorized. No systemd timer, cron schedule, persistent
-runtime, or active 3-hour automation exists.
+This target is implemented as repository systemd artifacts only. It is not
+deployed, enabled, or authorized in production. No installed systemd timer, cron
+schedule, persistent runtime, or active 3-hour automation exists.

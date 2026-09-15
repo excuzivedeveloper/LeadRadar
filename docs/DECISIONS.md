@@ -183,3 +183,32 @@ current implementation, once the matching Opportunity Analysis key is present,
 full `--run` can construct the analyzer, activate the `opportunity.analysis.v1`
 handler, claim pending jobs and make provider calls. `AI_REPLY_ENABLED=false`
 does not disable Opportunity Analysis.
+
+## D-014 — Recurring Owner candidate notifications use bounded one-shot systemd scheduling
+
+Recurring Owner candidate notification automation uses an operating-system
+systemd timer that starts the already-bounded one-shot application CLI and lets
+the process exit.
+
+Accepted shape:
+
+```text
+systemd timer
+-> Type=oneshot systemd service
+-> /opt/leadradar/LeadRadar/.venv/bin/python -m freelancer_bot --owner-candidate-notifications --owner-candidate-notification-limit 5
+-> existing OwnerCandidateNotificationService.run_once(...)
+-> process exits
+```
+
+It does not use the persistent `--run` runtime, a custom Python scheduler loop,
+cron, Docker scheduling, or a second notification implementation.
+
+**Reason:** this preserves bounded external work, reuses the already
+production-proven notification logic, keeps discovery/AI/collector runtime
+outside this automation, provides explicit OS-level schedule/enable/disable
+controls, and avoids a custom scheduler loop.
+
+**Consequence:** this decision does not reverse D-009. Repository unit files are
+not production activation. Installing/enabling the timer remains a separate
+Owner-authorized production gate, and persistent LeadRadar runtime remains
+unauthorized unless explicitly approved.

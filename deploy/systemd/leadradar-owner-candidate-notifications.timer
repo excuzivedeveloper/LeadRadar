@@ -1,0 +1,10 @@
+[Unit]
+Description=Run LeadRadar Owner candidate notifications every 3 hours
+
+[Timer]
+OnCalendar=*-*-* 00/3:00:00 UTC
+Persistent=false
+Unit=leadradar-owner-candidate-notifications.service
+
+[Install]
+WantedBy=timers.target

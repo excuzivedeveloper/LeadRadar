@@ -1,16 +1,16 @@
 # LeadRadar — Production Operations
 
 **Status:** CANONICAL  
-**Last verified:** 2026-09-14
-**Implementation baseline:** PR34 production cooldown deployment at `d7f1248fdee62d6eee13e4256614ee15c4cc2846`
-**Latest verified production evidence head:** `d7f1248fdee62d6eee13e4256614ee15c4cc2846`
+**Last verified:** 2026-09-15
+**Implementation baseline:** PR35 production sync at `ab36df17334f8eff57fe475c8090a29a6ac1243c`
+**Latest verified production evidence head:** `ab36df17334f8eff57fe475c8090a29a6ac1243c`
 
 This document is the operational source of truth for the current LeadRadar production environment. Fresh exact-head server evidence outranks this document; if later evidence disagrees, stop and reconcile docs before designing a new live task.
 
 ## Deployed cooldown contract
 
 Production is at repository head
-`d7f1248fdee62d6eee13e4256614ee15c4cc2846` and Alembic revision
+`ab36df17334f8eff57fe475c8090a29a6ac1243c` and Alembic revision
 `20260914_0043`. PR34 deployed `owner_source_candidate_probe_state` and
 exact-binding candidate probe cooldowns. Persistent runtime and recurring
 notification automation remain unauthorized.
@@ -44,6 +44,8 @@ STALE_24H_PATH_PRODUCTION_LIVE_PROVEN=YES
 UNRESOLVABLE_ESCALATION_IMPLEMENTED_AND_TESTED=YES
 UNRESOLVABLE_ESCALATION_INDEPENDENTLY_LIVE_PROVEN=NO
 RECURRING_NOTIFICATION_AUTOMATION_AUTHORIZED=NO
+RECURRING_NOTIFICATION_AUTOMATION_DEPLOYED=NO
+RECURRING_NOTIFICATION_TIMER_ENABLED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 ```
 
@@ -58,8 +60,8 @@ python=./.venv/bin/python
 python_version=3.14.7
 bare_python=ABSENT
 alembic_current=20260914_0043
-latest_verified_production_evidence_head=d7f1248fdee62d6eee13e4256614ee15c4cc2846
-implementation_base=d7f1248fdee62d6eee13e4256614ee15c4cc2846
+latest_verified_production_evidence_head=ab36df17334f8eff57fe475c8090a29a6ac1243c
+implementation_base=ab36df17334f8eff57fe475c8090a29a6ac1243c
 ```
 
 Do not modify global Python for LeadRadar work.
@@ -851,6 +853,8 @@ REPEAT_NOTIFICATION_AUTHORIZED=NO
 SOURCE_19_20_JOIN_PERFORMED=NO
 SOURCE_19_20_LIFECYCLE_DECISION=NONE
 CANDIDATE_NOTIFICATION_RECURRING_AUTOMATION_AUTHORIZED=NO
+RECURRING_NOTIFICATION_AUTOMATION_DEPLOYED=NO
+RECURRING_NOTIFICATION_TIMER_ENABLED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 NEW_LIVE_ACTION_AUTHORIZED=NO
 ```
@@ -860,25 +864,113 @@ The successful bounded gates do not authorize a repeat or a new operation.
 Required next ordering:
 
 ```text
-1. design a recurring-notification policy for independent review
-2. preserve exact current profile/current intent/profile revision binding
-3. preserve strong-only selection and pre-LIMIT cooldown suppression
-4. preserve durable at-most-once notification dedupe
-5. preserve silence when nothing is eligible
-6. request separate Owner authorization before deploying any recurring automation
+1. independent review of the exact PR36 scheduler artifacts and docs
+2. Owner merge authorization
+3. production sync authorization for the exact reviewed merge
+4. read-only PRELIVE of exact unit files, ExecStart, 3-hour UTC calendar, env path, project Python, Alembic `20260914_0043`, stopped runtime and absent/disabled timer
+5. separate Owner authorization before installing/enabling recurring automation
+6. prove one scheduled fire and bounded pass summary after activation
 7. keep persistent runtime unauthorized unless separately approved
 ```
 
-The intended future recurring target is every 3 hours, one bounded pass, at
-most 5 candidate cards per pass, current profile/current intent, strong only,
-durable at-most-once notification dedupe, durable cooldown suppression, and
-silence when no candidate is eligible. It is not implemented as recurring
-production automation, not deployed, and not authorized. No systemd timer, cron
-schedule, persistent runtime, or active 3-hour automation exists. No live
-command or exact run key is authorized by this docs reconciliation. The PR32
-and PR34 bounded canaries must not be retried.
+The intended future recurring target is implemented in repository artifacts as
+a systemd timer plus `Type=oneshot` service: every 3 hours UTC, one bounded
+pass, max 5 candidates considered per pass, current profile/current intent,
+strong only, durable at-most-once notification dedupe, durable cooldown
+suppression, and silence when no candidate is eligible. It is not deployed,
+enabled, or authorized in production. No installed systemd timer, cron schedule,
+persistent runtime, or active 3-hour automation exists. No live command or exact
+run key is authorized by PR36 implementation. The PR32 and PR34 bounded
+canaries must not be retried.
 
-## 19. Documentation precedence for operations
+## 19. Future recurring notification activation contract
+
+The following commands are documentation for a future Owner-authorized
+production activation only. Do not run them as part of PR36 implementation or
+review.
+
+Expected repository unit files:
+
+```text
+deploy/systemd/leadradar-owner-candidate-notifications.service
+deploy/systemd/leadradar-owner-candidate-notifications.timer
+```
+
+Expected production unit locations after a separately authorized activation:
+
+```text
+/etc/systemd/system/leadradar-owner-candidate-notifications.service
+/etc/systemd/system/leadradar-owner-candidate-notifications.timer
+```
+
+Future activation commands:
+
+```bash
+install -m 0644 \
+  deploy/systemd/leadradar-owner-candidate-notifications.service \
+  /etc/systemd/system/leadradar-owner-candidate-notifications.service
+
+install -m 0644 \
+  deploy/systemd/leadradar-owner-candidate-notifications.timer \
+  /etc/systemd/system/leadradar-owner-candidate-notifications.timer
+
+systemctl daemon-reload
+systemctl enable --now leadradar-owner-candidate-notifications.timer
+```
+
+`enable --now` starts the timer, not a manual immediate service invocation; the
+first candidate pass should occur only at the next normal `OnCalendar`
+boundary.
+
+Future rollback/stop commands:
+
+```bash
+systemctl disable --now leadradar-owner-candidate-notifications.timer
+```
+
+Disabling or removing the timer must not mutate notification/database history.
+
+Future rollout gates:
+
+```text
+1. independent review exact PR36 head
+2. Owner merge authorization
+3. merge exact reviewed head
+4. separate production git sync authorization
+5. read-only PRELIVE:
+   - exact production head
+   - unit files at exact repository head
+   - exact ExecStart
+   - exact 3h UTC calendar
+   - runtime env path exists without printing contents
+   - project Python exists
+   - Alembic still 20260914_0043 unless a later PR explicitly adds a migration
+   - persistent LeadRadar runtime stopped
+   - timer not installed/enabled/active
+6. separate Owner authorization to install units, daemon-reload, and enable timer
+7. prove timer enabled/active and service initially inactive
+8. observe one real scheduled timer fire
+9. verify bounded pass summary plus durable DB/Telegram side effects
+10. if PASS, leave timer enabled
+```
+
+First scheduled-fire acceptance target:
+
+```text
+timer triggered service
+service invoked exact bounded CLI
+limit=5
+service exited
+no persistent freelancer_bot process remained
+next timer occurrence is about 3 hours later
+no Web/AI/audit/lifecycle/join activity occurred
+```
+
+Valid product outcomes include `SENT >= 1`, all considered candidates
+stale/unresolvable/cooling/already terminal, or `CANDIDATES_CONSIDERED=0`. A
+zero-send scheduled run is not itself a failure.
+
+## 20. Documentation precedence for operations
 
 For production commands, use this order:
 

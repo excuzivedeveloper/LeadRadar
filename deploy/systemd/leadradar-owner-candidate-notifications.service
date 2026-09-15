@@ -1,0 +1,11 @@
+[Unit]
+Description=LeadRadar bounded Owner candidate notifications
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/leadradar/LeadRadar
+EnvironmentFile=/opt/leadradar/runtime/.env
+ExecStart=/opt/leadradar/LeadRadar/.venv/bin/python -m freelancer_bot --owner-candidate-notifications --owner-candidate-notification-limit 5
+TimeoutStartSec=30min
+Restart=no
+UMask=0077

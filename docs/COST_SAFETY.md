@@ -1,7 +1,7 @@
 # LeadRadar — Cost and External-Work Safety
 
 **Status:** CANONICAL  
-**Last verified:** 2026-08-31
+**Last verified:** 2026-09-15
 
 ## Current deployment rule
 
@@ -135,6 +135,30 @@ Before enabling:
 
 A missing Web provider is an unavailable optional capability, not a signal for
 continuous retries.
+
+## Recurring Owner candidate notifications
+
+The PR36 scheduling layer is allowed only as bounded recurring one-shot work:
+
+```text
+systemd timer every 3 hours UTC
+-> Type=oneshot service
+-> --owner-candidate-notifications --owner-candidate-notification-limit 5
+-> process exits
+```
+
+Each scheduled pass may perform only the external work already owned by the
+existing one-shot: Telegram entity access, one latest-history probe per
+considered candidate, and an Owner bot card send only for candidates that pass
+all existing gates.
+
+It must not activate Web Discovery, profile replenishment, Source Audit, Source
+Graph Discovery, Telegram global/chat discovery, AI/provider calls,
+Opportunity Analysis, catch-up, lifecycle transitions, join/leave, approved
+source collection, or full `--run`.
+
+A zero-send pass is valid and must stay silent in Telegram. Journal/process
+summary logging is acceptable; do not add a Telegram "nothing found" message.
 
 ## Owner-only delivery safety
 

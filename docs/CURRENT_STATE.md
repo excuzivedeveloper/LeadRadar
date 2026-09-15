@@ -1,11 +1,14 @@
 # LeadRadar — Current State
 
 **Status:** CANONICAL  
-**Snapshot date:** 2026-09-14
-**Implementation baseline:** PR34 production cooldown deployment at `d7f1248fdee62d6eee13e4256614ee15c4cc2846`
-**Latest verified production evidence head:** `d7f1248fdee62d6eee13e4256614ee15c4cc2846`
+**Snapshot date:** 2026-09-15
+**Implementation baseline:** PR35 production sync at `ab36df17334f8eff57fe475c8090a29a6ac1243c`
+**Latest verified production evidence head:** `ab36df17334f8eff57fe475c8090a29a6ac1243c`
 
 ## Executive status
+
+PR35 left production at `ab36df17334f8eff57fe475c8090a29a6ac1243c` with
+Alembic `20260914_0043` and persistent runtime stopped.
 
 PR34 was reviewed at `656443ea9e64a3f757ef05309a502c6661841523`, merged as
 `d7f1248fdee62d6eee13e4256614ee15c4cc2846`, synced to production, and migrated
@@ -14,12 +17,17 @@ source-`18` stale cooldown validation passed. Production remains stopped outside
 bounded tasks; recurring notification automation and persistent runtime remain
 unauthorized.
 
+PR36 implements deployable repository systemd artifacts for recurring bounded
+Owner candidate notifications. This branch may state
+`RECURRING_NOTIFICATION_SCHEDULER_IMPLEMENTED=YES`, but production remains:
+not deployed, not authorized, timer not enabled, and persistent runtime stopped.
+
 ```text
 PR33_PRODUCTION_DOCS_SYNC=PASS
 PR34_MERGED=YES
 PR34_REVIEWED_HEAD=656443ea9e64a3f757ef05309a502c6661841523
 PR34_MERGE_COMMIT=d7f1248fdee62d6eee13e4256614ee15c4cc2846
-PRODUCTION_HEAD=d7f1248fdee62d6eee13e4256614ee15c4cc2846
+PRODUCTION_HEAD=ab36df17334f8eff57fe475c8090a29a6ac1243c
 ALEMBIC_CURRENT=20260914_0043
 BOUNDED_PROFILE_WEB_REPLENISHMENT=PASS_NEW_STRONG
 REPLENISHMENT_RUN_KEY=owner-profile-web-replenishment-20260914-v1
@@ -52,11 +60,15 @@ SOURCE_18_ACTIVE_COOLDOWN_ROW=YES
 POST_READ_ONLY_COOLDOWN_SUPPRESSED_COUNT=1
 POST_READ_ONLY_SOURCE_18_ELIGIBLE=NO
 POST_READ_ONLY_ELIGIBLE_PAGE_SOURCE_IDS=23,24
+RECURRING_NOTIFICATION_SCHEDULER_IMPLEMENTED=YES
+RECURRING_NOTIFICATION_AUTOMATION_DEPLOYED=NO
 RECURRING_NOTIFICATION_AUTOMATION_AUTHORIZED=NO
+RECURRING_NOTIFICATION_TIMER_ENABLED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
+PERSISTENT_RUNTIME=STOPPED
 ```
 
-LeadRadar production is stable at merge commit `d7f1248fdee62d6eee13e4256614ee15c4cc2846`. PR34 deployed the exact-binding nonterminal probe-state table and proved the stale 24-hour cooldown path for source `18`: one stale/empty probe was recorded, no notification row was created, no Owner notification count changed, and an immediate read-only selector pass suppressed source `18` before Telegram while allowing deeper eligible sources `23` and `24`. The strong-only Owner candidate-notification selector is deployed; persistent runtime remains stopped.
+LeadRadar production is stable at commit `ab36df17334f8eff57fe475c8090a29a6ac1243c`. PR34 deployed the exact-binding nonterminal probe-state table and proved the stale 24-hour cooldown path for source `18`: one stale/empty probe was recorded, no notification row was created, no Owner notification count changed, and an immediate read-only selector pass suppressed source `18` before Telegram while allowing deeper eligible sources `23` and `24`. The strong-only Owner candidate-notification selector is deployed; persistent runtime remains stopped.
 
 PR24 production sync, post-sync verification and full bounded offline Stage A all passed. PR27 production sync, post-sync verification and the technical read-only PRELIVE for the repaired profile-discovery path also passed.
 
@@ -83,9 +95,9 @@ The authorization is consumed and retry is forbidden. Historical source
 ## Production contract
 
 ```text
-LATEST_VERIFIED_PRODUCTION_EVIDENCE_HEAD=d7f1248fdee62d6eee13e4256614ee15c4cc2846
-PRODUCTION_HEAD=d7f1248fdee62d6eee13e4256614ee15c4cc2846
-IMPLEMENTATION_BASE=d7f1248fdee62d6eee13e4256614ee15c4cc2846
+LATEST_VERIFIED_PRODUCTION_EVIDENCE_HEAD=ab36df17334f8eff57fe475c8090a29a6ac1243c
+PRODUCTION_HEAD=ab36df17334f8eff57fe475c8090a29a6ac1243c
+IMPLEMENTATION_BASE=ab36df17334f8eff57fe475c8090a29a6ac1243c
 BRANCH=main
 TRACKED_WORKTREE=CLEAN
 PYTHON_VERSION=3.14.7
@@ -701,28 +713,30 @@ PERSISTENT_RUNTIME_AUTHORIZED=NO
 ## Next gate
 
 ```text
-NEXT_PRODUCT_GATE=RECURRING_NOTIFICATION_DESIGN_REVIEW
+NEXT_PRODUCT_GATE=INDEPENDENT_REVIEW_OF_PR36_RECURRING_TIMER
 ```
 
 ```text
-1. design a separately reviewed recurring-notification policy
-2. preserve current profile/current deterministic intent/revision binding
-3. keep `relevance_class=strong`
-4. keep durable at-most-once notification dedupe
-5. keep durable cooldown suppression before `LIMIT`
-6. keep silence when nothing is eligible
-7. request separate authorization before any recurring production automation
+1. independently review exact PR36 unit files, tests and docs
+2. Owner-authorize merge of the reviewed PR
+3. separately authorize production sync of the reviewed merge
+4. read-only PRELIVE exact unit files, ExecStart, 3-hour UTC calendar, env path, project Python, Alembic `20260914_0043`, stopped runtime and absent/disabled timer
+5. separately authorize installing units, `systemctl daemon-reload` and enabling the timer
+6. prove timer enabled/active and service initially inactive
+7. observe one real scheduled fire and verify bounded pass summary
+8. keep persistent runtime unauthorized
 ```
 
 The intended future recurring target is every 3 hours, one bounded pass, at
-most 5 candidate cards per pass, current profile/current intent, strong only,
+most 5 candidates considered per pass, up to 5 cards if all pass, current profile/current intent, strong only,
 durable at-most-once notification dedupe, durable cooldown suppression, and
-silence when no candidate is eligible. It is **not implemented as recurring
-production automation**, **not deployed**, and **not authorized**. No systemd
-timer, cron schedule, persistent runtime, or active 3-hour automation exists.
+silence when no candidate is eligible. PR36 implements deployable repository
+systemd artifacts only. It is **not deployed**, **not enabled**, and **not
+authorized** in production. No installed systemd timer, cron schedule,
+persistent runtime, or active 3-hour automation exists.
 
-No current documentation reconciliation authorizes Telegram, Owner send,
-lifecycle mutation, Source Audit, Web, AI, scheduler, recurring automation, or
-persistent runtime work.
+No current implementation PR authorizes Telegram, Owner send, lifecycle
+mutation, Source Audit, Web, AI, production systemd mutation, recurring
+production automation, or persistent runtime work.
 
 Fresh exact-head server evidence remains higher authority than code/CLI, which remains higher authority than canonical docs, which remains higher authority than historical reports.

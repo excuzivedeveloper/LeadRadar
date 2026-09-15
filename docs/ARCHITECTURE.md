@@ -241,8 +241,32 @@ than a mutable handle. `sent`, `failed`, and ambiguous attempts are terminal for
 automatic notification: future passes do not retry them. Stale/empty and
 unresolvable probes do not write a terminal notification row; they update the
 separate bounded probe-state row, allowing the candidate to become eligible
-later and then notify once. Recurring scheduling still requires a separately
-reviewed design, explicit authorization, and an explicit deployment decision.
+later and then notify once.
+
+PR36 accepts a narrow recurring scheduling layer for this existing one-shot:
+
+```text
+systemd timer
+-> systemd Type=oneshot service
+-> /opt/leadradar/LeadRadar/.venv/bin/python -m freelancer_bot --owner-candidate-notifications --owner-candidate-notification-limit 5
+-> existing OwnerCandidateNotificationService.run_once(...)
+-> process exits
+```
+
+The timer cadence is deterministic wall-clock UTC every three hours:
+`00:00`, `03:00`, `06:00`, `09:00`, `12:00`, `15:00`, `18:00`, and `21:00`.
+`Persistent=false` means no downtime catch-up or missed-run replay. The service
+uses `Restart=no`, so a failed pass waits for the next normal calendar event
+rather than entering an immediate retry loop.
+
+This scheduler does not use `--run`, `--bot-only`, `--collector-only`,
+`operator_cli`, a Python scheduler loop, cron, Docker scheduling, Web
+Discovery, Source Audit, AI, Opportunity Analysis, catch-up, lifecycle
+transitions, join/leave, or approved-source collector runtime. It bounds each
+scheduled invocation to at most 5 candidate sources considered; cards sent are
+therefore `SENT <= CANDIDATES_CONSIDERED <= 5`. Zero-send scheduled runs are
+valid when no eligible fresh candidate exists. Production installation and
+timer enabling remain separate Owner-authorized gates.
 
 Reservation outcomes are reported distinctly: true duplicate attempts increment
 `ALREADY_NOTIFIED`, while source disappearance, no-longer-candidate races, and
