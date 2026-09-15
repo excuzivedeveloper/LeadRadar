@@ -382,13 +382,16 @@ Do not sync to a newer-than-authorized `origin/main` and do not use local merge/
 Current required order is:
 
 ```text
-1. design recurring notification behavior for independent review
-2. preserve exact current profile/current intent/profile revision binding
-3. preserve strong-only selection and pre-LIMIT cooldown suppression
-4. preserve durable at-most-once notification dedupe
-5. preserve silence when nothing is eligible
-6. request separate OWNER authorization before any recurring production automation
-7. keep persistent runtime stopped unless separately authorized
+1. complete independent review of the exact PR36 scheduler artifacts and docs
+2. obtain OWNER merge authorization
+3. merge the exact reviewed PR36 head
+4. obtain separate production git sync authorization
+5. run read-only PRELIVE on the merged production head: verify exact unit files, ExecStart, 3-hour UTC calendar, runtime env path, project Python, Alembic 20260914_0043, persistent runtime stopped, and timer not installed/enabled/active
+6. obtain separate OWNER authorization to install the systemd units, run daemon-reload, and enable the timer
+7. verify the timer enabled/active and the oneshot service initially inactive
+8. observe one real scheduled timer fire
+9. verify the bounded pass summary and durable DB/Telegram side effects
+10. if PASS, leave the timer enabled; persistent runtime remains separately unauthorized
 ```
 
 Known evidence is limited to the earlier stale/empty result for source `18`,

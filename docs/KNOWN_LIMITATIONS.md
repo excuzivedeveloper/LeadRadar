@@ -71,9 +71,10 @@ CANDIDATE_NOTIFICATION_TIMER_ENABLED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 ```
 
-The immediate gate is a separately reviewed recurring-notification design, not
-another cooldown production canary. Recurring notifications and persistent
-runtime remain unauthorized.
+The immediate gate is completion of PR36 review/merge and the separate
+production sync/PRELIVE/activation sequence, not another cooldown production
+canary. Recurring notifications remain not deployed, not enabled, and not
+production-authorized; persistent runtime remains unauthorized.
 
 Useful personalized opportunity delivery remains a later product limitation. The narrower fact now proven is durable delivery persistence for source-candidate cards for sources `19` and `20`; that does not establish end-to-end matched-opportunity delivery or Owner review/action.
 
@@ -206,9 +207,11 @@ high-relevance notification success. Its authorization is consumed and retry is
 forbidden.
 
 PR34 later recorded a nonterminal source-`18` stale probe-state row and proved
-immediate pre-LIMIT selector suppression before Telegram. Recurring 3-hour/max-5
-operation now requires a separately reviewed recurring design and explicit
-authorization; it remains unauthorized and not deployed.
+immediate pre-LIMIT selector suppression before Telegram. The recurring
+3-hour/max-5 scheduler is implemented in PR36 and independently reviewed at the
+implementation layer, but production deployment/installation/enablement still
+requires merge, separate production sync/PRELIVE, and explicit Owner activation
+authorization. It remains unauthorized and not deployed.
 
 ## What the historical membership investigation established
 
