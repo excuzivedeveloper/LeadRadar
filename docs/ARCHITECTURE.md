@@ -2,7 +2,7 @@
 
 **Status:** CANONICAL  
 **Last verified:** 2026-09-14
-**Implementation baseline:** cooldown/backoff PR based on `437c9dcc4b35846b6ce828258272814e06a79d13`
+**Implementation baseline:** PR34 production cooldown deployment at `d7f1248fdee62d6eee13e4256614ee15c4cc2846`
 
 ## Purpose
 
@@ -114,7 +114,7 @@ SearchProfiles, matching, deliveries, feedback and entitlement state.
 Alembic is the V2 schema path. The current production deployment is at:
 
 ```text
-PRODUCTION_ALEMBIC_CURRENT=20260908_0042
+PRODUCTION_ALEMBIC_CURRENT=20260914_0043
 ```
 
 SQLite remains legacy compatibility only. `LEGACY_DELIVERY_ENABLED=false` in the
@@ -203,7 +203,7 @@ This prevents a stale top page from starving deeper candidates while still
 allowing stale, empty, or temporarily unresolvable candidates to be reprobed
 after their bounded cooldown expires.
 
-The separate `owner_source_candidate_probe_state` table bounds those later
+The deployed `owner_source_candidate_probe_state` table bounds those later
 re-probes without turning them into terminal notification attempts. Its primary
 key is `(recipient_chat_id, source_id)` and each row stores the exact
 SearchProfile, deterministic discovery intent, and profile revision binding.
@@ -218,6 +218,12 @@ outcome changes reset the streak to one. The PostgreSQL upsert increments the
 streak atomically under concurrent writers. A proven fresh outcome deletes its
 exact-binding probe state before reservation; `reserved`, `sent`, and `failed`
 notification rows remain the permanent recipient/source exclusion authority.
+The stale exact-binding suppression path is production-proven for source `18`:
+one current Owner/profile/intent/revision `stale_or_empty` row recorded a
+24-hour cooldown, and an immediate read-only selector pass suppressed that row
+before Telegram while allowing deeper eligible sources. The unresolvable
+escalation sequence is implemented and tested, but not independently
+live-proven.
 
 For each notification attempt the probed Telegram identity and Owner URL come
 from one coherent address decision: a valid source handle wins and produces both
@@ -235,8 +241,8 @@ than a mutable handle. `sent`, `failed`, and ambiguous attempts are terminal for
 automatic notification: future passes do not retry them. Stale/empty and
 unresolvable probes do not write a terminal notification row; they update the
 separate bounded probe-state row, allowing the candidate to become eligible
-later and then notify once. Recurring scheduling still requires separately
-authorized production validation and an explicit deployment decision.
+later and then notify once. Recurring scheduling still requires a separately
+reviewed design, explicit authorization, and an explicit deployment decision.
 
 Reservation outcomes are reported distinctly: true duplicate attempts increment
 `ALREADY_NOTIFIED`, while source disappearance, no-longer-candidate races, and

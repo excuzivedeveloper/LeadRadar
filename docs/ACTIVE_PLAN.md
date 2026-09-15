@@ -2,19 +2,19 @@
 
 **Status:** CANONICAL / ACTIVE  
 **Last verified:** 2026-09-14
-**Implementation baseline:** cooldown/backoff PR based on `437c9dcc4b35846b6ce828258272814e06a79d13`
-**Latest verified production evidence head:** `437c9dcc4b35846b6ce828258272814e06a79d13`
+**Implementation baseline:** PR34 production cooldown deployment at `d7f1248fdee62d6eee13e4256614ee15c4cc2846`
+**Latest verified production evidence head:** `d7f1248fdee62d6eee13e4256614ee15c4cc2846`
 
 This file defines execution order. Implemented capability does not imply authorization to activate it.
 
 ## Current production baseline
 
 ```text
-LATEST_VERIFIED_PRODUCTION_EVIDENCE_HEAD=437c9dcc4b35846b6ce828258272814e06a79d13
-IMPLEMENTATION_BASE=437c9dcc4b35846b6ce828258272814e06a79d13
+LATEST_VERIFIED_PRODUCTION_EVIDENCE_HEAD=d7f1248fdee62d6eee13e4256614ee15c4cc2846
+IMPLEMENTATION_BASE=d7f1248fdee62d6eee13e4256614ee15c4cc2846
 BRANCH=main
 TRACKED_WORKTREE=CLEAN
-ALEMBIC_CURRENT=20260908_0042
+ALEMBIC_CURRENT=20260914_0043
 PERSISTENT_RUNTIME=STOPPED
 PROFILE_DISCOVERY_INTENT_VERSION=profile-discovery-intent.v2
 ```
@@ -95,37 +95,45 @@ REPLENISHMENT_RUN_KEY=owner-profile-web-replenishment-20260914-v1
 REPLENISHMENT_DISCOVERY_RUN_ID=0d7ff4de-1845-418e-8b1b-3b78d8ae0b06
 REPLENISHMENT_DISCOVERY_RUN_STATUS=completed
 NEW_CURRENT_STRONG_CANDIDATE_SOURCE_IDS=23,24,26
+CURRENT_STRONG_CANDIDATE_SOURCE_IDS=18,23,24,26
 SOURCE_23_NOTIFICATION_CANARY=NO_SEND_STALE_OR_EMPTY
 SOURCE_24_NOTIFICATION_CANARY=NO_SEND_STALE_OR_EMPTY
 SOURCE_26_NOTIFICATION_CANARY=PASS_SENT
-POST_SCAN_CURSOR=26
+POST_SCAN_CURSOR=18
 OWNER_NOTIFICATION_COUNT=4
 HIGH_RELEVANCE_GATE_LIVE_VALIDATED=YES
 OWNER_CARD_SEND_UNDER_PR32_PROVEN=YES
+PR34_REVIEW=PASS
+PR34_REVIEWED_HEAD=656443ea9e64a3f757ef05309a502c6661841523
+PR34_MERGED=YES
+PR34_MERGE_COMMIT=d7f1248fdee62d6eee13e4256614ee15c4cc2846
+PR34_PRODUCTION_SYNC=PASS
+PR34_ALEMBIC_CURRENT=20260914_0043
+PR34_COOLDOWN_PRELIVE=PASS
+PR34_SOURCE18_STALE_COOLDOWN_VALIDATION=PASS
+COOLDOWN_BACKOFF_PRODUCTION_VALIDATED=YES
+SOURCE_18_PROBE_OUTCOME=stale_or_empty
+SOURCE_18_PROBE_COOLDOWN_SECONDS=86400
+POST_READ_ONLY_COOLDOWN_SUPPRESSED_COUNT=1
+POST_READ_ONLY_SOURCE_18_ELIGIBLE=NO
+POST_READ_ONLY_ELIGIBLE_PAGE_SOURCE_IDS=23,24
 ```
 
-## Current implementation gate
+## Current implementation state
 
 ```text
 COOLDOWN_BACKOFF_IMPLEMENTED=YES
-MIGRATION_ADDED=20260914_0043
-PRODUCTION_MIGRATION_CURRENT=20260908_0042
+MIGRATION_DEPLOYED=20260914_0043
+COOLDOWN_BACKOFF_PRODUCTION_VALIDATED=YES
 RECURRING_NOTIFICATION_AUTOMATION_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 ```
 
-Execution order:
-
-1. independent review of the exact cooldown implementation head;
-2. Owner merge authorization, then merge that exact reviewed head;
-3. separate production sync and migration authorization;
-4. read-only exact-state PRELIVE verification;
-5. separately authorize one bounded stale/unresolvable probe to create real state;
-6. prove read-only that an immediate selector pass excludes it before Telegram;
-7. only then discuss a recurring 3-hour/max-5 policy.
-
-No step above currently authorizes production work, recurring scheduling, or a
-persistent LeadRadar runtime.
+PR34 completed independent review, merge, production sync, migration, read-only
+PRELIVE, one bounded source-`18` stale cooldown validation, and read-only proof
+that immediate re-selection is suppressed before Telegram. The next stage is a
+separately reviewed recurring-notification design. No current step authorizes
+recurring scheduling or a persistent LeadRadar runtime.
 
 The bounded planner contract remained:
 
@@ -450,14 +458,14 @@ it did not execute a live non-strong negative-control case.
 ## Current gate
 
 ```text
-CURRENT_GATE=COOLDOWN_IMPLEMENTATION_INDEPENDENT_REVIEW
-IMPLEMENTATION_BASE=437c9dcc4b35846b6ce828258272814e06a79d13
+CURRENT_GATE=RECURRING_NOTIFICATION_DESIGN_REVIEW
+IMPLEMENTATION_BASE=d7f1248fdee62d6eee13e4256614ee15c4cc2846
 OWNER_PROFILE_GATE=EXACT_ACTIVE_PRIMARY_CONFIRMED
 DISCOVERY_INTENT_GATE=CURRENT_DETERMINISTIC_INTENT
 OWNER_CANDIDATE_NOTIFICATION_RELEVANCE_GATE=strong_only
 RELEVANCE_FILTER_BEFORE_LIMIT=YES
-NEXT_GATE=INDEPENDENT_REVIEW_OF_EXACT_IMPLEMENTATION_HEAD
-NEXT_PRODUCT_GATE_AFTER_REVIEW_MERGE_SYNC=BOUNDED_COOLDOWN_VALIDATION
+COOLDOWN_BACKOFF_PRODUCTION_VALIDATED=YES
+NEXT_GATE=SEPARATELY_REVIEWED_RECURRING_NOTIFICATION_DESIGN
 NEW_LIVE_ACTION_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 CANDIDATE_NOTIFICATION_RECURRING_AUTOMATION_AUTHORIZED=NO
@@ -466,20 +474,18 @@ CANDIDATE_NOTIFICATION_RECURRING_AUTOMATION_AUTHORIZED=NO
 ## Required sequence from here
 
 ```text
-1. independent review of the exact cooldown implementation head
-2. only after review PASS: Owner merge authorization
-3. merge the exact reviewed implementation head
-4. separate production sync and migration authorization
-5. read-only exact-state PRELIVE
-6. separately authorize one bounded stale/unresolvable probe
-7. read-only proof of immediate exact-binding exclusion before Telegram
-8. only then discuss recurring 3h/max5 scheduling
-9. persistent runtime remains unauthorized
+1. design the recurring notification policy for independent review
+2. preserve current profile/current intent/profile revision binding
+3. preserve strong-only selection and pre-LIMIT cooldown suppression
+4. preserve durable at-most-once notification dedupe
+5. preserve silence when nothing is eligible
+6. request separate Owner authorization before any recurring production automation
+7. persistent runtime remains unauthorized
 ```
 
-Do not retry consumed canaries. This implementation task permits no Telegram,
-Web, Owner send, lifecycle mutation, Source Audit, AI, migration, scheduler, or
-persistent runtime action.
+Do not retry consumed canaries. This docs reconciliation permits no Telegram,
+Web, Owner send, lifecycle mutation, Source Audit, AI, migration, scheduler,
+recurring automation, or persistent runtime action.
 
 Future lifecycle and membership actions remain independent choices:
 
@@ -510,11 +516,15 @@ Once source quality, lifecycle decisions, membership and delivery behavior have 
 
 ```text
 every 3 hours
-one pass
-max 5 new cards
-silence if none
-durable at-most-once
-never notify the same candidate twice
+one bounded pass
+max 5 candidate cards per pass
+current profile/current intent
+strong only
+durable at-most-once notification dedupe
+durable cooldown suppression
+silence if nothing eligible
 ```
 
-This target is not current production authorization.
+This target is not implemented as recurring production automation, not
+deployed, and not authorized. No systemd timer, cron schedule, persistent
+runtime, or active 3-hour automation exists.

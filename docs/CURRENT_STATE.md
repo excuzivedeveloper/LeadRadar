@@ -2,30 +2,31 @@
 
 **Status:** CANONICAL  
 **Snapshot date:** 2026-09-14
-**Implementation baseline:** cooldown/backoff PR based on `437c9dcc4b35846b6ce828258272814e06a79d13`
-**Latest verified production evidence head:** `437c9dcc4b35846b6ce828258272814e06a79d13`
+**Implementation baseline:** PR34 production cooldown deployment at `d7f1248fdee62d6eee13e4256614ee15c4cc2846`
+**Latest verified production evidence head:** `d7f1248fdee62d6eee13e4256614ee15c4cc2846`
 
 ## Executive status
 
-PR33 production docs sync passed. A later bounded profile Web replenishment
-completed and added current-strong candidate sources `23`, `24`, and `26`.
-Notification canaries classified sources `23` and `24` as stale/empty without
-notification rows; source `26` sent one durable Owner card. Source `26` remains
-`candidate`, and neither lifecycle approval nor Telegram membership is proven.
-
-This PR implements durable exact-binding re-probe suppression in new Alembic
-revision `20260914_0043`. It does not change production, whose database remains
-at `20260908_0042`. Recurring notification automation and persistent runtime
-remain unauthorized.
+PR34 was reviewed at `656443ea9e64a3f757ef05309a502c6661841523`, merged as
+`d7f1248fdee62d6eee13e4256614ee15c4cc2846`, synced to production, and migrated
+to Alembic `20260914_0043`. A read-only cooldown PRELIVE and one bounded
+source-`18` stale cooldown validation passed. Production remains stopped outside
+bounded tasks; recurring notification automation and persistent runtime remain
+unauthorized.
 
 ```text
 PR33_PRODUCTION_DOCS_SYNC=PASS
-PRODUCTION_HEAD=437c9dcc4b35846b6ce828258272814e06a79d13
+PR34_MERGED=YES
+PR34_REVIEWED_HEAD=656443ea9e64a3f757ef05309a502c6661841523
+PR34_MERGE_COMMIT=d7f1248fdee62d6eee13e4256614ee15c4cc2846
+PRODUCTION_HEAD=d7f1248fdee62d6eee13e4256614ee15c4cc2846
+ALEMBIC_CURRENT=20260914_0043
 BOUNDED_PROFILE_WEB_REPLENISHMENT=PASS_NEW_STRONG
 REPLENISHMENT_RUN_KEY=owner-profile-web-replenishment-20260914-v1
 REPLENISHMENT_DISCOVERY_RUN_ID=0d7ff4de-1845-418e-8b1b-3b78d8ae0b06
 REPLENISHMENT_DISCOVERY_RUN_STATUS=completed
 NEW_CURRENT_STRONG_CANDIDATE_SOURCE_IDS=23,24,26
+CURRENT_STRONG_CANDIDATE_SOURCE_IDS=18,23,24,26
 SOURCE_23_HANDLE=backend_job_geeklink
 SOURCE_24_HANDLE=well_paid_job
 SOURCE_26_HANDLE=devkz_jobs
@@ -36,19 +37,26 @@ SOURCE_18_NOTIFICATION_ROW_COUNT=0
 SOURCE_23_NOTIFICATION_ROW_COUNT=0
 SOURCE_24_NOTIFICATION_ROW_COUNT=0
 SOURCE_26_NOTIFICATION_STATUS=sent
-POST_SCAN_CURSOR=26
+POST_SCAN_CURSOR=18
 OWNER_NOTIFICATION_COUNT=4
 HIGH_RELEVANCE_GATE_LIVE_VALIDATED=YES
 OWNER_CARD_SEND_UNDER_PR32_PROVEN=YES
 SOURCE_26_LIFECYCLE=candidate
 SOURCE_26_MEMBERSHIP_PROVEN=NO
 COOLDOWN_BACKOFF_IMPLEMENTED=YES
-COOLDOWN_BACKOFF_PRODUCTION_VALIDATED=NO
+COOLDOWN_BACKOFF_PRODUCTION_VALIDATED=YES
+SOURCE_18_PROBE_OUTCOME=stale_or_empty
+SOURCE_18_PROBE_COOLDOWN_SECONDS=86400
+SOURCE_18_NOTIFICATION_ROW_COUNT=0
+SOURCE_18_ACTIVE_COOLDOWN_ROW=YES
+POST_READ_ONLY_COOLDOWN_SUPPRESSED_COUNT=1
+POST_READ_ONLY_SOURCE_18_ELIGIBLE=NO
+POST_READ_ONLY_ELIGIBLE_PAGE_SOURCE_IDS=23,24
 RECURRING_NOTIFICATION_AUTOMATION_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 ```
 
-LeadRadar production is stable at merge commit `437c9dcc4b35846b6ce828258272814e06a79d13`. PR32 reviewed head `e197a532ace1a79ac5c335b5ab220ee228eda637` passed independent review, was merged and synced, and its post-sync verification passed after the initial incomplete checkpoint was corrected by checkpoint `3A`. PR33 then reconciled the canonical production evidence. The strong-only Owner candidate-notification selector is deployed; persistent runtime remains stopped.
+LeadRadar production is stable at merge commit `d7f1248fdee62d6eee13e4256614ee15c4cc2846`. PR34 deployed the exact-binding nonterminal probe-state table and proved the stale 24-hour cooldown path for source `18`: one stale/empty probe was recorded, no notification row was created, no Owner notification count changed, and an immediate read-only selector pass suppressed source `18` before Telegram while allowing deeper eligible sources `23` and `24`. The strong-only Owner candidate-notification selector is deployed; persistent runtime remains stopped.
 
 PR24 production sync, post-sync verification and full bounded offline Stage A all passed. PR27 production sync, post-sync verification and the technical read-only PRELIVE for the repaired profile-discovery path also passed.
 
@@ -75,15 +83,15 @@ The authorization is consumed and retry is forbidden. Historical source
 ## Production contract
 
 ```text
-LATEST_VERIFIED_PRODUCTION_EVIDENCE_HEAD=437c9dcc4b35846b6ce828258272814e06a79d13
-PRODUCTION_HEAD=437c9dcc4b35846b6ce828258272814e06a79d13
-IMPLEMENTATION_BASE=437c9dcc4b35846b6ce828258272814e06a79d13
+LATEST_VERIFIED_PRODUCTION_EVIDENCE_HEAD=d7f1248fdee62d6eee13e4256614ee15c4cc2846
+PRODUCTION_HEAD=d7f1248fdee62d6eee13e4256614ee15c4cc2846
+IMPLEMENTATION_BASE=d7f1248fdee62d6eee13e4256614ee15c4cc2846
 BRANCH=main
 TRACKED_WORKTREE=CLEAN
 PYTHON_VERSION=3.14.7
 PRODUCTION_PYTHON=./.venv/bin/python
 BARE_PYTHON=ABSENT
-ALEMBIC_CURRENT=20260908_0042
+ALEMBIC_CURRENT=20260914_0043
 PERSISTENT_RUNTIME=STOPPED
 PROFILE_DISCOVERY_INTENT_VERSION=profile-discovery-intent.v2
 ```
@@ -177,7 +185,7 @@ sources.lifecycle_status
 candidate=candidate
 ```
 
-Latest bounded evidence snapshot:
+Historical bounded evidence snapshot (pre-replenishment; not current production baseline):
 
 ```text
 DISCOVERY_RUN_COUNT=7
@@ -189,7 +197,13 @@ AI_CALL_TELEMETRY_COUNT=51
 SOURCE_LIFECYCLE_EVENT_COUNT=24
 ```
 
-Counts are observational snapshots, not stable invariants.
+These values are a historical observational snapshot, not current invariants. The current proven Owner notification count after replenishment, source-26 send, PR34 deployment, and source-18 cooldown validation is:
+
+```text
+OWNER_NOTIFICATION_COUNT=4
+```
+
+No fresh replacement measurements are asserted here for the other historical counters.
 
 ## PR23 bounded Web baseline
 
@@ -646,10 +660,13 @@ missing-current-relevance candidates are excluded before Telegram. The live
 canary selected one strong candidate and did not run a weak, adequate, or
 missing-current-relevance negative control.
 
-At production head `437c9dcc4b35846b6ce828258272814e06a79d13`,
-stale/empty selection writes no notification marker, so sources `18`, `23`, and
-`24` are eligible again after cursor wrap. This PR implements the required
-nonterminal cooldown, but it is not yet deployed or production-validated.
+At production head `d7f1248fdee62d6eee13e4256614ee15c4cc2846`, stale/empty
+selection writes nonterminal exact-binding probe state rather than a terminal
+notification marker. The source-`18` validation recorded one current
+Owner/profile/intent/revision `stale_or_empty` row with a 24-hour cooldown and
+proved immediate selector suppression before Telegram. Sources `23` and `24`
+remained eligible after source `18` suppression; no cooldown rows or post-PR34
+re-probes are claimed for them.
 
 ## Current authorization state
 
@@ -684,24 +701,28 @@ PERSISTENT_RUNTIME_AUTHORIZED=NO
 ## Next gate
 
 ```text
-NEXT_PRODUCT_GATE_AFTER_REVIEW_MERGE_SYNC=BOUNDED_COOLDOWN_VALIDATION
+NEXT_PRODUCT_GATE=RECURRING_NOTIFICATION_DESIGN_REVIEW
 ```
 
 ```text
-1. independently review the exact cooldown implementation head
-2. only after review PASS, request Owner merge authorization
-3. merge the exact reviewed head
-4. separately authorize production sync and migration to 20260914_0043
-5. run a read-only exact-state PRELIVE
-6. separately authorize one bounded stale/unresolvable probe
-7. prove by read-only selection that immediate re-probe is suppressed before Telegram
-8. only after that evidence, discuss recurring scheduling
+1. design a separately reviewed recurring-notification policy
+2. preserve current profile/current deterministic intent/revision binding
+3. keep `relevance_class=strong`
+4. keep durable at-most-once notification dedupe
+5. keep durable cooldown suppression before `LIMIT`
+6. keep silence when nothing is eligible
+7. request separate authorization before any recurring production automation
 ```
 
-The later cooldown validation must keep `relevance_class=strong` and the exact
-active confirmed profile/current deterministic intent binding. This PR contains
-no authorization or command for production sync, migration, Telegram, Owner
-send, lifecycle mutation, Source Audit, Web, AI, scheduler, or persistent
-runtime work.
+The intended future recurring target is every 3 hours, one bounded pass, at
+most 5 candidate cards per pass, current profile/current intent, strong only,
+durable at-most-once notification dedupe, durable cooldown suppression, and
+silence when no candidate is eligible. It is **not implemented as recurring
+production automation**, **not deployed**, and **not authorized**. No systemd
+timer, cron schedule, persistent runtime, or active 3-hour automation exists.
+
+No current documentation reconciliation authorizes Telegram, Owner send,
+lifecycle mutation, Source Audit, Web, AI, scheduler, recurring automation, or
+persistent runtime work.
 
 Fresh exact-head server evidence remains higher authority than code/CLI, which remains higher authority than canonical docs, which remains higher authority than historical reports.

@@ -2,22 +2,25 @@
 
 **Status:** CANONICAL  
 **Snapshot date:** 2026-09-14
-**Deployment code baseline:** `437c9dcc4b35846b6ce828258272814e06a79d13`
-**Latest verified production evidence head:** `437c9dcc4b35846b6ce828258272814e06a79d13`
+**Deployment code baseline:** `d7f1248fdee62d6eee13e4256614ee15c4cc2846`
+**Latest verified production evidence head:** `d7f1248fdee62d6eee13e4256614ee15c4cc2846`
 
 This document records the current shared-server LeadRadar layout and deployment boundaries. Exact operational commands live in [`OPERATIONS.md`](OPERATIONS.md). A docs-only repository head can be newer than the implementation baseline without changing deployed code behavior.
 
-The cooldown/backoff PR adds Alembic revision `20260914_0043` and a separate
-`owner_source_candidate_probe_state` table. It has not been deployed: production
-remains at `20260908_0042`. The migration creates an empty table with no inferred
-historical backfill. No scheduler, timer, service, runtime env, lifecycle, or
-membership configuration changes in this PR.
+PR34 deployed Alembic revision `20260914_0043` and the separate
+`owner_source_candidate_probe_state` table. The migration created no inferred
+historical backfill. A bounded source-`18` stale cooldown validation then
+recorded one current Owner/profile/intent/revision-bound `stale_or_empty` row
+with a 24-hour cooldown and proved immediate selector suppression before
+Telegram. No scheduler, timer, service, runtime env, lifecycle, or membership
+configuration changed.
 
-Current fresh evidence includes a passed PR33 docs sync, bounded Web
-replenishment yielding current-strong candidates `23`, `24`, and `26`, stale
-no-send outcomes for `23`/`24`, and one durable sent card for `26`. Source `26`
-remains a candidate and its membership is unproven. Production scan cursor is
-`26`; total Owner candidate notification rows are `4`.
+Current fresh evidence includes PR34 merge/sync/migration, read-only cooldown
+PRELIVE, source-`18` stale cooldown validation, bounded Web replenishment
+yielding current-strong candidates `23`, `24`, and `26`, stale no-send outcomes
+for `23`/`24`, and one durable sent card for `26`. Source `26` remains a
+candidate and its membership is unproven. Production scan cursor is `18`; total
+Owner candidate notification rows remain `4`.
 
 ## Server layout
 
@@ -41,7 +44,7 @@ container=leadradar-postgres
 image=postgres:18.4-alpine
 host_bind=127.0.0.1:55432->5432/tcp
 health=healthy
-alembic_current=20260908_0042
+alembic_current=20260914_0043
 ```
 
 The canonical runtime env must be loaded before DB-connected Alembic commands. Never print PostgreSQL credentials or the full credentialed `DATABASE_URL`.
@@ -322,6 +325,37 @@ No exact latest-message timestamp is proven. No Owner card, reservation,
 lifecycle change, join/leave action, runtime-env edit, or persistent runtime
 occurred. Historical source `19`/`20` sent rows predate the strong-only selector.
 
+## PR34 cooldown deployment and validation state
+
+```text
+PR34_REVIEWED_HEAD=656443ea9e64a3f757ef05309a502c6661841523
+PR34_MERGE_COMMIT=d7f1248fdee62d6eee13e4256614ee15c4cc2846
+PRODUCTION_HEAD=d7f1248fdee62d6eee13e4256614ee15c4cc2846
+ALEMBIC_CURRENT=20260914_0043
+PERSISTENT_RUNTIME=STOPPED
+COOLDOWN_BACKOFF_PRODUCTION_VALIDATED=YES
+```
+
+The deployed `owner_source_candidate_probe_state` table currently has one
+proven source-`18` stale row for the active Owner/profile/intent/revision
+binding:
+
+```text
+SOURCE_18_PROBE_OUTCOME=stale_or_empty
+SOURCE_18_PROBE_COOLDOWN_SECONDS=86400
+SOURCE_18_NOTIFICATION_ROW_COUNT=0
+POST_SCAN_CURSOR=18
+POST_READ_ONLY_COOLDOWN_SUPPRESSED_COUNT=1
+POST_READ_ONLY_SOURCE_18_ELIGIBLE=NO
+POST_READ_ONLY_ELIGIBLE_PAGE_SOURCE_IDS=23,24
+OWNER_NOTIFICATION_COUNT=4
+```
+
+This proves the stale 24-hour cooldown path and immediate selector suppression.
+It does not prove source `18` notification, approval, join/membership, or an
+exact latest-message timestamp. It does not prove cooldown rows for sources
+`23` or `24`, and it does not prove the unresolvable escalation sequence live.
+
 ## Promotion rules
 
 Before production checkout changes:
@@ -342,36 +376,43 @@ Do not sync to a newer-than-authorized `origin/main` and do not use local merge/
 Current required order is:
 
 ```text
-1. independent re-review of the exact follow-up head
-2. OWNER merge authorization
-3. merge the exact reviewed head
-4. separate OWNER-authorized production sync of the exact merge result
-5. apply and verify Alembic 20260914_0043 within that authorized sync/migration gate
-6. read-only PRELIVE: exact synced head, migration, current binding, cooldown baseline
-7. separately authorize one bounded stale/unresolvable probe to create probe state
-8. prove read-only that an immediate selector suppresses that binding before Telegram
-9. only after validation, discuss recurring 3h/max5 scheduling separately
+1. design recurring notification behavior for independent review
+2. preserve exact current profile/current intent/profile revision binding
+3. preserve strong-only selection and pre-LIMIT cooldown suppression
+4. preserve durable at-most-once notification dedupe
+5. preserve silence when nothing is eligible
+6. request separate OWNER authorization before any recurring production automation
+7. keep persistent runtime stopped unless separately authorized
 ```
 
 Known evidence is limited to the earlier stale/empty result for source `18`,
 then replenishment producing current-strong sources `23`, `24`, and `26`:
 sources `23` and `24` were stale/empty no-sends, while source `26` produced one
-durable sent Owner card. The scan cursor is `26` and the current proven Owner
-notification count is `4`. This does not establish the total current strong
+durable sent Owner card. PR34 then recorded one source-`18` stale cooldown row,
+advanced the scan cursor to `18`, and immediately suppressed source `18` before
+Telegram. The current proven Owner notification count is `4`. This does not
+establish the total current strong
 pool. Source `26` remains lifecycle `candidate`, and its membership is not
 proven.
 
-Implementation and test success are not production validation:
+Current authorization state:
 
 ```text
-COOLDOWN_BACKOFF_PRODUCTION_VALIDATED=NO
+COOLDOWN_BACKOFF_PRODUCTION_VALIDATED=YES
 RECURRING_NOTIFICATION_AUTOMATION_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 ```
 
+The intended future recurring target is every 3 hours, one bounded pass, at
+most 5 candidate cards per pass, current profile/current intent, strong only,
+durable at-most-once notification dedupe, durable cooldown suppression, and
+silence when no candidate is eligible. It is not implemented as recurring
+production automation, not deployed, and not authorized. No systemd timer, cron
+schedule, persistent runtime, or active 3-hour automation exists.
+
 Keep `relevance_class=strong`; do not lower the threshold merely to produce a
-card. No production sync, migration, Telegram, Web, AI, scheduler, or runtime
-action is authorized by this documentation follow-up.
+card. No production sync, migration, Telegram, Web, AI, scheduler, recurring
+automation, or runtime action is authorized by this documentation follow-up.
 
 ## Shared-server boundary
 
