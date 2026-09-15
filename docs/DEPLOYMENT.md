@@ -1,9 +1,9 @@
 # LeadRadar — Current Deployment
 
 **Status:** CANONICAL  
-**Snapshot date:** 2026-09-14
-**Deployment code baseline:** `d7f1248fdee62d6eee13e4256614ee15c4cc2846`
-**Latest verified production evidence head:** `d7f1248fdee62d6eee13e4256614ee15c4cc2846`
+**Snapshot date:** 2026-09-15
+**Deployment code baseline:** `ab36df17334f8eff57fe475c8090a29a6ac1243c`
+**Latest verified production evidence head:** `ab36df17334f8eff57fe475c8090a29a6ac1243c`
 
 This document records the current shared-server LeadRadar layout and deployment boundaries. Exact operational commands live in [`OPERATIONS.md`](OPERATIONS.md). A docs-only repository head can be newer than the implementation baseline without changing deployed code behavior.
 
@@ -13,7 +13,13 @@ historical backfill. A bounded source-`18` stale cooldown validation then
 recorded one current Owner/profile/intent/revision-bound `stale_or_empty` row
 with a 24-hour cooldown and proved immediate selector suppression before
 Telegram. No scheduler, timer, service, runtime env, lifecycle, or membership
-configuration changed.
+configuration changed. PR35 then left the production checkout at
+`ab36df17334f8eff57fe475c8090a29a6ac1243c` with Alembic still
+`20260914_0043` and persistent runtime stopped.
+
+PR36 adds repository unit files for a future separately authorized systemd
+timer. Those files are not installed in `/etc/systemd/system`, the timer is not
+enabled, and production recurring notification automation remains unauthorized.
 
 Current fresh evidence includes PR34 merge/sync/migration, read-only cooldown
 PRELIVE, source-`18` stale cooldown validation, bounded Web replenishment
@@ -330,7 +336,7 @@ occurred. Historical source `19`/`20` sent rows predate the strong-only selector
 ```text
 PR34_REVIEWED_HEAD=656443ea9e64a3f757ef05309a502c6661841523
 PR34_MERGE_COMMIT=d7f1248fdee62d6eee13e4256614ee15c4cc2846
-PRODUCTION_HEAD=d7f1248fdee62d6eee13e4256614ee15c4cc2846
+PRODUCTION_HEAD=ab36df17334f8eff57fe475c8090a29a6ac1243c
 ALEMBIC_CURRENT=20260914_0043
 PERSISTENT_RUNTIME=STOPPED
 COOLDOWN_BACKOFF_PRODUCTION_VALIDATED=YES
@@ -399,16 +405,32 @@ Current authorization state:
 
 ```text
 COOLDOWN_BACKOFF_PRODUCTION_VALIDATED=YES
+RECURRING_NOTIFICATION_SCHEDULER_IMPLEMENTED=YES
+RECURRING_NOTIFICATION_AUTOMATION_DEPLOYED=NO
 RECURRING_NOTIFICATION_AUTOMATION_AUTHORIZED=NO
+RECURRING_NOTIFICATION_TIMER_ENABLED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 ```
 
-The intended future recurring target is every 3 hours, one bounded pass, at
-most 5 candidate cards per pass, current profile/current intent, strong only,
-durable at-most-once notification dedupe, durable cooldown suppression, and
-silence when no candidate is eligible. It is not implemented as recurring
-production automation, not deployed, and not authorized. No systemd timer, cron
-schedule, persistent runtime, or active 3-hour automation exists.
+PR36 defines the future recurring target as a systemd timer plus bounded
+Type=oneshot service. The service invokes only:
+
+```bash
+/opt/leadradar/LeadRadar/.venv/bin/python -m freelancer_bot \
+  --owner-candidate-notifications \
+  --owner-candidate-notification-limit 5
+```
+
+The timer is anchored to UTC every three hours:
+
+```text
+OnCalendar=*-*-* 00/3:00:00 UTC
+Persistent=false
+```
+
+It considers at most 5 candidates per pass; it does not promise exactly five
+sends. It is not deployed, not enabled, and not authorized. No installed systemd
+timer, cron schedule, persistent runtime, or active 3-hour automation exists.
 
 Keep `relevance_class=strong`; do not lower the threshold merely to produce a
 card. No production sync, migration, Telegram, Web, AI, scheduler, recurring
