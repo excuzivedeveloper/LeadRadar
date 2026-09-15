@@ -185,7 +185,7 @@ sources.lifecycle_status
 candidate=candidate
 ```
 
-Latest bounded evidence snapshot:
+Historical bounded evidence snapshot (pre-replenishment; not current production baseline):
 
 ```text
 DISCOVERY_RUN_COUNT=7
@@ -197,7 +197,13 @@ AI_CALL_TELEMETRY_COUNT=51
 SOURCE_LIFECYCLE_EVENT_COUNT=24
 ```
 
-Counts are observational snapshots, not stable invariants.
+These values are a historical observational snapshot, not current invariants. The current proven Owner notification count after replenishment, source-26 send, PR34 deployment, and source-18 cooldown validation is:
+
+```text
+OWNER_NOTIFICATION_COUNT=4
+```
+
+No fresh replacement measurements are asserted here for the other historical counters.
 
 ## PR23 bounded Web baseline
 

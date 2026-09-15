@@ -302,7 +302,7 @@ tested but not independently live-proven. This implementation does not
 authorize a recurring schedule, Source Audit, discovery, AI, lifecycle mutation,
 membership action, or persistent runtime.
 
-Latest bounded evidence snapshot:
+Historical bounded evidence snapshot (pre-replenishment; not current production baseline):
 
 ```text
 DISCOVERY_RUN_COUNT=7
@@ -314,7 +314,13 @@ AI_CALL_TELEMETRY_COUNT=51
 SOURCE_LIFECYCLE_EVENT_COUNT=24
 ```
 
-Counts are snapshots, not invariants.
+These values are a historical observational snapshot, not current invariants. The current proven Owner notification count after replenishment, source-26 send, PR34 deployment, and source-18 cooldown validation is:
+
+```text
+OWNER_NOTIFICATION_COUNT=4
+```
+
+No fresh replacement measurements are asserted here for the other historical counters.
 
 ## 7. Alembic contract
 
