@@ -2,8 +2,8 @@
 
 **Status:** CANONICAL  
 **Last verified:** 2026-09-14
-**Implementation baseline:** cooldown/backoff PR based on `437c9dcc4b35846b6ce828258272814e06a79d13`
-**Latest verified production evidence head:** `437c9dcc4b35846b6ce828258272814e06a79d13`
+**Implementation baseline:** PR34 production cooldown deployment at `d7f1248fdee62d6eee13e4256614ee15c4cc2846`
+**Latest verified production evidence head:** `d7f1248fdee62d6eee13e4256614ee15c4cc2846`
 
 This document distinguishes code that exists from behavior that has actually been validated in the current deployment.
 
@@ -47,27 +47,30 @@ PR32_NOTIFICATION_CANARY_RESULT=NO_SEND_STALE_OR_EMPTY
 PR32_NOTIFICATION_CANARY_AUTHORIZATION_CONSUMED=YES
 PR32_NOTIFICATION_CANARY_RETRY_ALLOWED=NO
 PR33_PRODUCTION_DOCS_SYNC=PASS
-PRODUCTION_HEAD=437c9dcc4b35846b6ce828258272814e06a79d13
+PRODUCTION_HEAD=d7f1248fdee62d6eee13e4256614ee15c4cc2846
+ALEMBIC_CURRENT=20260914_0043
 BOUNDED_PROFILE_WEB_REPLENISHMENT=PASS_NEW_STRONG
 NEW_CURRENT_STRONG_CANDIDATE_SOURCE_IDS=23,24,26
+CURRENT_STRONG_CANDIDATE_SOURCE_IDS=18,23,24,26
 SOURCE_23_NOTIFICATION_CANARY=NO_SEND_STALE_OR_EMPTY
 SOURCE_24_NOTIFICATION_CANARY=NO_SEND_STALE_OR_EMPTY
 SOURCE_26_NOTIFICATION_CANARY=PASS_SENT
-POST_SCAN_CURSOR=26
+POST_SCAN_CURSOR=18
 OWNER_NOTIFICATION_COUNT=4
 SOURCE_26_LIFECYCLE=candidate
 SOURCE_26_MEMBERSHIP_PROVEN=NO
 COOLDOWN_BACKOFF_IMPLEMENTED=YES
-COOLDOWN_BACKOFF_PRODUCTION_VALIDATED=NO
-READY_FOR_RECURRING_NOTIFICATION_DECISION=NO
+COOLDOWN_BACKOFF_PRODUCTION_VALIDATED=YES
+SOURCE_18_STALE_24H_COOLDOWN_PRODUCTION_PROVEN=YES
+SOURCE_18_IMMEDIATE_SELECTOR_SUPPRESSION_PRODUCTION_PROVEN=YES
+UNRESOLVABLE_BACKOFF_LIVE_PROVEN=NO
 CANDIDATE_NOTIFICATION_RECURRING_AUTOMATION_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 ```
 
-The immediate gate is independent review of this cooldown implementation. After
-an exact-head merge and separately authorized production sync/migration, the
-next live gate is a separately authorized bounded cooldown validation. Recurring
-notifications and persistent runtime remain unauthorized.
+The immediate gate is a separately reviewed recurring-notification design, not
+another cooldown production canary. Recurring notifications and persistent
+runtime remain unauthorized.
 
 Useful personalized opportunity delivery remains a later product limitation. The narrower fact now proven is durable delivery persistence for source-candidate cards for sources `19` and `20`; that does not establish end-to-end matched-opportunity delivery or Owner review/action.
 
@@ -80,8 +83,8 @@ Useful personalized opportunity delivery remains a later product limitation. The
 5. **P1 — Lifecycle approval and Telegram membership are separate gates.** PostgreSQL `APPROVED` status plus public-history readability still does not guarantee Telegram live-update delivery. A future source approval requires explicit membership provisioning before collection readiness can be claimed.
 6. **P1 — Telegram account/platform limits remain external.** FloodWait, ChannelsTooMuch, membership loss, source removal/rename and access changes can interrupt collection independently of PostgreSQL correctness.
 7. **P1 — Membership drift is not automatically reconciled.** Previously approved source membership was brought to 13/13, but there is no authorized automatic join/remediation mechanism. Sources `19` and `20` were not joined by the new bounded probe.
-8. **P1 — Candidate notification automation remains unauthorized.** PR32's bounded canary proved live current-profile/current-intent strong selection and freshness suppression, but produced no reservation or Owner card. Source `18` remains unnotified after `STALE_OR_EMPTY=1`; the consumed authorization cannot be retried. Historical source `19`/`20` sends predate the strong-only selector.
-9. **P1 — Durable cooldown is implemented but not production-validated.** Sources `18`, `23`, and `24` have stale/empty evidence and no terminal notification rows. Without this PR they are wrap-reprobe eligible. Revision `20260914_0043` and pre-limit exact-binding suppression now implement the bounded policy, but production remains at `0042`; recurring 3-hour/max-5 scheduling cannot be considered until a separately authorized bounded production validation proves immediate selector exclusion before Telegram.
+8. **P1 — Candidate notification automation remains unauthorized.** PR32's bounded canary proved live current-profile/current-intent strong selection and freshness suppression, but produced no reservation or Owner card. PR34 later proved source-`18` stale 24-hour cooldown and immediate selector suppression. Historical source `19`/`20` sends predate the strong-only selector, and source `26` remains a candidate despite its sent card.
+9. **P1 — Durable cooldown has a narrower remaining validation boundary.** The stale/empty 24-hour cooldown plus immediate pre-LIMIT selector suppression are production-proven for source `18`. The unresolvable 6/12/24/48-hour escalation sequence is implemented and tested, but not separately live-proven. Recurring 3-hour/max-5 scheduling remains unauthorized and not deployed.
 10. **P1 — Legacy filter substring behavior can create false positives.** The accumulated stop-word matcher remains substring-based. It is intentionally preserved until enough shadow data supports a narrow redesign.
 11. **P1 — Current shadow sample is small.** Live path correctness is proven, but one successful natural shadow row is not enough to tune thresholds/keywords confidently.
 12. **P1 — OpenRouter model availability/cost are external.** `minimax/minimax-m3:free` availability, pricing and rate/free-tier limits can change outside the repository and must be reverified before further live validation or expanded use.
@@ -101,7 +104,7 @@ Useful personalized opportunity delivery remains a later product limitation. The
 26. **P2 — One-shot query bounds do not bound autonomous discovery.** `--max-queries` bounds an explicit operator run; persistent Web discovery remains unauthorized and separately unproven.
 27. **P2 — Successful access/freshness probes do not validate the lifecycle service.** The source `19`/`20` gate intentionally did not call `SourceValidationService`; source and validation-table hashes remained unchanged. Treat it as access/freshness evidence only.
 28. **P2 — Historical inactive collector row `1` remains persisted.** The duplicate-active anomaly is resolved and collector `2` is the sole active row. Collector `1` remains inactive for historical/FK continuity; its dependent operation-state row and historical references were intentionally preserved. This is not a blocker by itself, and its exact historical Telegram-user origin remains unproven.
-29. **P2 — Candidate supply is the immediate blocker.** The observed current-strong unnotified pool contained only source `18`, which failed freshness. Keep the strong threshold; the next later live gate is bounded profile Web replenishment followed by a read-only pool check. Exact bounds/run key and authorization remain pending.
+29. **P2 — Recurring scheduling remains a design and authorization gap.** The intended future target is every 3 hours, one bounded pass, max 5 candidate cards per pass, current profile/current intent, strong only, durable at-most-once notification dedupe, durable cooldown suppression, and silence if nothing is eligible. It is not implemented as recurring production automation, not deployed, and not authorized; persistent runtime remains stopped.
 
 ## PR27 bounded Web evidence boundary
 
@@ -199,10 +202,10 @@ reservation path, `mark_sent`, bot send, Owner-card delivery, or complete
 high-relevance notification success. Its authorization is consumed and retry is
 forbidden.
 
-Because no stale marker was written and the cursor wraps, source `18` can be
-selected again if the pool remains unchanged. Recurring 3-hour/max-5 operation
-requires a reviewed bounded stale/unresolvable re-probe cooldown or backoff
-policy and remains unauthorized.
+PR34 later recorded a nonterminal source-`18` stale probe-state row and proved
+immediate pre-LIMIT selector suppression before Telegram. Recurring 3-hour/max-5
+operation now requires a separately reviewed recurring design and explicit
+authorization; it remains unauthorized and not deployed.
 
 ## What the historical membership investigation established
 
