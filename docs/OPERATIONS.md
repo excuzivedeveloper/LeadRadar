@@ -1,7 +1,7 @@
 # LeadRadar — Production Operations
 
 **Status:** CANONICAL  
-**Last verified:** 2026-09-15
+**Last verified:** 2026-09-16
 **Implementation baseline:** PR35 production sync at `ab36df17334f8eff57fe475c8090a29a6ac1243c`
 **Latest verified production evidence head:** `ab36df17334f8eff57fe475c8090a29a6ac1243c`
 
@@ -14,6 +14,16 @@ Production is at repository head
 `20260914_0043`. PR34 deployed `owner_source_candidate_probe_state` and
 exact-binding candidate probe cooldowns. Persistent runtime and recurring
 notification automation remain unauthorized.
+
+GitHub main has advanced to the already-merged PR36 commit
+`21842ef0fbc110babecd7c8b559c987076e795b0`
+(`PR36_REVIEWED_HEAD=2044c92288733b5dcc4fc6906c08bdb7bc53873f`), but
+production has not been synced to that state. PR36 was merged before the
+required independent-review and Owner merge-authorization gates were proven.
+Post-merge independent technical review passed the implementation as safe to
+keep on GitHub main with two medium corrections handled by PR37. Current live
+operations remain bound to production head
+`ab36df17334f8eff57fe475c8090a29a6ac1243c`.
 
 The source-`18` production validation live-proved the stale/empty path: one
 current Owner/profile/intent/revision-bound `stale_or_empty` row was recorded
@@ -47,6 +57,21 @@ RECURRING_NOTIFICATION_AUTOMATION_AUTHORIZED=NO
 RECURRING_NOTIFICATION_AUTOMATION_DEPLOYED=NO
 RECURRING_NOTIFICATION_TIMER_ENABLED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
+PERSISTENT_RUNTIME=STOPPED
+PR36_MERGED=YES
+PR36_REVIEWED_HEAD=2044c92288733b5dcc4fc6906c08bdb7bc53873f
+PR36_MERGE_COMMIT=21842ef0fbc110babecd7c8b559c987076e795b0
+GITHUB_MAIN_HEAD=21842ef0fbc110babecd7c8b559c987076e795b0
+PRODUCTION_HEAD=ab36df17334f8eff57fe475c8090a29a6ac1243c
+CURRENT_GATE=PR36_POST_MERGE_CORRECTIVE_PR_REVIEW
+AFTER_PR37_MERGE_NEXT_GATE=OWNER_ACCEPTANCE_OF_ALREADY_MERGED_PR36_GITHUB_STATE
+PR36_POST_MERGE_TECHNICAL_REVIEW=PASS
+PR36_CORRECTIVE_PR_REQUIRED=YES
+PR36_PRODUCTION_SYNC_COMPLETED=NO
+ORCHESTRATION_GATE_BYPASS=YES
+PRE_MERGE_INDEPENDENT_REVIEW_OCCURRED=NO
+PRE_MERGE_OWNER_AUTHORIZATION_PROVEN=NO
+POST_MERGE_INDEPENDENT_TECHNICAL_REVIEW=PASS_WITH_2_MEDIUM_CORRECTIONS
 ```
 
 ## 1. Production layout
@@ -864,13 +889,18 @@ The successful bounded gates do not authorize a repeat or a new operation.
 Required next ordering:
 
 ```text
-1. independent review of the exact PR36 scheduler artifacts and docs
-2. Owner merge authorization
-3. production sync authorization for the exact reviewed merge
-4. read-only PRELIVE of exact unit files, ExecStart, 3-hour UTC calendar, env path, project Python, Alembic `20260914_0043`, stopped runtime and absent/disabled timer
-5. separate Owner authorization before installing/enabling recurring automation
-6. prove one scheduled fire and bounded pass summary after activation
-7. keep persistent runtime unauthorized unless separately approved
+1. implement PR37 narrow corrections
+2. independent review exact PR37 head
+3. explicit OWNER merge authorization for PR37
+4. merge exact reviewed PR37 head
+5. reconcile GitHub main to exact PR37 merge commit
+6. OWNER explicitly accepts already-merged PR36 technical state plus PR37 correction
+7. separate production git sync authorization
+8. production sync only
+9. read-only PRELIVE of systemd units, paths, env-path existence and timer inactive state
+10. separate OWNER authorization for unit install, daemon-reload and timer enable
+11. observe one real scheduled timer fire
+12. verify bounded pass and no persistent runtime
 ```
 
 The intended future recurring target is implemented in repository artifacts as
@@ -878,16 +908,17 @@ a systemd timer plus `Type=oneshot` service: every 3 hours UTC, one bounded
 pass, max 5 candidates considered per pass, current profile/current intent,
 strong only, durable at-most-once notification dedupe, durable cooldown
 suppression, and silence when no candidate is eligible. It is not deployed,
-enabled, or authorized in production. No installed systemd timer, cron schedule,
-persistent runtime, or active 3-hour automation exists. No live command or exact
-run key is authorized by PR36 implementation. The PR32 and PR34 bounded
+enabled, or authorized in production. Steps 6 and later in the required order
+are not authorized now. No installed systemd timer, cron schedule, persistent
+runtime, or active 3-hour automation exists. No live command or exact
+run key is authorized by the PR36 implementation. The PR32 and PR34 bounded
 canaries must not be retried.
 
 ## 19. Future recurring notification activation contract
 
 The following commands are documentation for a future Owner-authorized
-production activation only. Do not run them as part of PR36 implementation or
-review.
+production activation only. Do not run them as part of PR37 correction,
+review, or post-merge acceptance.
 
 Expected repository unit files:
 
@@ -933,11 +964,15 @@ Disabling or removing the timer must not mutate notification/database history.
 Future rollout gates:
 
 ```text
-1. independent review exact PR36 head
-2. Owner merge authorization
-3. merge exact reviewed head
-4. separate production git sync authorization
-5. read-only PRELIVE:
+1. implement PR37 narrow corrections
+2. independent review exact PR37 head
+3. explicit OWNER merge authorization for PR37
+4. merge exact reviewed PR37 head
+5. reconcile GitHub main to exact PR37 merge commit
+6. OWNER explicitly accepts already-merged PR36 technical state plus PR37 correction
+7. separate production git sync authorization
+8. production sync only
+9. read-only PRELIVE:
    - exact production head
    - unit files at exact repository head
    - exact ExecStart
@@ -947,11 +982,9 @@ Future rollout gates:
    - Alembic still 20260914_0043 unless a later PR explicitly adds a migration
    - persistent LeadRadar runtime stopped
    - timer not installed/enabled/active
-6. separate Owner authorization to install units, daemon-reload, and enable timer
-7. prove timer enabled/active and service initially inactive
-8. observe one real scheduled timer fire
-9. verify bounded pass summary plus durable DB/Telegram side effects
-10. if PASS, leave timer enabled
+10. separate Owner authorization to install units, daemon-reload, and enable timer
+11. observe one real scheduled timer fire
+12. verify bounded pass summary and no persistent runtime
 ```
 
 First scheduled-fire acceptance target:
