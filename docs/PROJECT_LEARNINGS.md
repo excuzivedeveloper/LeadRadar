@@ -1,21 +1,24 @@
 # LeadRadar — Project Learnings
 
 **Status:** CANONICAL  
-**Last verified:** 2026-09-15
+**Last verified:** 2026-09-16
 
 This file records operational lessons that should shape future implementation, review and server work. Read it immediately after `docs/DOCUMENTATION_INDEX.md`.
 
 ## Current lessons
 
 - **Implementation state and production repository head are separate facts.** A docs-only commit can advance repository/server `HEAD` without changing runtime behavior. The latest verified production repository head is `ab36df17334f8eff57fe475c8090a29a6ac1243c`; PR34 has been reviewed, merged, synced, migrated to `20260914_0043`, and live-validated for the stale 24-hour cooldown path.
+- **Post-merge orchestration bypasses must be recorded as facts, not smoothed over.** PR36 reached GitHub main at `21842ef0fbc110babecd7c8b559c987076e795b0` before the required pre-merge independent-review and Owner merge-authorization gates were proven. The correction is to preserve production untouched, record `ORCHESTRATION_GATE_BYPASS=YES`, independently review and merge PR37 corrections, then ask the Owner to accept the already-merged PR36 GitHub state before any separate production sync is considered.
 - **Repository scheduler artifacts are not production activation.** A committed
   systemd timer/service only defines a deployable contract. Production remains
-  inactive until exact reviewed head merge, production sync, prelive checks,
+  inactive until post-merge correction review, Owner acceptance of the
+  already-merged GitHub state, separate production sync, prelive checks,
   explicit Owner install/enable authorization, and timer evidence prove it.
 - **Recurring candidate notifications must stay bounded one-shot work.** The
   accepted shape is a systemd timer invoking the existing
   `--owner-candidate-notifications --owner-candidate-notification-limit 5` CLI
   and then exiting, not a Python scheduler loop or full `--run` runtime.
+- **Timer drift tests should define the allowed authority, not only deny known bad keys.** The recurring Owner notification timer must have exactly one `OnCalendar` authority and the `[Timer]` section must contain only `OnCalendar`, `Persistent`, and `Unit`. Denying `OnBootSec`/`OnStartupSec`/`OnUnitActiveSec` alone misses other relative timer authorities such as `OnActiveSec` and `OnUnitInactiveSec`.
 - **Fresh exact-head server evidence outranks canonical docs.** Prefer fresh exact-head production evidence first, then exact code/CLI behavior, then canonical docs, then historical reports. Reconcile stale docs before using them to design another live task.
 - **A successful bounded Web run is not automatically a search-quality or novelty improvement.** PR27 increased considered search results from 7 to 19 and Telegram-like matches from 6 to 18 versus PR23, while unique candidates stayed 4 and new candidates stayed 0. Report observed deltas, not a stronger product conclusion.
 - **Angle support and source discovery are different measurements.** PR27 proved `buyer_habitat`/`adjacent` live support for 3/4 unique candidates, but produced zero non-direct-only candidates. `NON_DIRECT_LIVE_YIELD_PROVEN=YES` must not be rewritten as “non-direct found new sources” or “novelty improved.”

@@ -1,7 +1,7 @@
 # LeadRadar — Current Deployment
 
 **Status:** CANONICAL  
-**Snapshot date:** 2026-09-15
+**Snapshot date:** 2026-09-16
 **Deployment code baseline:** `ab36df17334f8eff57fe475c8090a29a6ac1243c`
 **Latest verified production evidence head:** `ab36df17334f8eff57fe475c8090a29a6ac1243c`
 
@@ -17,9 +17,16 @@ configuration changed. PR35 then left the production checkout at
 `ab36df17334f8eff57fe475c8090a29a6ac1243c` with Alembic still
 `20260914_0043` and persistent runtime stopped.
 
-PR36 adds repository unit files for a future separately authorized systemd
-timer. Those files are not installed in `/etc/systemd/system`, the timer is not
-enabled, and production recurring notification automation remains unauthorized.
+PR36 added repository unit files for a future separately authorized systemd
+timer and has already been merged on GitHub main at
+`21842ef0fbc110babecd7c8b559c987076e795b0`
+(`PR36_REVIEWED_HEAD=2044c92288733b5dcc4fc6906c08bdb7bc53873f`). It was merged
+before the required independent-review and Owner merge-authorization gates were
+proven. Post-merge independent technical review passed the implementation as
+safe to keep on GitHub main with two medium corrections handled by PR37. The
+production checkout remains `ab36df17334f8eff57fe475c8090a29a6ac1243c`; the
+unit files are not installed in `/etc/systemd/system`, the timer is not enabled,
+and production recurring notification automation remains unauthorized.
 
 Current fresh evidence includes PR34 merge/sync/migration, read-only cooldown
 PRELIVE, source-`18` stale cooldown validation, bounded Web replenishment
@@ -382,16 +389,18 @@ Do not sync to a newer-than-authorized `origin/main` and do not use local merge/
 Current required order is:
 
 ```text
-1. complete independent review of the exact PR36 scheduler artifacts and docs
-2. obtain OWNER merge authorization
-3. merge the exact reviewed PR36 head
-4. obtain separate production git sync authorization
-5. run read-only PRELIVE on the merged production head: verify exact unit files, ExecStart, 3-hour UTC calendar, runtime env path, project Python, Alembic 20260914_0043, persistent runtime stopped, and timer not installed/enabled/active
-6. obtain separate OWNER authorization to install the systemd units, run daemon-reload, and enable the timer
-7. verify the timer enabled/active and the oneshot service initially inactive
-8. observe one real scheduled timer fire
-9. verify the bounded pass summary and durable DB/Telegram side effects
-10. if PASS, leave the timer enabled; persistent runtime remains separately unauthorized
+1. implement PR37 narrow corrections
+2. independent review exact PR37 head
+3. explicit OWNER merge authorization for PR37
+4. merge exact reviewed PR37 head
+5. reconcile GitHub main to exact PR37 merge commit
+6. OWNER explicitly accepts already-merged PR36 technical state plus PR37 correction
+7. obtain separate production git sync authorization
+8. production sync only
+9. run read-only PRELIVE: verify exact unit files, ExecStart, 3-hour UTC calendar, runtime env path existence without printing contents, project Python, Alembic 20260914_0043, persistent runtime stopped, and timer not installed/enabled/active
+10. obtain separate OWNER authorization to install the systemd units, run daemon-reload, and enable the timer
+11. observe one real scheduled timer fire
+12. verify bounded pass summary and no persistent runtime
 ```
 
 Known evidence is limited to the earlier stale/empty result for source `18`,
@@ -407,12 +416,28 @@ proven.
 Current authorization state:
 
 ```text
+PR36_MERGED=YES
+PR36_REVIEWED_HEAD=2044c92288733b5dcc4fc6906c08bdb7bc53873f
+PR36_MERGE_COMMIT=21842ef0fbc110babecd7c8b559c987076e795b0
+GITHUB_MAIN_HEAD=21842ef0fbc110babecd7c8b559c987076e795b0
+PRODUCTION_HEAD=ab36df17334f8eff57fe475c8090a29a6ac1243c
+ALEMBIC_CURRENT=20260914_0043
 COOLDOWN_BACKOFF_PRODUCTION_VALIDATED=YES
 RECURRING_NOTIFICATION_SCHEDULER_IMPLEMENTED=YES
 RECURRING_NOTIFICATION_AUTOMATION_DEPLOYED=NO
 RECURRING_NOTIFICATION_AUTOMATION_AUTHORIZED=NO
 RECURRING_NOTIFICATION_TIMER_ENABLED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
+PERSISTENT_RUNTIME=STOPPED
+CURRENT_GATE=PR36_POST_MERGE_CORRECTIVE_PR_REVIEW
+AFTER_PR37_MERGE_NEXT_GATE=OWNER_ACCEPTANCE_OF_ALREADY_MERGED_PR36_GITHUB_STATE
+PR36_POST_MERGE_TECHNICAL_REVIEW=PASS
+PR36_CORRECTIVE_PR_REQUIRED=YES
+PR36_PRODUCTION_SYNC_COMPLETED=NO
+ORCHESTRATION_GATE_BYPASS=YES
+PRE_MERGE_INDEPENDENT_REVIEW_OCCURRED=NO
+PRE_MERGE_OWNER_AUTHORIZATION_PROVEN=NO
+POST_MERGE_INDEPENDENT_TECHNICAL_REVIEW=PASS_WITH_2_MEDIUM_CORRECTIONS
 ```
 
 PR36 defines the future recurring target as a systemd timer plus bounded
@@ -432,7 +457,8 @@ Persistent=false
 ```
 
 It considers at most 5 candidates per pass; it does not promise exactly five
-sends. It is not deployed, not enabled, and not authorized. No installed systemd
+sends. It is not deployed, not enabled, and not authorized in production. Steps
+6 and later in the required order are not authorized now. No installed systemd
 timer, cron schedule, persistent runtime, or active 3-hour automation exists.
 
 Keep `relevance_class=strong`; do not lower the threshold merely to produce a

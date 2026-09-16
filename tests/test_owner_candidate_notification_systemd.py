@@ -26,6 +26,23 @@ def _read_unit(path: Path) -> dict[str, dict[str, str]]:
     return sections
 
 
+def _read_unit_values(path: Path) -> dict[str, dict[str, list[str]]]:
+    sections: dict[str, dict[str, list[str]]] = {}
+    current: dict[str, list[str]] | None = None
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith(("#", ";")):
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            current = sections.setdefault(line[1:-1], {})
+            continue
+        if current is None or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        current.setdefault(key, []).append(value)
+    return sections
+
+
 class OwnerCandidateNotificationSystemdTest(unittest.TestCase):
     def test_service_contract(self):
         service = _read_unit(SERVICE_PATH)
@@ -113,11 +130,23 @@ class OwnerCandidateNotificationSystemdTest(unittest.TestCase):
         self.assertEqual(install["WantedBy"], "timers.target")
 
     def test_timer_has_single_calendar_authority(self):
+        timer = _read_unit_values(TIMER_PATH)
+        timer_section = timer["Timer"]
+
+        self.assertEqual(set(timer_section), {"OnCalendar", "Persistent", "Unit"})
+        self.assertEqual(timer_section["OnCalendar"], ["*-*-* 00/3:00:00 UTC"])
+        self.assertEqual(timer_section["Persistent"], ["false"])
+        self.assertEqual(
+            timer_section["Unit"],
+            ["leadradar-owner-candidate-notifications.service"],
+        )
+
         text = TIMER_PATH.read_text(encoding="utf-8")
-        self.assertEqual(text.count("OnCalendar="), 1)
+        self.assertNotIn("OnActiveSec", text)
         self.assertNotIn("OnBootSec", text)
         self.assertNotIn("OnStartupSec", text)
         self.assertNotIn("OnUnitActiveSec", text)
+        self.assertNotIn("OnUnitInactiveSec", text)
         self.assertNotIn("Persistent=true", text)
 
 

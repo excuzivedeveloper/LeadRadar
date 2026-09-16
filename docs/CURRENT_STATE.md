@@ -1,7 +1,7 @@
 # LeadRadar — Current State
 
 **Status:** CANONICAL  
-**Snapshot date:** 2026-09-15
+**Snapshot date:** 2026-09-16
 **Implementation baseline:** PR35 production sync at `ab36df17334f8eff57fe475c8090a29a6ac1243c`
 **Latest verified production evidence head:** `ab36df17334f8eff57fe475c8090a29a6ac1243c`
 
@@ -17,16 +17,29 @@ source-`18` stale cooldown validation passed. Production remains stopped outside
 bounded tasks; recurring notification automation and persistent runtime remain
 unauthorized.
 
-PR36 implements deployable repository systemd artifacts for recurring bounded
-Owner candidate notifications. This branch may state
-`RECURRING_NOTIFICATION_SCHEDULER_IMPLEMENTED=YES`, but production remains:
-not deployed, not authorized, timer not enabled, and persistent runtime stopped.
+PR36 implemented deployable repository systemd artifacts for recurring bounded
+Owner candidate notifications and has already been merged on GitHub main. It
+was merged before the required independent-review and Owner merge-authorization
+gates were proven. A post-merge independent technical review passed the
+implementation as safe to keep on GitHub main, with two medium corrections:
+reconcile the orchestration docs and harden the timer drift test. PR37 is the
+narrow corrective PR for those two items only.
+
+GitHub main and production are now intentionally different facts. GitHub main is
+the PR36 merge commit, while production remains on the PR35 production-sync
+commit: not synced to PR36, not deployed for recurring notifications, not
+authorized for recurring automation, timer not enabled, and persistent runtime
+stopped.
 
 ```text
 PR33_PRODUCTION_DOCS_SYNC=PASS
 PR34_MERGED=YES
 PR34_REVIEWED_HEAD=656443ea9e64a3f757ef05309a502c6661841523
 PR34_MERGE_COMMIT=d7f1248fdee62d6eee13e4256614ee15c4cc2846
+PR36_MERGED=YES
+PR36_REVIEWED_HEAD=2044c92288733b5dcc4fc6906c08bdb7bc53873f
+PR36_MERGE_COMMIT=21842ef0fbc110babecd7c8b559c987076e795b0
+GITHUB_MAIN_HEAD=21842ef0fbc110babecd7c8b559c987076e795b0
 PRODUCTION_HEAD=ab36df17334f8eff57fe475c8090a29a6ac1243c
 ALEMBIC_CURRENT=20260914_0043
 BOUNDED_PROFILE_WEB_REPLENISHMENT=PASS_NEW_STRONG
@@ -66,6 +79,14 @@ RECURRING_NOTIFICATION_AUTOMATION_AUTHORIZED=NO
 RECURRING_NOTIFICATION_TIMER_ENABLED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 PERSISTENT_RUNTIME=STOPPED
+CURRENT_GATE=PR36_POST_MERGE_CORRECTIVE_PR_REVIEW
+PR36_POST_MERGE_TECHNICAL_REVIEW=PASS
+PR36_CORRECTIVE_PR_REQUIRED=YES
+PR36_PRODUCTION_SYNC_COMPLETED=NO
+ORCHESTRATION_GATE_BYPASS=YES
+PRE_MERGE_INDEPENDENT_REVIEW_OCCURRED=NO
+PRE_MERGE_OWNER_AUTHORIZATION_PROVEN=NO
+POST_MERGE_INDEPENDENT_TECHNICAL_REVIEW=PASS_WITH_2_MEDIUM_CORRECTIONS
 ```
 
 LeadRadar production is stable at commit `ab36df17334f8eff57fe475c8090a29a6ac1243c`. PR34 deployed the exact-binding nonterminal probe-state table and proved the stale 24-hour cooldown path for source `18`: one stale/empty probe was recorded, no notification row was created, no Owner notification count changed, and an immediate read-only selector pass suppressed source `18` before Telegram while allowing deeper eligible sources `23` and `24`. The strong-only Owner candidate-notification selector is deployed; persistent runtime remains stopped.
@@ -713,30 +734,36 @@ PERSISTENT_RUNTIME_AUTHORIZED=NO
 ## Next gate
 
 ```text
-NEXT_PRODUCT_GATE=INDEPENDENT_REVIEW_OF_PR36_RECURRING_TIMER
+NEXT_PRODUCT_GATE=PR36_POST_MERGE_CORRECTIVE_PR_REVIEW
+AFTER_PR37_MERGE_NEXT_GATE=OWNER_ACCEPTANCE_OF_ALREADY_MERGED_PR36_GITHUB_STATE
 ```
 
 ```text
-1. independently review exact PR36 unit files, tests and docs
-2. Owner-authorize merge of the reviewed PR
-3. separately authorize production sync of the reviewed merge
-4. read-only PRELIVE exact unit files, ExecStart, 3-hour UTC calendar, env path, project Python, Alembic `20260914_0043`, stopped runtime and absent/disabled timer
-5. separately authorize installing units, `systemctl daemon-reload` and enabling the timer
-6. prove timer enabled/active and service initially inactive
-7. observe one real scheduled fire and verify bounded pass summary
-8. keep persistent runtime unauthorized
+1. implement PR37 narrow corrections
+2. independent review exact PR37 head
+3. explicit Owner merge authorization for PR37
+4. merge exact reviewed PR37 head
+5. reconcile GitHub main to exact PR37 merge commit
+6. Owner explicitly accepts already-merged PR36 technical state plus PR37 correction
+7. separate production git sync authorization
+8. production sync only
+9. read-only PRELIVE of systemd units, paths, env-path existence and timer inactive state
+10. separate Owner authorization for unit install, daemon-reload and timer enable
+11. observe one real scheduled timer fire
+12. verify bounded pass and no persistent runtime
 ```
 
 The intended future recurring target is every 3 hours, one bounded pass, at
 most 5 candidates considered per pass, up to 5 cards if all pass, current profile/current intent, strong only,
 durable at-most-once notification dedupe, durable cooldown suppression, and
-silence when no candidate is eligible. PR36 implements deployable repository
+silence when no candidate is eligible. PR36 implemented deployable repository
 systemd artifacts only. It is **not deployed**, **not enabled**, and **not
 authorized** in production. No installed systemd timer, cron schedule,
 persistent runtime, or active 3-hour automation exists.
 
-No current implementation PR authorizes Telegram, Owner send, lifecycle
-mutation, Source Audit, Web, AI, production systemd mutation, recurring
-production automation, or persistent runtime work.
+Steps 6 and later are not authorized now. No current implementation PR
+authorizes Telegram, Owner send, lifecycle mutation, Source Audit, Web, AI,
+production sync, production systemd mutation, recurring production automation,
+or persistent runtime work.
 
 Fresh exact-head server evidence remains higher authority than code/CLI, which remains higher authority than canonical docs, which remains higher authority than historical reports.

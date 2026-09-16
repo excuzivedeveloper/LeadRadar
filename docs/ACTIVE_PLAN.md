@@ -1,7 +1,7 @@
 # LeadRadar — Active Plan
 
 **Status:** CANONICAL / ACTIVE  
-**Last verified:** 2026-09-15
+**Last verified:** 2026-09-16
 **Implementation baseline:** PR35 production sync at `ab36df17334f8eff57fe475c8090a29a6ac1243c`
 **Latest verified production evidence head:** `ab36df17334f8eff57fe475c8090a29a6ac1243c`
 
@@ -131,13 +131,29 @@ RECURRING_NOTIFICATION_AUTOMATION_AUTHORIZED=NO
 RECURRING_NOTIFICATION_TIMER_ENABLED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 PERSISTENT_RUNTIME=STOPPED
+PR36_MERGED=YES
+PR36_REVIEWED_HEAD=2044c92288733b5dcc4fc6906c08bdb7bc53873f
+PR36_MERGE_COMMIT=21842ef0fbc110babecd7c8b559c987076e795b0
+GITHUB_MAIN_HEAD=21842ef0fbc110babecd7c8b559c987076e795b0
+PRODUCTION_HEAD=ab36df17334f8eff57fe475c8090a29a6ac1243c
+PR36_POST_MERGE_TECHNICAL_REVIEW=PASS
+PR36_CORRECTIVE_PR_REQUIRED=YES
+PR36_PRODUCTION_SYNC_COMPLETED=NO
+ORCHESTRATION_GATE_BYPASS=YES
+PRE_MERGE_INDEPENDENT_REVIEW_OCCURRED=NO
+PRE_MERGE_OWNER_AUTHORIZATION_PROVEN=NO
+POST_MERGE_INDEPENDENT_TECHNICAL_REVIEW=PASS_WITH_2_MEDIUM_CORRECTIONS
 ```
 
 PR34 completed independent review, merge, production sync, migration, read-only
 PRELIVE, one bounded source-`18` stale cooldown validation, and read-only proof
-that immediate re-selection is suppressed before Telegram. PR36 implements the
-repository scheduling layer for independent review only. No current step
-authorizes installing/enabling the timer, running the notification CLI live, or
+that immediate re-selection is suppressed before Telegram. PR36 implemented the
+repository scheduling layer and was merged on GitHub main before the required
+independent-review and Owner merge gates were proven. The post-merge technical
+review passed the implementation as safe to keep on GitHub main with two medium
+corrections handled by PR37: docs reconciliation and timer drift-test hardening.
+Production remains untouched at PR35. No current step authorizes production
+sync, installing/enabling the timer, running the notification CLI live, or
 starting a persistent LeadRadar runtime.
 
 The bounded planner contract remained:
@@ -463,8 +479,16 @@ it did not execute a live non-strong negative-control case.
 ## Current gate
 
 ```text
-CURRENT_GATE=INDEPENDENT_REVIEW_OF_PR36_RECURRING_TIMER
+CURRENT_GATE=PR36_POST_MERGE_CORRECTIVE_PR_REVIEW
+AFTER_PR37_MERGE_NEXT_GATE=OWNER_ACCEPTANCE_OF_ALREADY_MERGED_PR36_GITHUB_STATE
 IMPLEMENTATION_BASE=ab36df17334f8eff57fe475c8090a29a6ac1243c
+GITHUB_MAIN_HEAD=21842ef0fbc110babecd7c8b559c987076e795b0
+PR36_MERGED=YES
+PR36_REVIEWED_HEAD=2044c92288733b5dcc4fc6906c08bdb7bc53873f
+PR36_MERGE_COMMIT=21842ef0fbc110babecd7c8b559c987076e795b0
+PR36_POST_MERGE_TECHNICAL_REVIEW=PASS
+PR36_CORRECTIVE_PR_REQUIRED=YES
+PR36_PRODUCTION_SYNC_COMPLETED=NO
 OWNER_PROFILE_GATE=EXACT_ACTIVE_PRIMARY_CONFIRMED
 DISCOVERY_INTENT_GATE=CURRENT_DETERMINISTIC_INTENT
 OWNER_CANDIDATE_NOTIFICATION_RELEVANCE_GATE=strong_only
@@ -472,31 +496,39 @@ RELEVANCE_FILTER_BEFORE_LIMIT=YES
 COOLDOWN_BACKOFF_PRODUCTION_VALIDATED=YES
 RECURRING_NOTIFICATION_SCHEDULER_IMPLEMENTED=YES
 RECURRING_NOTIFICATION_AUTOMATION_DEPLOYED=NO
+RECURRING_NOTIFICATION_AUTOMATION_AUTHORIZED=NO
 RECURRING_NOTIFICATION_TIMER_ENABLED=NO
-NEXT_GATE=INDEPENDENT_REVIEW_OF_PR36_RECURRING_TIMER
+NEXT_GATE=OWNER_ACCEPTANCE_OF_ALREADY_MERGED_PR36_GITHUB_STATE
 NEW_LIVE_ACTION_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 CANDIDATE_NOTIFICATION_RECURRING_AUTOMATION_AUTHORIZED=NO
+ORCHESTRATION_GATE_BYPASS=YES
+PRE_MERGE_INDEPENDENT_REVIEW_OCCURRED=NO
+PRE_MERGE_OWNER_AUTHORIZATION_PROVEN=NO
+POST_MERGE_INDEPENDENT_TECHNICAL_REVIEW=PASS_WITH_2_MEDIUM_CORRECTIONS
 ```
 
 ## Required sequence from here
 
 ```text
-1. independent review of the exact PR36 scheduler artifacts and docs
-2. Owner merge authorization
-3. merge exact reviewed head
-4. separate production git sync authorization
-5. read-only PRELIVE of exact unit files, ExecStart, calendar, env path and project Python
-6. separate Owner authorization to install units, daemon-reload and enable the timer
-7. prove timer enabled/active and service initially inactive
-8. observe one real scheduled timer fire
-9. verify bounded pass summary and durable DB/Telegram side effects
-10. persistent runtime remains unauthorized
+1. implement PR37 narrow corrections
+2. independent review exact PR37 head
+3. explicit OWNER merge authorization for PR37
+4. merge exact reviewed PR37 head
+5. reconcile GitHub main to exact PR37 merge commit
+6. OWNER explicitly accepts already-merged PR36 technical state plus PR37 correction
+7. separate production git sync authorization
+8. production sync only
+9. read-only PRELIVE of systemd units, paths, env-path existence and timer inactive state
+10. separate OWNER authorization for unit install, daemon-reload and timer enable
+11. observe one real scheduled timer fire
+12. verify bounded pass and no persistent runtime
 ```
 
-Do not retry consumed canaries. PR36 permits no Telegram, Web, Owner send,
-lifecycle mutation, Source Audit, AI, migration, production systemd mutation,
-timer enabling, recurring production automation, or persistent runtime action.
+Do not retry consumed canaries. Steps 6 and later are not authorized now. PR37
+permits no Telegram, Web, Owner send, lifecycle mutation, Source Audit, AI,
+migration, production sync, production systemd mutation, timer enabling,
+recurring production automation, or persistent runtime action.
 
 Future lifecycle and membership actions remain independent choices:
 

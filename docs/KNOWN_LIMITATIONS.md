@@ -1,7 +1,7 @@
 # LeadRadar — Known Limitations and Validation Gaps
 
 **Status:** CANONICAL  
-**Last verified:** 2026-09-15
+**Last verified:** 2026-09-16
 **Implementation baseline:** PR35 production sync at `ab36df17334f8eff57fe475c8090a29a6ac1243c`
 **Latest verified production evidence head:** `ab36df17334f8eff57fe475c8090a29a6ac1243c`
 
@@ -47,6 +47,10 @@ PR32_NOTIFICATION_CANARY_RESULT=NO_SEND_STALE_OR_EMPTY
 PR32_NOTIFICATION_CANARY_AUTHORIZATION_CONSUMED=YES
 PR32_NOTIFICATION_CANARY_RETRY_ALLOWED=NO
 PR33_PRODUCTION_DOCS_SYNC=PASS
+PR36_MERGED=YES
+PR36_REVIEWED_HEAD=2044c92288733b5dcc4fc6906c08bdb7bc53873f
+PR36_MERGE_COMMIT=21842ef0fbc110babecd7c8b559c987076e795b0
+GITHUB_MAIN_HEAD=21842ef0fbc110babecd7c8b559c987076e795b0
 PRODUCTION_HEAD=ab36df17334f8eff57fe475c8090a29a6ac1243c
 ALEMBIC_CURRENT=20260914_0043
 BOUNDED_PROFILE_WEB_REPLENISHMENT=PASS_NEW_STRONG
@@ -65,16 +69,36 @@ SOURCE_18_STALE_24H_COOLDOWN_PRODUCTION_PROVEN=YES
 SOURCE_18_IMMEDIATE_SELECTOR_SUPPRESSION_PRODUCTION_PROVEN=YES
 UNRESOLVABLE_BACKOFF_LIVE_PROVEN=NO
 RECURRING_NOTIFICATION_SCHEDULER_IMPLEMENTED=YES
+RECURRING_NOTIFICATION_AUTOMATION_DEPLOYED=NO
+RECURRING_NOTIFICATION_AUTOMATION_AUTHORIZED=NO
+RECURRING_NOTIFICATION_TIMER_ENABLED=NO
 CANDIDATE_NOTIFICATION_RECURRING_AUTOMATION_DEPLOYED=NO
 CANDIDATE_NOTIFICATION_RECURRING_AUTOMATION_AUTHORIZED=NO
 CANDIDATE_NOTIFICATION_TIMER_ENABLED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
+PERSISTENT_RUNTIME=STOPPED
+CURRENT_GATE=PR36_POST_MERGE_CORRECTIVE_PR_REVIEW
+AFTER_PR37_MERGE_NEXT_GATE=OWNER_ACCEPTANCE_OF_ALREADY_MERGED_PR36_GITHUB_STATE
+PR36_POST_MERGE_TECHNICAL_REVIEW=PASS
+PR36_CORRECTIVE_PR_REQUIRED=YES
+PR36_PRODUCTION_SYNC_COMPLETED=NO
+ORCHESTRATION_GATE_BYPASS=YES
+PRE_MERGE_INDEPENDENT_REVIEW_OCCURRED=NO
+PRE_MERGE_OWNER_AUTHORIZATION_PROVEN=NO
+POST_MERGE_INDEPENDENT_TECHNICAL_REVIEW=PASS_WITH_2_MEDIUM_CORRECTIONS
 ```
 
-The immediate gate is completion of PR36 review/merge and the separate
-production sync/PRELIVE/activation sequence, not another cooldown production
-canary. Recurring notifications remain not deployed, not enabled, and not
-production-authorized; persistent runtime remains unauthorized.
+PR36 has already been merged on GitHub main at
+`21842ef0fbc110babecd7c8b559c987076e795b0`
+(`PR36_REVIEWED_HEAD=2044c92288733b5dcc4fc6906c08bdb7bc53873f`) before the
+required independent-review and Owner merge-authorization gates were proven.
+Post-merge independent technical review passed the implementation as safe to
+keep on GitHub main with two medium corrections handled by PR37. The immediate
+gate is PR37 post-merge corrective review, then Owner acceptance of the
+already-merged PR36 GitHub state plus PR37 correction before any separate
+production sync authorization is considered. Recurring notifications remain not
+deployed, not enabled, and not production-authorized; persistent runtime remains
+unauthorized.
 
 Useful personalized opportunity delivery remains a later product limitation. The narrower fact now proven is durable delivery persistence for source-candidate cards for sources `19` and `20`; that does not establish end-to-end matched-opportunity delivery or Owner review/action.
 
@@ -108,7 +132,7 @@ Useful personalized opportunity delivery remains a later product limitation. The
 26. **P2 — One-shot query bounds do not bound autonomous discovery.** `--max-queries` bounds an explicit operator run; persistent Web discovery remains unauthorized and separately unproven.
 27. **P2 — Successful access/freshness probes do not validate the lifecycle service.** The source `19`/`20` gate intentionally did not call `SourceValidationService`; source and validation-table hashes remained unchanged. Treat it as access/freshness evidence only.
 28. **P2 — Historical inactive collector row `1` remains persisted.** The duplicate-active anomaly is resolved and collector `2` is the sole active row. Collector `1` remains inactive for historical/FK continuity; its dependent operation-state row and historical references were intentionally preserved. This is not a blocker by itself, and its exact historical Telegram-user origin remains unproven.
-29. **P2 — Recurring scheduling is implemented as repository artifacts only.** PR36 adds a systemd timer and one-shot service contract for every 3 hours, one bounded pass, max 5 candidates considered per pass, current profile/current intent, strong only, durable at-most-once notification dedupe, durable cooldown suppression, and silence if nothing is eligible. It is not deployed, not enabled, and not authorized in production; persistent runtime remains stopped.
+29. **P2 — Recurring scheduling is implemented as repository artifacts only.** PR36 added a systemd timer and one-shot service contract for every 3 hours, one bounded pass, max 5 candidates considered per pass, current profile/current intent, strong only, durable at-most-once notification dedupe, durable cooldown suppression, and silence if nothing is eligible. GitHub main contains those artifacts, but production remains at `ab36df17334f8eff57fe475c8090a29a6ac1243c` with `RECURRING_NOTIFICATION_AUTOMATION_DEPLOYED=NO`, `RECURRING_NOTIFICATION_AUTOMATION_AUTHORIZED=NO`, `RECURRING_NOTIFICATION_TIMER_ENABLED=NO`, and `PERSISTENT_RUNTIME=STOPPED`.
 
 ## PR27 bounded Web evidence boundary
 
@@ -208,10 +232,12 @@ forbidden.
 
 PR34 later recorded a nonterminal source-`18` stale probe-state row and proved
 immediate pre-LIMIT selector suppression before Telegram. The recurring
-3-hour/max-5 scheduler is implemented in PR36 and independently reviewed at the
-implementation layer, but production deployment/installation/enablement still
-requires merge, separate production sync/PRELIVE, and explicit Owner activation
-authorization. It remains unauthorized and not deployed.
+3-hour/max-5 scheduler is implemented on GitHub main by already-merged PR36, but
+PR37 post-merge corrections and Owner acceptance of the already-merged PR36
+GitHub state must precede any separate production sync authorization. Production
+deployment/installation/enablement still requires separate production
+sync/PRELIVE and explicit Owner activation authorization. It remains
+unauthorized and not deployed.
 
 ## What the historical membership investigation established
 
