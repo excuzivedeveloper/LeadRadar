@@ -94,8 +94,10 @@ PR36 has already been merged on GitHub main at
 required independent-review and Owner merge-authorization gates were proven.
 Post-merge independent technical review passed the implementation as safe to
 keep on GitHub main with two medium corrections handled by PR37. The immediate
-gate is PR37 post-merge corrective review, then Owner acceptance of the
-already-merged PR36 GitHub state plus PR37 correction before any separate
+gate is PR37 post-merge corrective review, followed by explicit Owner merge
+authorization for PR37, merge of the exact reviewed PR37 head, reconciliation
+of GitHub main to the exact PR37 merge commit, and then Owner acceptance of the
+already-merged PR36 technical state plus PR37 correction before any separate
 production sync authorization is considered. Recurring notifications remain not
 deployed, not enabled, and not production-authorized; persistent runtime remains
 unauthorized.
