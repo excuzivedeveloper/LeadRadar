@@ -9,6 +9,8 @@ incidental refactor.
 
 The accepted PR38 manual-start constraint does not make timer enablement
 automatic; recurring steady-state activation remains separately Owner-gated.
+It refuses explicit manual service starts while preserving indirect timer or
+dependency activation.
 
 ## D-001 — Preserve useful upstream anti-noise behavior
 

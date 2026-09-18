@@ -7,7 +7,7 @@ This file records operational lessons that should shape future implementation, r
 
 ## Current lessons
 
-- **Historical correction sequences do not define the active gate.** Preserve them as evidence, but use current production state and the explicitly active Owner authorization gate for forward work.
+- **Historical correction sequences do not define the active gate.** Preserve them as evidence, but use current production state and the active Owner steady-state decision for forward work.
 
 - **Schedule alignment is not direct trigger provenance.** A recurring systemd
   timer can prove schedule alignment without historical journal providing a
