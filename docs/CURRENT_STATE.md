@@ -198,7 +198,7 @@ FUTURE_SCHEDULED_FIRES_DISABLED=YES
 PR38_STATE=OPEN
 PR38_REFUSE_MANUAL_START_IMPLEMENTED_IN_REPOSITORY=YES
 PR38_HARDENING_INSTALLED_IN_PRODUCTION=NO
-CURRENT_GATE=PR38_CORRECTIVE_REVIEW
+CURRENT_GATE=PR38_FINAL_CORRECTIVE_REREVIEW
 TIMER_REACTIVATION_AUTHORIZED=NO
 NEW_SCHEDULED_FIRE_AUTHORIZED=NO
 PRODUCTION_SYNC_OF_PR38_AUTHORIZED=NO
@@ -811,18 +811,18 @@ PERSISTENT_RUNTIME_AUTHORIZED=NO
 ## Current next gate
 
 ```text
-NEXT_PRODUCT_GATE=PR38_CORRECTIVE_REVIEW
+NEXT_PRODUCT_GATE=PR38_FINAL_CORRECTIVE_REREVIEW
 ```
 
 ```text
-1. complete PR38 corrective docs commit
-2. independent re-review of exact new PR38 head
-3. explicit OWNER merge authorization if clean
-4. merge exact reviewed PR38 head
-5. separate production sync authorization
-6. production repository sync
-7. read-only PRELIVE: compare installed/repository units, confirm repository `RefuseManualStart=yes`, and timer disabled/inactive
-8. separate authorization to replace installed service unit and daemon-reload
+1. independent re-review of exact new PR38 corrective head
+2. explicit OWNER merge authorization if clean
+3. merge exact reviewed PR38 head
+4. separate production sync authorization
+5. production repository sync
+6. read-only PRELIVE: compare installed/repository units, confirm repository `RefuseManualStart=yes`, and timer disabled/inactive
+7. separate authorization to replace installed service unit
+8. systemctl daemon-reload
 9. verify loaded `RefuseManualStart=yes`
 10. separate OWNER authorization to re-enable timer
 11. observe exactly one natural scheduled fire
