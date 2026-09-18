@@ -2,6 +2,7 @@
 
 **Status:** CANONICAL  
 **Snapshot date:** 2026-09-18
+**Post-PR38 validation:** hardening loaded; controlled natural fire passed; timer disabled afterward.
 **Deployment code baseline:** `f196a14b73f9955acc267787402c6f4da2008d82`
 **Latest verified production evidence head:** `f196a14b73f9955acc267787402c6f4da2008d82`
 
