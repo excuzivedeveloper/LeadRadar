@@ -2,10 +2,15 @@
 
 **Status:** CANONICAL  
 **Snapshot date:** 2026-09-18
-**Deployment code baseline:** `b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`
-**Latest verified production evidence head:** `b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`
+**Deployment code baseline:** `f196a14b73f9955acc267787402c6f4da2008d82`
+**Latest verified production evidence head:** `f196a14b73f9955acc267787402c6f4da2008d82`
 
 This document records the current shared-server LeadRadar layout and deployment boundaries. Exact operational commands live in [`OPERATIONS.md`](OPERATIONS.md). A docs-only repository head can be newer than the implementation baseline without changing deployed code behavior.
+
+PR38 is merged, synced, installed, and loaded with `RefuseManualStart=yes` at
+`f196a14b73f9955acc267787402c6f4da2008d82`. Service is inactive; timer is
+installed, disabled/inactive, and has no next trigger. One controlled natural
+fire at `2026-09-18T12:00:00Z` succeeded once and the timer was disabled again.
 
 Current production is `b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`, Alembic
 `20260914_0043`, clean and stopped outside bounded work. The Owner notification

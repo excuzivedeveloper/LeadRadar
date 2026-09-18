@@ -2,10 +2,27 @@
 
 **Status:** CANONICAL  
 **Last verified:** 2026-09-18
-**Implementation baseline:** `b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`
-**Latest verified production evidence head:** `b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`
+**Implementation baseline:** `f196a14b73f9955acc267787402c6f4da2008d82`
+**Latest verified production evidence head:** `f196a14b73f9955acc267787402c6f4da2008d82`
 
 This document is the operational source of truth for the current LeadRadar production environment. Fresh exact-head server evidence outranks this document; if later evidence disagrees, stop and reconcile docs before designing a new live task.
+
+## Post-PR38 current operational state
+
+```text
+PRODUCTION_HEAD=f196a14b73f9955acc267787402c6f4da2008d82
+PR38_HARDENING_INSTALLED_IN_PRODUCTION=YES
+LOADED_REFUSE_MANUAL_START=yes
+SERVICE_ACTIVE=NO
+TIMER_ENABLED=NO
+TIMER_ACTIVE=NO
+NEXT_TRIGGER_PRESENT=NO
+PERSISTENT_RUNTIME=STOPPED
+PR38_CONTROLLED_NATURAL_SCHEDULED_FIRE_PROVEN=YES
+PR38_CONTROLLED_FIRE_RESULT=PASS
+CURRENT_GATE=OWNER_DECISION_ON_RECURRING_TIMER_STEADY_STATE
+STEADY_STATE_TIMER_ENABLE_AUTHORIZED=NO
+```
 
 ## Historical cooldown contract and current PR38 safety state
 

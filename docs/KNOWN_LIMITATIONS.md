@@ -9,13 +9,19 @@ This document distinguishes code that exists from behavior that has actually bee
 
 ## PR38 scheduler provenance boundary
 
+PR38 hardening is installed and loaded, and one controlled natural scheduled
+fire is proven. The service/timer remain installed, but service is inactive and
+timer disabled/inactive. This does not prove useful fresh Owner delivery
+(`SENT=0`) or authorize steady-state timer enablement.
+
 The six historical scheduled fires are safe and bounded by available evidence,
 but their trigger provenance remains indirect rather than direct: the journal
 does not expose a per-job natural-timer caller field. This is an observability
 gap, not evidence of a manual start or of an unsafe/failed run. PR38 adds a
 systemd-level `RefuseManualStart=yes` contract so future explicit manual starts
-are refused while indirect timer activation remains allowed. The timer remains
-disabled pending full PR38 rollout and new activation authorization.
+are refused while indirect timer activation remains allowed. The historical
+six-run forensic verdict remains `INCOMPLETE`; the new controlled fire is
+prospective evidence only.
 
 ## Completed evidence status
 

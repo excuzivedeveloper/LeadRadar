@@ -245,6 +245,9 @@ later and then notify once.
 
 PR36 accepts a narrow recurring scheduling layer for this existing one-shot:
 
+The bounded service has `RefuseManualStart=yes`: explicit manual `systemctl
+start` is refused, while timer/dependency activation remains allowed.
+
 ```text
 systemd timer
 -> systemd Type=oneshot service

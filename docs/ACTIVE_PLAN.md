@@ -9,6 +9,29 @@ This file defines execution order. Implemented capability does not imply authori
 
 ## Current production baseline
 
+## Post-PR38 production-validation state
+
+```text
+PRODUCTION_HEAD=f196a14b73f9955acc267787402c6f4da2008d82
+ALEMBIC_CURRENT=20260914_0043
+PR38_STATE=MERGED
+PR38_PRODUCTION_SYNCED=YES
+PR38_HARDENING_INSTALLED_IN_PRODUCTION=YES
+LOADED_REFUSE_MANUAL_START=yes
+SERVICE_INSTALLED=YES
+SERVICE_ACTIVE=NO
+TIMER_INSTALLED=YES
+TIMER_ENABLED=NO
+TIMER_ACTIVE=NO
+NEXT_TRIGGER_PRESENT=NO
+PR38_CONTROLLED_NATURAL_SCHEDULED_FIRE_PROVEN=YES
+PR38_CONTROLLED_FIRE_RESULT=PASS
+CURRENT_GATE=OWNER_DECISION_ON_RECURRING_TIMER_STEADY_STATE
+STEADY_STATE_TIMER_ENABLE_AUTHORIZED=NO
+NEW_SCHEDULED_FIRE_AUTHORIZED=NO
+PERSISTENT_RUNTIME_AUTHORIZED=NO
+```
+
 ```text
 CURRENT_PRODUCTION_HEAD=b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7
 CURRENT_ALEMBIC=20260914_0043
@@ -531,6 +554,11 @@ PERSISTENT_RUNTIME_AUTHORIZED=NO
 ```
 
 ## Required sequence from here
+
+The PR38 rollout is complete. Forward work is: independently review this
+documentation reconciliation, merge only with Owner authorization, separately
+sync documentation if authorized, then have the Owner decide whether to retain
+the disabled timer or create a new bounded steady-state activation gate.
 
 ```text
 1. independent re-review of exact new PR38 corrective head
