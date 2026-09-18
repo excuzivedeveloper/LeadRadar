@@ -140,7 +140,7 @@ PERSISTENT_RUNTIME_AUTHORIZED=NO
 PERSISTENT_RUNTIME=STOPPED
 PR36_MERGED=YES
 PR36_REVIEWED_HEAD=2044c92288733b5dcc4fc6906c08bdb7bc53873f
-CURRENT_GATE=PR38_CORRECTIVE_REVIEW
+CURRENT_GATE=PR38_FINAL_CORRECTIVE_REREVIEW
 TIMER_REACTIVATION_AUTHORIZED=NO
 NEW_SCHEDULED_FIRE_AUTHORIZED=NO
 PRODUCTION_SYNC_OF_PR38_AUTHORIZED=NO
@@ -498,9 +498,12 @@ OWNER_CANDIDATE_NOTIFICATION_RELEVANCE_GATE=strong_only
 RELEVANCE_FILTER_BEFORE_LIMIT=YES
 COOLDOWN_BACKOFF_PRODUCTION_VALIDATED=YES
 RECURRING_NOTIFICATION_SCHEDULER_IMPLEMENTED=YES
-RECURRING_NOTIFICATION_AUTOMATION_DEPLOYED=NO
-RECURRING_NOTIFICATION_AUTOMATION_AUTHORIZED=NO
+RECURRING_NOTIFICATION_SERVICE_INSTALLED=YES
+RECURRING_NOTIFICATION_TIMER_INSTALLED=YES
 RECURRING_NOTIFICATION_TIMER_ENABLED=NO
+RECURRING_NOTIFICATION_TIMER_ACTIVE=NO
+PR38_HARDENING_INSTALLED_IN_PRODUCTION=NO
+TIMER_REACTIVATION_AUTHORIZED=NO
 HISTORICAL_NEXT_GATE=OWNER_MERGE_AUTHORIZATION_FOR_PR37
 NEW_LIVE_ACTION_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
@@ -530,20 +533,19 @@ PERSISTENT_RUNTIME_AUTHORIZED=NO
 ## Required sequence from here
 
 ```text
-1. implement PR38
-2. independent review of exact PR38 head
-3. fix/re-review if required
-4. OWNER merge authorization
-5. merge exact reviewed PR38 head
-6. separate production sync authorization
-7. production repository sync
-8. read-only PRELIVE: compare exact installed/repository units, confirm repository `RefuseManualStart=yes`, and confirm timer disabled/inactive
-9. separate authorization to update the installed service file and run daemon-reload
-10. verify loaded service property `RefuseManualStart=yes`
-11. separate OWNER authorization to re-enable the timer
-12. observe exactly one natural scheduled fire
-13. verify bounded pass and no persistent runtime
-14. documentation reconciliation
+1. independent re-review of exact new PR38 corrective head
+2. explicit OWNER merge authorization
+3. merge exact reviewed PR38 head
+4. separate production sync authorization
+5. production repository sync
+6. read-only PRELIVE: verify exact production head, compare repository/installed service unit, confirm repository `RefuseManualStart=yes`, and confirm timer installed/disabled/inactive
+7. separate authorization to replace the already-installed service unit
+8. systemctl daemon-reload
+9. verify loaded `RefuseManualStart=yes`
+10. separate OWNER authorization to re-enable the already-installed timer
+11. observe exactly one natural scheduled fire
+12. verify bounded pass and no persistent runtime
+13. documentation reconciliation
 ```
 
 Do not retry consumed canaries. No later PR38 sequence step is authorized by

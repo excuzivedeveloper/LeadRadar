@@ -66,7 +66,7 @@ HISTORICAL_PR36_REVIEWED_HEAD=2044c92288733b5dcc4fc6906c08bdb7bc53873f
 HISTORICAL_PR36_MERGE_COMMIT=21842ef0fbc110babecd7c8b559c987076e795b0
 HISTORICAL_GITHUB_MAIN_HEAD=21842ef0fbc110babecd7c8b559c987076e795b0
 PRODUCTION_HEAD=b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7
-CURRENT_GATE=PR38_CORRECTIVE_REVIEW
+CURRENT_GATE=PR38_FINAL_CORRECTIVE_REREVIEW
 OWNER_NOTIFICATION_SERVICE_INSTALLED=YES
 OWNER_NOTIFICATION_SERVICE_ACTIVE=NO
 OWNER_NOTIFICATION_TIMER_INSTALLED=YES
@@ -898,8 +898,12 @@ REPEAT_NOTIFICATION_AUTHORIZED=NO
 SOURCE_19_20_JOIN_PERFORMED=NO
 SOURCE_19_20_LIFECYCLE_DECISION=NONE
 CANDIDATE_NOTIFICATION_RECURRING_AUTOMATION_AUTHORIZED=NO
-RECURRING_NOTIFICATION_AUTOMATION_DEPLOYED=NO
+RECURRING_NOTIFICATION_SERVICE_INSTALLED=YES
+RECURRING_NOTIFICATION_TIMER_INSTALLED=YES
 RECURRING_NOTIFICATION_TIMER_ENABLED=NO
+RECURRING_NOTIFICATION_TIMER_ACTIVE=NO
+PR38_HARDENING_INSTALLED_IN_PRODUCTION=NO
+TIMER_REACTIVATION_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 NEW_LIVE_ACTION_AUTHORIZED=NO
 ```
@@ -935,10 +939,11 @@ the PR38 hardened artifact is not installed. No daemon-reload, update,
 reactivation, or live fire is authorized. The PR32 and PR34 bounded canaries
 must not be retried.
 
-## 19. Future recurring notification activation contract
+## 19. PR38 staged service-update and timer-reactivation contract
 
-The following commands are documentation for a future Owner-authorized
-production activation only. Do not run them during PR38 corrective review.
+The service and timer units are already installed. This is a future,
+Owner-authorized PR38 rollout contract only; do not run it during corrective
+review.
 
 Expected repository unit files:
 
@@ -947,31 +952,39 @@ deploy/systemd/leadradar-owner-candidate-notifications.service
 deploy/systemd/leadradar-owner-candidate-notifications.timer
 ```
 
-Expected production unit locations after a separately authorized activation:
+Current production unit locations:
 
 ```text
 /etc/systemd/system/leadradar-owner-candidate-notifications.service
 /etc/systemd/system/leadradar-owner-candidate-notifications.timer
 ```
 
-Future activation commands:
+A. After merge and separately authorized production sync, verify the repository
+contains the PR38 service artifact.
+
+B. Read-only PRELIVE: verify the installed service is still the old production
+artifact, repository service contains `RefuseManualStart=yes`, timer remains
+installed/disabled/inactive, and service is inactive.
+
+C. After separate Owner authorization, replace only the installed service file
+from the exact repository artifact, verify exact hash/content, then run
+`systemctl daemon-reload`.
+
+D. Read-only verify loaded `RefuseManualStart=yes`, timer still
+disabled/inactive, and service inactive.
+
+E. After separate Owner authorization, run:
 
 ```bash
-install -m 0644 \
-  deploy/systemd/leadradar-owner-candidate-notifications.service \
-  /etc/systemd/system/leadradar-owner-candidate-notifications.service
-
-install -m 0644 \
-  deploy/systemd/leadradar-owner-candidate-notifications.timer \
-  /etc/systemd/system/leadradar-owner-candidate-notifications.timer
-
-systemctl daemon-reload
 systemctl enable --now leadradar-owner-candidate-notifications.timer
 ```
 
-`enable --now` starts the timer, not a manual immediate service invocation; the
-first candidate pass should occur only at the next normal `OnCalendar`
-boundary.
+`enable --now` re-enables the already-installed timer; it does not manually
+start the service. The first candidate pass must occur at the next normal
+`OnCalendar` boundary.
+
+F. Observe exactly one natural scheduled fire and verify the bounded pass with
+no persistent runtime.
 
 Future rollback/stop commands:
 

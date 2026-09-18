@@ -16,11 +16,7 @@ This file records operational lessons that should shape future implementation, r
 
 - **Implementation state and production repository head are separate facts.** A docs-only commit can advance repository/server `HEAD` without changing runtime behavior. The latest verified production repository head is `b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`; Alembic is `20260914_0043` and persistent runtime is stopped.
 - **Post-merge orchestration bypasses must be recorded as facts, not smoothed over.** Historically, PR36 reached GitHub main at `21842ef0fbc110babecd7c8b559c987076e795b0` before the required pre-merge independent-review and Owner merge-authorization gates were proven. Its correction sequence is historical evidence, not a substitute for the current PR38 corrective-review and explicit authorization gates.
-- **Repository scheduler artifacts are not production activation.** A committed
-  systemd timer/service only defines a deployable contract. Production remains
-  inactive until post-merge correction review, Owner acceptance of the
-  already-merged GitHub state, separate production sync, prelive checks,
-  explicit Owner install/enable authorization, and timer evidence prove it.
+- **Repository artifacts, installed units, and active scheduling are separate states.** A committed unit may be absent from production; an installed timer may be disabled; and newer hardening may not yet be loaded into an installed unit. Track repository-artifact, installed-unit, enabled/active, and Owner-authorization states independently. For PR38, service/timer units are already installed, the timer is disabled, and `RefuseManualStart=yes` remains repository-only until a separately authorized service update and daemon-reload.
 - **Recurring candidate notifications must stay bounded one-shot work.** The
   accepted shape is a systemd timer invoking the existing
   `--owner-candidate-notifications --owner-candidate-notification-limit 5` CLI

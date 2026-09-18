@@ -89,7 +89,7 @@ OWNER_NOTIFICATION_TIMER_NEXT_TRIGGER_PRESENT=NO
 PR38_HARDENING_INSTALLED_IN_PRODUCTION=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 PERSISTENT_RUNTIME=STOPPED
-CURRENT_GATE=PR38_CORRECTIVE_REVIEW
+CURRENT_GATE=PR38_FINAL_CORRECTIVE_REREVIEW
 TIMER_REACTIVATION_AUTHORIZED=NO
 NEW_SCHEDULED_FIRE_AUTHORIZED=NO
 PRODUCTION_SYNC_OF_PR38_AUTHORIZED=NO
@@ -118,7 +118,7 @@ Useful personalized opportunity delivery remains a later product limitation. The
 6. **P1 — Telegram account/platform limits remain external.** FloodWait, ChannelsTooMuch, membership loss, source removal/rename and access changes can interrupt collection independently of PostgreSQL correctness.
 7. **P1 — Membership drift is not automatically reconciled.** Previously approved source membership was brought to 13/13, but there is no authorized automatic join/remediation mechanism. Sources `19` and `20` were not joined by the new bounded probe.
 8. **P1 — Candidate notification automation remains unauthorized.** PR32's bounded canary proved live current-profile/current-intent strong selection and freshness suppression, but produced no reservation or Owner card. PR34 later proved source-`18` stale 24-hour cooldown and immediate selector suppression. Historical source `19`/`20` sends predate the strong-only selector, and source `26` remains a candidate despite its sent card.
-9. **P1 — Durable cooldown has a narrower remaining validation boundary.** The stale/empty 24-hour cooldown plus immediate pre-LIMIT selector suppression are production-proven for source `18`. The unresolvable 6/12/24/48-hour escalation sequence is implemented and tested, but not separately live-proven. Recurring 3-hour/max-5 scheduling remains unauthorized and not deployed.
+9. **P1 — Durable cooldown has a narrower remaining validation boundary.** The stale/empty 24-hour cooldown plus immediate pre-LIMIT selector suppression are production-proven for source `18`; unresolvable 6/12/24/48-hour escalation is not separately live-proven. The 3-hour/max-5 scheduler units are installed, its timer is disabled/inactive, reactivation is unauthorized, and PR38 hardening is not yet installed.
 10. **P1 — Legacy filter substring behavior can create false positives.** The accumulated stop-word matcher remains substring-based. It is intentionally preserved until enough shadow data supports a narrow redesign.
 11. **P1 — Current shadow sample is small.** Live path correctness is proven, but one successful natural shadow row is not enough to tune thresholds/keywords confidently.
 12. **P1 — OpenRouter model availability/cost are external.** `minimax/minimax-m3:free` availability, pricing and rate/free-tier limits can change outside the repository and must be reverified before further live validation or expanded use.
@@ -237,13 +237,13 @@ high-relevance notification success. Its authorization is consumed and retry is
 forbidden.
 
 PR34 later recorded a nonterminal source-`18` stale probe-state row and proved
-immediate pre-LIMIT selector suppression before Telegram. The recurring
-3-hour/max-5 scheduler is implemented on GitHub main by already-merged PR36, but
-PR37 post-merge corrections and Owner acceptance of the already-merged PR36
-GitHub state must precede any separate production sync authorization. Production
-deployment/installation/enablement still requires separate production
-sync/PRELIVE and explicit Owner activation authorization. It remains
-unauthorized and not deployed.
+immediate pre-LIMIT selector suppression before Telegram. The scheduler units
+are already installed and produced six bounded service invocations during the
+earlier enabled interval; the timer is now disabled/inactive. PR38
+`RefuseManualStart=yes` hardening exists only in the repository artifact and is
+not installed/loaded in production. A new timer fire remains unauthorized until
+PR38 review/merge/sync, installed-service update, daemon-reload/property
+verification, and separate Owner reactivation authorization.
 
 ## What the historical membership investigation established
 
