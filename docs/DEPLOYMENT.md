@@ -42,11 +42,10 @@ timer and has already been merged on GitHub main at
 before the required independent-review and Owner merge-authorization gates were
 proven. Post-merge independent technical review passed the implementation as
 safe to keep on GitHub main with two medium corrections handled by PR37. The
-PR36/PR37 context ends here. Current production is
-`b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`: service/timer units are installed,
-the service is inactive, the timer is disabled/inactive with no next trigger,
-and PR38 hardening is not installed. No unit replacement, daemon-reload, or
-timer reactivation is currently authorized.
+PR36/PR37 context ends here. At the historical pre-PR38 checkpoint
+`b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`, the service/timer units were
+installed, the service was inactive, the timer was disabled/inactive with no
+next trigger, and PR38 hardening had not yet been installed.
 
 Current fresh evidence includes PR34 merge/sync/migration, read-only cooldown
 PRELIVE, source-`18` stale cooldown validation, bounded Web replenishment
@@ -438,7 +437,7 @@ proven.
 ```text
 PR36_MERGED=YES
 PR36_REVIEWED_HEAD=2044c92288733b5dcc4fc6906c08bdb7bc53873f
-PRODUCTION_HEAD=b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7
+PRODUCTION_HEAD=f196a14b73f9955acc267787402c6f4da2008d82
 ALEMBIC_CURRENT=20260914_0043
 COOLDOWN_BACKOFF_PRODUCTION_VALIDATED=YES
 RECURRING_NOTIFICATION_SCHEDULER_IMPLEMENTED=YES
@@ -454,8 +453,9 @@ PERSISTENT_RUNTIME=STOPPED
 CURRENT_GATE=OWNER_DECISION_ON_RECURRING_TIMER_STEADY_STATE
 TIMER_REACTIVATION_AUTHORIZED=NO
 NEW_SCHEDULED_FIRE_AUTHORIZED=NO
-PRODUCTION_SYNC_OF_PR38_AUTHORIZED=NO
-PR38_MERGE_AUTHORIZED=NO
+PR38_PRODUCTION_SYNCED=YES
+LOADED_REFUSE_MANUAL_START=yes
+STEADY_STATE_TIMER_ENABLE_AUTHORIZED=NO
 ```
 
 PR36 defines the future recurring target as a systemd timer plus bounded
@@ -475,8 +475,9 @@ Persistent=false
 ```
 
 It considers at most 5 candidates per pass; it does not promise exactly five
-sends. Its units are installed; the timer is disabled/inactive, service inactive,
-and PR38 hardening is not installed. No live action is authorized.
+sends. Its units are installed; the PR38 hardened service is installed and
+loaded, the timer is disabled/inactive, the service is inactive, and steady-state
+timer enablement remains unauthorized.
 
 Keep `relevance_class=strong`; do not lower the threshold merely to produce a
 card. No production sync, migration, Telegram, Web, AI, scheduler, recurring

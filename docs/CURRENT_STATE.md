@@ -2,8 +2,8 @@
 
 **Status:** CANONICAL  
 **Snapshot date:** 2026-09-18
-**Implementation baseline:** production evidence at `b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`
-**Latest verified production evidence head:** `b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`
+**Implementation baseline:** production evidence at `f196a14b73f9955acc267787402c6f4da2008d82`
+**Latest verified production evidence head:** `f196a14b73f9955acc267787402c6f4da2008d82`
 
 ## Executive status
 
@@ -54,7 +54,7 @@ ENTITY_ACCESS / HISTORY probes. No live notification send is proven by these
 six runs.
 
 ```text
-PRODUCTION_HEAD=b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7
+HISTORICAL_SIX_RUN_PRODUCTION_HEAD=b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7
 ALEMBIC_CURRENT=20260914_0043
 TRACKED_WORKTREE=CLEAN
 PERSISTENT_RUNTIME=STOPPED
@@ -845,6 +845,8 @@ PERSISTENT_RUNTIME_AUTHORIZED=NO
 NEXT_PRODUCT_GATE=OWNER_DECISION_ON_RECURRING_TIMER_STEADY_STATE
 ```
 
+The PR38 rollout below is completed historical context, not pending work:
+
 ```text
 1. independent re-review of exact new PR38 corrective head
 2. explicit OWNER merge authorization if clean
@@ -865,9 +867,9 @@ The intended future recurring target is every 3 hours, one bounded pass, at
 most 5 candidates considered per pass, up to 5 cards if all pass, current profile/current intent, strong only,
 durable at-most-once notification dedupe, durable cooldown suppression, and
 silence when no candidate is eligible. PR36 implemented deployable repository
-systemd artifacts. The service and timer are installed, but the timer is
-disabled/inactive, the service is inactive, and the PR38 hardened service unit
-is not yet installed. No activation is authorized.
+systemd artifacts. The service and timer are installed. The PR38 hardened service unit is installed
+and loaded; the timer is disabled/inactive, the service is inactive, and no
+steady-state activation is authorized.
 
 Steps 6 and later are not authorized now. No current implementation PR
 authorizes Telegram, Owner send, lifecycle mutation, Source Audit, Web, AI,

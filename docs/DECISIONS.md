@@ -214,11 +214,8 @@ outside this automation, provides explicit OS-level schedule/enable/disable
 controls, and avoids a custom scheduler loop.
 
 **Consequence:** this decision does not reverse D-009. Repository unit files are
-
-`RefuseManualStart=yes` is required on the bounded notification service. It
-prevents explicit manual starts from being confused with timer-originated work
-while preserving indirect timer/dependency activation. Timer enablement remains
-a separate Owner-authorized action and persistent runtime remains unauthorized.
-not production activation. Installing/enabling the timer remains a separate
-Owner-authorized production gate, and persistent LeadRadar runtime remains
+not production activation. `RefuseManualStart=yes` is required on the bounded
+notification service: explicit manual starts are refused while indirect
+timer/dependency activation remains allowed. Timer enablement remains a separate
+Owner-authorized production action, and persistent LeadRadar runtime remains
 unauthorized unless explicitly approved.

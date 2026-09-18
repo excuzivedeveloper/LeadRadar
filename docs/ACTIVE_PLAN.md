@@ -33,7 +33,7 @@ PERSISTENT_RUNTIME_AUTHORIZED=NO
 ```
 
 ```text
-CURRENT_PRODUCTION_HEAD=b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7
+CURRENT_PRODUCTION_HEAD=f196a14b73f9955acc267787402c6f4da2008d82
 CURRENT_ALEMBIC=20260914_0043
 BRANCH=main
 TRACKED_WORKTREE=CLEAN
@@ -525,7 +525,7 @@ RECURRING_NOTIFICATION_SERVICE_INSTALLED=YES
 RECURRING_NOTIFICATION_TIMER_INSTALLED=YES
 RECURRING_NOTIFICATION_TIMER_ENABLED=NO
 RECURRING_NOTIFICATION_TIMER_ACTIVE=NO
-PR38_HARDENING_INSTALLED_IN_PRODUCTION=NO
+HISTORICAL_PRE_PR38_HARDENING_INSTALLED_IN_PRODUCTION=NO
 TIMER_REACTIVATION_AUTHORIZED=NO
 HISTORICAL_NEXT_GATE=OWNER_MERGE_AUTHORIZATION_FOR_PR37
 NEW_LIVE_ACTION_AUTHORIZED=NO
@@ -537,10 +537,10 @@ PRE_MERGE_OWNER_AUTHORIZATION_PROVEN=NO
 POST_MERGE_INDEPENDENT_TECHNICAL_REVIEW=PASS_WITH_2_MEDIUM_CORRECTIONS
 ```
 
-## PR38 current gate
+## Historical PR38 rollout evidence
 
-Production evidence is reconciled at
-`b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`: six bounded, successful
+At the historical pre-PR38 production checkpoint
+`b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`, six bounded, successful
 three-hour-UTC service invocations occurred while the timer was enabled, with
 zero Owner sends and no persistent runtime remaining. Historical direct timer
 trigger attribution is unavailable, so the forensic verdict remains
@@ -621,6 +621,7 @@ durable cooldown suppression
 silence if nothing eligible
 ```
 
-The service and timer units are installed in production, but the timer is
-disabled/inactive and the service inactive. PR38 hardening is repository-only
-until a separately authorized unit replacement and daemon-reload.
+The service and timer units are installed in production. The PR38 hardened
+service is installed and loaded with `RefuseManualStart=yes`; the timer is
+disabled/inactive, the service is inactive, and steady-state timer enablement
+remains separately Owner-gated.
