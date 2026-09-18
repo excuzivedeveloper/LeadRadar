@@ -7,6 +7,9 @@ These decisions explain why the current architecture and execution order look
 the way they do. Reversing one should be an explicit reviewed decision, not an
 incidental refactor.
 
+The accepted PR38 manual-start constraint does not make timer enablement
+automatic; recurring steady-state activation remains separately Owner-gated.
+
 ## D-001 — Preserve useful upstream anti-noise behavior
 
 LeadRadar is a fork/adaptation, not a clean-sheet rewrite.
