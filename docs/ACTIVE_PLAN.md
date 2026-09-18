@@ -2,8 +2,8 @@
 
 **Status:** CANONICAL / ACTIVE  
 **Last verified:** 2026-09-18
-**Implementation baseline:** `b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`
-**Latest verified production evidence head:** `b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`
+**Implementation baseline:** `f196a14b73f9955acc267787402c6f4da2008d82`
+**Latest verified production evidence head:** `f196a14b73f9955acc267787402c6f4da2008d82`
 
 This file defines execution order. Implemented capability does not imply authorization to activate it.
 
@@ -553,7 +553,9 @@ NEW_SCHEDULED_FIRE_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 ```
 
-## Required sequence from here
+## Completed PR38 rollout sequence
+
+The following sequence is completed historical rollout evidence, not pending work:
 
 The PR38 rollout is complete. Forward work is: independently review this
 documentation reconciliation, merge only with Owner authorization, separately

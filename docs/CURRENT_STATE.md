@@ -38,7 +38,7 @@ NEW_SCHEDULED_FIRE_AUTHORIZED=NO
 The controlled fire proves its own prospective natural schedule only; the
 historical six-run forensic verdict remains `INCOMPLETE`.
 
-Production is at `b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7` with Alembic
+Production is at `f196a14b73f9955acc267787402c6f4da2008d82` with Alembic
 `20260914_0043`, a clean tracked worktree, and no persistent freelancer bot
 process. The Owner-notification service is installed but inactive; its timer is
 installed, disabled, inactive, and has no next trigger. Future scheduled fires
@@ -209,9 +209,9 @@ The authorization is consumed and retry is forbidden. Historical source
 ## Production contract
 
 ```text
-LATEST_VERIFIED_PRODUCTION_EVIDENCE_HEAD=b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7
-PRODUCTION_HEAD=b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7
-IMPLEMENTATION_BASE=b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7
+LATEST_VERIFIED_PRODUCTION_EVIDENCE_HEAD=f196a14b73f9955acc267787402c6f4da2008d82
+PRODUCTION_HEAD=f196a14b73f9955acc267787402c6f4da2008d82
+IMPLEMENTATION_BASE=f196a14b73f9955acc267787402c6f4da2008d82
 BRANCH=main
 TRACKED_WORKTREE=CLEAN
 PYTHON_VERSION=3.14.7

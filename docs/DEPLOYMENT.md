@@ -13,7 +13,7 @@ PR38 is merged, synced, installed, and loaded with `RefuseManualStart=yes` at
 installed, disabled/inactive, and has no next trigger. One controlled natural
 fire at `2026-09-18T12:00:00Z` succeeded once and the timer was disabled again.
 
-Current production is `b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`, Alembic
+Current production is `f196a14b73f9955acc267787402c6f4da2008d82`, Alembic
 `20260914_0043`, clean and stopped outside bounded work. The Owner notification
 service is installed/inactive; the timer is installed/disabled/inactive with no
 next trigger. Six scheduled service runs completed at the three-hour UTC
