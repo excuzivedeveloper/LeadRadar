@@ -70,7 +70,9 @@ PR38 adds `RefuseManualStart=yes` to the service contract so future explicit
 manual starts are refused while timer/dependency activation remains possible.
 It does not change the timer cadence or authorize a production action.
 
-PR35 left production at `ab36df17334f8eff57fe475c8090a29a6ac1243c` with
+## Historical PR35–PR37 record (not current state)
+
+PR35 historically left production at `ab36df17334f8eff57fe475c8090a29a6ac1243c` with
 Alembic `20260914_0043` and persistent runtime stopped.
 
 PR34 was reviewed at `656443ea9e64a3f757ef05309a502c6661841523`, merged as
@@ -88,11 +90,8 @@ implementation as safe to keep on GitHub main, with two medium corrections:
 reconcile the orchestration docs and harden the timer drift test. PR37 is the
 narrow corrective PR for those two items only.
 
-GitHub main and production are now intentionally different facts. GitHub main is
-the PR36 merge commit, while production remains on the PR35 production-sync
-commit: not synced to PR36, not deployed for recurring notifications, not
-authorized for recurring automation, timer not enabled, and persistent runtime
-stopped.
+This is historical context only; it predates the current six-fire evidence at
+`b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`.
 
 ```text
 PR33_PRODUCTION_DOCS_SYNC=PASS
@@ -101,9 +100,9 @@ PR34_REVIEWED_HEAD=656443ea9e64a3f757ef05309a502c6661841523
 PR34_MERGE_COMMIT=d7f1248fdee62d6eee13e4256614ee15c4cc2846
 PR36_MERGED=YES
 PR36_REVIEWED_HEAD=2044c92288733b5dcc4fc6906c08bdb7bc53873f
-PR36_MERGE_COMMIT=21842ef0fbc110babecd7c8b559c987076e795b0
-GITHUB_MAIN_HEAD=21842ef0fbc110babecd7c8b559c987076e795b0
-PRODUCTION_HEAD=ab36df17334f8eff57fe475c8090a29a6ac1243c
+HISTORICAL_PR36_MERGE_COMMIT=21842ef0fbc110babecd7c8b559c987076e795b0
+HISTORICAL_GITHUB_MAIN_HEAD=21842ef0fbc110babecd7c8b559c987076e795b0
+HISTORICAL_PRODUCTION_HEAD=ab36df17334f8eff57fe475c8090a29a6ac1243c
 ALEMBIC_CURRENT=20260914_0043
 BOUNDED_PROFILE_WEB_REPLENISHMENT=PASS_NEW_STRONG
 REPLENISHMENT_RUN_KEY=owner-profile-web-replenishment-20260914-v1
@@ -142,17 +141,17 @@ RECURRING_NOTIFICATION_AUTOMATION_AUTHORIZED=NO
 RECURRING_NOTIFICATION_TIMER_ENABLED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 PERSISTENT_RUNTIME=STOPPED
-CURRENT_GATE=PR36_POST_MERGE_CORRECTIVE_PR_REVIEW
+HISTORICAL_CURRENT_GATE=PR36_POST_MERGE_CORRECTIVE_PR_REVIEW
 PR36_POST_MERGE_TECHNICAL_REVIEW=PASS
 PR36_CORRECTIVE_PR_REQUIRED=YES
-PR36_PRODUCTION_SYNC_COMPLETED=NO
+HISTORICAL_PR36_PRODUCTION_SYNC_COMPLETED=NO
 ORCHESTRATION_GATE_BYPASS=YES
 PRE_MERGE_INDEPENDENT_REVIEW_OCCURRED=NO
 PRE_MERGE_OWNER_AUTHORIZATION_PROVEN=NO
 POST_MERGE_INDEPENDENT_TECHNICAL_REVIEW=PASS_WITH_2_MEDIUM_CORRECTIONS
 ```
 
-LeadRadar production is stable at commit `ab36df17334f8eff57fe475c8090a29a6ac1243c`. PR34 deployed the exact-binding nonterminal probe-state table and proved the stale 24-hour cooldown path for source `18`: one stale/empty probe was recorded, no notification row was created, no Owner notification count changed, and an immediate read-only selector pass suppressed source `18` before Telegram while allowing deeper eligible sources `23` and `24`. The strong-only Owner candidate-notification selector is deployed; persistent runtime remains stopped.
+Historically, production was stable at commit `ab36df17334f8eff57fe475c8090a29a6ac1243c`. PR34 deployed the exact-binding nonterminal probe-state table and proved the stale 24-hour cooldown path for source `18`: one stale/empty probe was recorded, no notification row was created, no Owner notification count changed, and an immediate read-only selector pass suppressed source `18` before Telegram while allowing deeper eligible sources `23` and `24`.
 
 PR24 production sync, post-sync verification and full bounded offline Stage A all passed. PR27 production sync, post-sync verification and the technical read-only PRELIVE for the repaired profile-discovery path also passed.
 
@@ -179,9 +178,9 @@ The authorization is consumed and retry is forbidden. Historical source
 ## Production contract
 
 ```text
-LATEST_VERIFIED_PRODUCTION_EVIDENCE_HEAD=ab36df17334f8eff57fe475c8090a29a6ac1243c
-PRODUCTION_HEAD=ab36df17334f8eff57fe475c8090a29a6ac1243c
-IMPLEMENTATION_BASE=ab36df17334f8eff57fe475c8090a29a6ac1243c
+LATEST_VERIFIED_PRODUCTION_EVIDENCE_HEAD=b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7
+PRODUCTION_HEAD=b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7
+IMPLEMENTATION_BASE=b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7
 BRANCH=main
 TRACKED_WORKTREE=CLEAN
 PYTHON_VERSION=3.14.7
@@ -189,6 +188,21 @@ PRODUCTION_PYTHON=./.venv/bin/python
 BARE_PYTHON=ABSENT
 ALEMBIC_CURRENT=20260914_0043
 PERSISTENT_RUNTIME=STOPPED
+OWNER_NOTIFICATION_SERVICE_INSTALLED=YES
+OWNER_NOTIFICATION_SERVICE_ACTIVE=NO
+OWNER_NOTIFICATION_TIMER_INSTALLED=YES
+OWNER_NOTIFICATION_TIMER_ENABLED=NO
+OWNER_NOTIFICATION_TIMER_ACTIVE=NO
+OWNER_NOTIFICATION_NEXT_TRIGGER_PRESENT=NO
+FUTURE_SCHEDULED_FIRES_DISABLED=YES
+PR38_STATE=OPEN
+PR38_REFUSE_MANUAL_START_IMPLEMENTED_IN_REPOSITORY=YES
+PR38_HARDENING_INSTALLED_IN_PRODUCTION=NO
+CURRENT_GATE=PR38_CORRECTIVE_REVIEW
+TIMER_REACTIVATION_AUTHORIZED=NO
+NEW_SCHEDULED_FIRE_AUTHORIZED=NO
+PRODUCTION_SYNC_OF_PR38_AUTHORIZED=NO
+PR38_MERGE_AUTHORIZED=NO
 PROFILE_DISCOVERY_INTENT_VERSION=profile-discovery-intent.v2
 ```
 
@@ -794,35 +808,35 @@ AUTO_JOIN_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 ```
 
-## Next gate
+## Current next gate
 
 ```text
-NEXT_PRODUCT_GATE=PR36_POST_MERGE_CORRECTIVE_PR_REVIEW
-AFTER_PR37_MERGE_NEXT_GATE=OWNER_ACCEPTANCE_OF_ALREADY_MERGED_PR36_GITHUB_STATE
+NEXT_PRODUCT_GATE=PR38_CORRECTIVE_REVIEW
 ```
 
 ```text
-1. implement PR37 narrow corrections
-2. independent review exact PR37 head
-3. explicit Owner merge authorization for PR37
-4. merge exact reviewed PR37 head
-5. reconcile GitHub main to exact PR37 merge commit
-6. Owner explicitly accepts already-merged PR36 technical state plus PR37 correction
-7. separate production git sync authorization
-8. production sync only
-9. read-only PRELIVE of systemd units, paths, env-path existence and timer inactive state
-10. separate Owner authorization for unit install, daemon-reload and timer enable
-11. observe one real scheduled timer fire
+1. complete PR38 corrective docs commit
+2. independent re-review of exact new PR38 head
+3. explicit OWNER merge authorization if clean
+4. merge exact reviewed PR38 head
+5. separate production sync authorization
+6. production repository sync
+7. read-only PRELIVE: compare installed/repository units, confirm repository `RefuseManualStart=yes`, and timer disabled/inactive
+8. separate authorization to replace installed service unit and daemon-reload
+9. verify loaded `RefuseManualStart=yes`
+10. separate OWNER authorization to re-enable timer
+11. observe exactly one natural scheduled fire
 12. verify bounded pass and no persistent runtime
+13. documentation reconciliation
 ```
 
 The intended future recurring target is every 3 hours, one bounded pass, at
 most 5 candidates considered per pass, up to 5 cards if all pass, current profile/current intent, strong only,
 durable at-most-once notification dedupe, durable cooldown suppression, and
 silence when no candidate is eligible. PR36 implemented deployable repository
-systemd artifacts only. It is **not deployed**, **not enabled**, and **not
-authorized** in production. No installed systemd timer, cron schedule,
-persistent runtime, or active 3-hour automation exists.
+systemd artifacts. The service and timer are installed, but the timer is
+disabled/inactive, the service is inactive, and the PR38 hardened service unit
+is not yet installed. No activation is authorized.
 
 Steps 6 and later are not authorized now. No current implementation PR
 authorizes Telegram, Owner send, lifecycle mutation, Source Audit, Web, AI,

@@ -21,7 +21,8 @@ disabled pending full PR38 rollout and new activation authorization.
 
 The previous live-ingestion blocker is closed, the first bounded Opportunity Analysis canary passed, PR23 restored production SearXNG, PR27 repaired Profile Discovery Intent versioning, and the PR27 bounded Web canary has now completed successfully.
 
-Current Web/Telegram evidence includes:
+Current Web/Telegram evidence includes historical PR27–PR37 records and the
+current PR38 state below:
 
 ```text
 PR27_BOUNDED_WEB_CANARY=PASS
@@ -59,9 +60,9 @@ PR32_NOTIFICATION_CANARY_RETRY_ALLOWED=NO
 PR33_PRODUCTION_DOCS_SYNC=PASS
 PR36_MERGED=YES
 PR36_REVIEWED_HEAD=2044c92288733b5dcc4fc6906c08bdb7bc53873f
-PR36_MERGE_COMMIT=21842ef0fbc110babecd7c8b559c987076e795b0
-GITHUB_MAIN_HEAD=21842ef0fbc110babecd7c8b559c987076e795b0
-PRODUCTION_HEAD=ab36df17334f8eff57fe475c8090a29a6ac1243c
+HISTORICAL_PR36_MERGE_COMMIT=21842ef0fbc110babecd7c8b559c987076e795b0
+HISTORICAL_GITHUB_MAIN_HEAD=21842ef0fbc110babecd7c8b559c987076e795b0
+CURRENT_PRODUCTION_HEAD=b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7
 ALEMBIC_CURRENT=20260914_0043
 BOUNDED_PROFILE_WEB_REPLENISHMENT=PASS_NEW_STRONG
 NEW_CURRENT_STRONG_CANDIDATE_SOURCE_IDS=23,24,26
@@ -79,38 +80,31 @@ SOURCE_18_STALE_24H_COOLDOWN_PRODUCTION_PROVEN=YES
 SOURCE_18_IMMEDIATE_SELECTOR_SUPPRESSION_PRODUCTION_PROVEN=YES
 UNRESOLVABLE_BACKOFF_LIVE_PROVEN=NO
 RECURRING_NOTIFICATION_SCHEDULER_IMPLEMENTED=YES
-RECURRING_NOTIFICATION_AUTOMATION_DEPLOYED=NO
-RECURRING_NOTIFICATION_AUTOMATION_AUTHORIZED=NO
-RECURRING_NOTIFICATION_TIMER_ENABLED=NO
-CANDIDATE_NOTIFICATION_RECURRING_AUTOMATION_DEPLOYED=NO
-CANDIDATE_NOTIFICATION_RECURRING_AUTOMATION_AUTHORIZED=NO
-CANDIDATE_NOTIFICATION_TIMER_ENABLED=NO
+OWNER_NOTIFICATION_SERVICE_INSTALLED=YES
+OWNER_NOTIFICATION_SERVICE_ACTIVE=NO
+OWNER_NOTIFICATION_TIMER_INSTALLED=YES
+OWNER_NOTIFICATION_TIMER_ENABLED=NO
+OWNER_NOTIFICATION_TIMER_ACTIVE=NO
+OWNER_NOTIFICATION_TIMER_NEXT_TRIGGER_PRESENT=NO
+PR38_HARDENING_INSTALLED_IN_PRODUCTION=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 PERSISTENT_RUNTIME=STOPPED
-CURRENT_GATE=PR36_POST_MERGE_CORRECTIVE_PR_REVIEW
-AFTER_PR37_MERGE_NEXT_GATE=OWNER_ACCEPTANCE_OF_ALREADY_MERGED_PR36_GITHUB_STATE
-PR36_POST_MERGE_TECHNICAL_REVIEW=PASS
-PR36_CORRECTIVE_PR_REQUIRED=YES
-PR36_PRODUCTION_SYNC_COMPLETED=NO
-ORCHESTRATION_GATE_BYPASS=YES
-PRE_MERGE_INDEPENDENT_REVIEW_OCCURRED=NO
-PRE_MERGE_OWNER_AUTHORIZATION_PROVEN=NO
-POST_MERGE_INDEPENDENT_TECHNICAL_REVIEW=PASS_WITH_2_MEDIUM_CORRECTIONS
+CURRENT_GATE=PR38_CORRECTIVE_REVIEW
+TIMER_REACTIVATION_AUTHORIZED=NO
+NEW_SCHEDULED_FIRE_AUTHORIZED=NO
+PRODUCTION_SYNC_OF_PR38_AUTHORIZED=NO
+PR38_MERGE_AUTHORIZED=NO
 ```
 
-PR36 has already been merged on GitHub main at
+Historically, PR36 was merged on GitHub main at
 `21842ef0fbc110babecd7c8b559c987076e795b0`
 (`PR36_REVIEWED_HEAD=2044c92288733b5dcc4fc6906c08bdb7bc53873f`) before the
 required independent-review and Owner merge-authorization gates were proven.
 Post-merge independent technical review passed the implementation as safe to
-keep on GitHub main with two medium corrections handled by PR37. The immediate
-gate is PR37 post-merge corrective review, followed by explicit Owner merge
-authorization for PR37, merge of the exact reviewed PR37 head, reconciliation
-of GitHub main to the exact PR37 merge commit, and then Owner acceptance of the
-already-merged PR36 technical state plus PR37 correction before any separate
-production sync authorization is considered. Recurring notifications remain not
-deployed, not enabled, and not production-authorized; persistent runtime remains
-unauthorized.
+keep on GitHub main with corrections handled historically by PR37. That history
+does not define the current gate: service/timer units are installed, timer is
+disabled/inactive, service is inactive, and PR38 hardening remains repository-
+only pending corrective review and explicit authorization.
 
 Useful personalized opportunity delivery remains a later product limitation. The narrower fact now proven is durable delivery persistence for source-candidate cards for sources `19` and `20`; that does not establish end-to-end matched-opportunity delivery or Owner review/action.
 
@@ -144,7 +138,7 @@ Useful personalized opportunity delivery remains a later product limitation. The
 26. **P2 — One-shot query bounds do not bound autonomous discovery.** `--max-queries` bounds an explicit operator run; persistent Web discovery remains unauthorized and separately unproven.
 27. **P2 — Successful access/freshness probes do not validate the lifecycle service.** The source `19`/`20` gate intentionally did not call `SourceValidationService`; source and validation-table hashes remained unchanged. Treat it as access/freshness evidence only.
 28. **P2 — Historical inactive collector row `1` remains persisted.** The duplicate-active anomaly is resolved and collector `2` is the sole active row. Collector `1` remains inactive for historical/FK continuity; its dependent operation-state row and historical references were intentionally preserved. This is not a blocker by itself, and its exact historical Telegram-user origin remains unproven.
-29. **P2 — Recurring scheduling is implemented as repository artifacts only.** PR36 added a systemd timer and one-shot service contract for every 3 hours, one bounded pass, max 5 candidates considered per pass, current profile/current intent, strong only, durable at-most-once notification dedupe, durable cooldown suppression, and silence if nothing is eligible. GitHub main contains those artifacts, but production remains at `ab36df17334f8eff57fe475c8090a29a6ac1243c` with `RECURRING_NOTIFICATION_AUTOMATION_DEPLOYED=NO`, `RECURRING_NOTIFICATION_AUTOMATION_AUTHORIZED=NO`, `RECURRING_NOTIFICATION_TIMER_ENABLED=NO`, and `PERSISTENT_RUNTIME=STOPPED`.
+29. **P2 — Recurring scheduling remains activation-limited.** Service/timer units are installed, but timer is disabled/inactive, service is inactive, and PR38 hardening is not installed. Six historical fires were bounded; direct caller provenance was unavailable. Reactivation requires PR38 corrective review and explicit authorization.
 
 ## PR27 bounded Web evidence boundary
 

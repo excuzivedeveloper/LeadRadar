@@ -1,7 +1,7 @@
 # LeadRadar — Project Learnings
 
 **Status:** CANONICAL  
-**Last verified:** 2026-09-16
+**Last verified:** 2026-09-18
 
 This file records operational lessons that should shape future implementation, review and server work. Read it immediately after `docs/DOCUMENTATION_INDEX.md`.
 
@@ -14,8 +14,8 @@ This file records operational lessons that should shape future implementation, r
   user starts while preserving indirect timer/dependency activation, reducing
   future validation ambiguity without adding application-level runtime.
 
-- **Implementation state and production repository head are separate facts.** A docs-only commit can advance repository/server `HEAD` without changing runtime behavior. The latest verified production repository head is `ab36df17334f8eff57fe475c8090a29a6ac1243c`; PR34 has been reviewed, merged, synced, migrated to `20260914_0043`, and live-validated for the stale 24-hour cooldown path.
-- **Post-merge orchestration bypasses must be recorded as facts, not smoothed over.** PR36 reached GitHub main at `21842ef0fbc110babecd7c8b559c987076e795b0` before the required pre-merge independent-review and Owner merge-authorization gates were proven. The correction is to preserve production untouched, record `ORCHESTRATION_GATE_BYPASS=YES`, independently review and merge PR37 corrections, then ask the Owner to accept the already-merged PR36 GitHub state before any separate production sync is considered.
+- **Implementation state and production repository head are separate facts.** A docs-only commit can advance repository/server `HEAD` without changing runtime behavior. The latest verified production repository head is `b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`; Alembic is `20260914_0043` and persistent runtime is stopped.
+- **Post-merge orchestration bypasses must be recorded as facts, not smoothed over.** Historically, PR36 reached GitHub main at `21842ef0fbc110babecd7c8b559c987076e795b0` before the required pre-merge independent-review and Owner merge-authorization gates were proven. Its correction sequence is historical evidence, not a substitute for the current PR38 corrective-review and explicit authorization gates.
 - **Repository scheduler artifacts are not production activation.** A committed
   systemd timer/service only defines a deployable contract. Production remains
   inactive until post-merge correction review, Owner acceptance of the

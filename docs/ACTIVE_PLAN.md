@@ -1,17 +1,17 @@
 # LeadRadar — Active Plan
 
 **Status:** CANONICAL / ACTIVE  
-**Last verified:** 2026-09-16
-**Implementation baseline:** PR35 production sync at `ab36df17334f8eff57fe475c8090a29a6ac1243c`
-**Latest verified production evidence head:** `ab36df17334f8eff57fe475c8090a29a6ac1243c`
+**Last verified:** 2026-09-18
+**Implementation baseline:** `b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`
+**Latest verified production evidence head:** `b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`
 
 This file defines execution order. Implemented capability does not imply authorization to activate it.
 
 ## Current production baseline
 
 ```text
-LATEST_VERIFIED_PRODUCTION_EVIDENCE_HEAD=ab36df17334f8eff57fe475c8090a29a6ac1243c
-IMPLEMENTATION_BASE=ab36df17334f8eff57fe475c8090a29a6ac1243c
+CURRENT_PRODUCTION_HEAD=b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7
+CURRENT_ALEMBIC=20260914_0043
 BRANCH=main
 TRACKED_WORKTREE=CLEAN
 ALEMBIC_CURRENT=20260914_0043
@@ -38,7 +38,7 @@ AI_REPLY_ENABLED=false
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 ```
 
-## Completed current chain
+## Historical completed chain through PR37
 
 ```text
 PR23_MERGED=YES
@@ -119,42 +119,45 @@ POST_READ_ONLY_SOURCE_18_ELIGIBLE=NO
 POST_READ_ONLY_ELIGIBLE_PAGE_SOURCE_IDS=23,24
 ```
 
-## Current implementation state
+## Current implementation and authorization state
 
 ```text
 COOLDOWN_BACKOFF_IMPLEMENTED=YES
 MIGRATION_DEPLOYED=20260914_0043
 COOLDOWN_BACKOFF_PRODUCTION_VALIDATED=YES
 RECURRING_NOTIFICATION_SCHEDULER_IMPLEMENTED=YES
-RECURRING_NOTIFICATION_AUTOMATION_DEPLOYED=NO
-RECURRING_NOTIFICATION_AUTOMATION_AUTHORIZED=NO
-RECURRING_NOTIFICATION_TIMER_ENABLED=NO
+OWNER_NOTIFICATION_SERVICE_INSTALLED=YES
+OWNER_NOTIFICATION_SERVICE_ACTIVE=NO
+OWNER_NOTIFICATION_TIMER_INSTALLED=YES
+OWNER_NOTIFICATION_TIMER_ENABLED=NO
+OWNER_NOTIFICATION_TIMER_ACTIVE=NO
+OWNER_NOTIFICATION_NEXT_TRIGGER_PRESENT=NO
+FUTURE_SCHEDULED_FIRES_DISABLED=YES
+PR38_STATE=OPEN
+PR38_REFUSE_MANUAL_START_IMPLEMENTED_IN_REPOSITORY=YES
+PR38_HARDENING_INSTALLED_IN_PRODUCTION=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 PERSISTENT_RUNTIME=STOPPED
 PR36_MERGED=YES
 PR36_REVIEWED_HEAD=2044c92288733b5dcc4fc6906c08bdb7bc53873f
-PR36_MERGE_COMMIT=21842ef0fbc110babecd7c8b559c987076e795b0
-GITHUB_MAIN_HEAD=21842ef0fbc110babecd7c8b559c987076e795b0
-PRODUCTION_HEAD=ab36df17334f8eff57fe475c8090a29a6ac1243c
-PR36_POST_MERGE_TECHNICAL_REVIEW=PASS
-PR36_CORRECTIVE_PR_REQUIRED=YES
-PR36_PRODUCTION_SYNC_COMPLETED=NO
-ORCHESTRATION_GATE_BYPASS=YES
-PRE_MERGE_INDEPENDENT_REVIEW_OCCURRED=NO
-PRE_MERGE_OWNER_AUTHORIZATION_PROVEN=NO
-POST_MERGE_INDEPENDENT_TECHNICAL_REVIEW=PASS_WITH_2_MEDIUM_CORRECTIONS
+CURRENT_GATE=PR38_CORRECTIVE_REVIEW
+TIMER_REACTIVATION_AUTHORIZED=NO
+NEW_SCHEDULED_FIRE_AUTHORIZED=NO
+PRODUCTION_SYNC_OF_PR38_AUTHORIZED=NO
+PR38_MERGE_AUTHORIZED=NO
 ```
 
-PR34 completed independent review, merge, production sync, migration, read-only
+Historically, PR34 completed independent review, merge, production sync, migration, read-only
 PRELIVE, one bounded source-`18` stale cooldown validation, and read-only proof
 that immediate re-selection is suppressed before Telegram. PR36 implemented the
 repository scheduling layer and was merged on GitHub main before the required
 independent-review and Owner merge gates were proven. The post-merge technical
 review passed the implementation as safe to keep on GitHub main with two medium
 corrections handled by PR37: docs reconciliation and timer drift-test hardening.
-Production remains untouched at PR35. No current step authorizes production
-sync, installing/enabling the timer, running the notification CLI live, or
-starting a persistent LeadRadar runtime.
+Those PR35–PR37 facts are historical; the current production state and PR38
+authorization are recorded above. No current step authorizes production sync,
+unit replacement/daemon-reload, timer reactivation, a live fire, or persistent
+runtime.
 
 The bounded planner contract remained:
 
@@ -476,19 +479,19 @@ and missing-current-relevance candidates are filtered before Telegram. The live
 canary proved only that one selected strong candidate reached Telegram probing;
 it did not execute a live non-strong negative-control case.
 
-## Current gate
+## Historical PR36/PR37 gate record (not current)
 
 ```text
-CURRENT_GATE=PR36_POST_MERGE_CORRECTIVE_PR_REVIEW
-AFTER_PR37_MERGE_NEXT_GATE=OWNER_ACCEPTANCE_OF_ALREADY_MERGED_PR36_GITHUB_STATE
-IMPLEMENTATION_BASE=ab36df17334f8eff57fe475c8090a29a6ac1243c
-GITHUB_MAIN_HEAD=21842ef0fbc110babecd7c8b559c987076e795b0
+HISTORICAL_CURRENT_GATE=PR36_POST_MERGE_CORRECTIVE_PR_REVIEW
+HISTORICAL_AFTER_PR37_MERGE_NEXT_GATE=OWNER_ACCEPTANCE_OF_ALREADY_MERGED_PR36_GITHUB_STATE
+HISTORICAL_IMPLEMENTATION_BASE=ab36df17334f8eff57fe475c8090a29a6ac1243c
+HISTORICAL_GITHUB_MAIN_HEAD=21842ef0fbc110babecd7c8b559c987076e795b0
 PR36_MERGED=YES
 PR36_REVIEWED_HEAD=2044c92288733b5dcc4fc6906c08bdb7bc53873f
 PR36_MERGE_COMMIT=21842ef0fbc110babecd7c8b559c987076e795b0
 PR36_POST_MERGE_TECHNICAL_REVIEW=PASS
 PR36_CORRECTIVE_PR_REQUIRED=YES
-PR36_PRODUCTION_SYNC_COMPLETED=NO
+HISTORICAL_PR36_PRODUCTION_SYNC_COMPLETED=NO
 OWNER_PROFILE_GATE=EXACT_ACTIVE_PRIMARY_CONFIRMED
 DISCOVERY_INTENT_GATE=CURRENT_DETERMINISTIC_INTENT
 OWNER_CANDIDATE_NOTIFICATION_RELEVANCE_GATE=strong_only
@@ -498,7 +501,7 @@ RECURRING_NOTIFICATION_SCHEDULER_IMPLEMENTED=YES
 RECURRING_NOTIFICATION_AUTOMATION_DEPLOYED=NO
 RECURRING_NOTIFICATION_AUTOMATION_AUTHORIZED=NO
 RECURRING_NOTIFICATION_TIMER_ENABLED=NO
-NEXT_GATE=OWNER_MERGE_AUTHORIZATION_FOR_PR37
+HISTORICAL_NEXT_GATE=OWNER_MERGE_AUTHORIZATION_FOR_PR37
 NEW_LIVE_ACTION_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 CANDIDATE_NOTIFICATION_RECURRING_AUTOMATION_AUTHORIZED=NO
@@ -543,10 +546,10 @@ PERSISTENT_RUNTIME_AUTHORIZED=NO
 14. documentation reconciliation
 ```
 
-Do not retry consumed canaries. Steps 6 and later are not authorized now. PR37
-permits no Telegram, Web, Owner send, lifecycle mutation, Source Audit, AI,
-migration, production sync, production systemd mutation, timer enabling,
-recurring production automation, or persistent runtime action.
+Do not retry consumed canaries. No later PR38 sequence step is authorized by
+this corrective review: Telegram, Web, Owner send, lifecycle mutation, Source
+Audit, AI, production sync, systemd mutation, timer activation, recurring live
+work, and persistent runtime remain forbidden.
 
 Future lifecycle and membership actions remain independent choices:
 
@@ -586,6 +589,6 @@ durable cooldown suppression
 silence if nothing eligible
 ```
 
-This target is implemented as repository systemd artifacts only. It is not
-deployed, enabled, or authorized in production. No installed systemd timer, cron
-schedule, persistent runtime, or active 3-hour automation exists.
+The service and timer units are installed in production, but the timer is
+disabled/inactive and the service inactive. PR38 hardening is repository-only
+until a separately authorized unit replacement and daemon-reload.
