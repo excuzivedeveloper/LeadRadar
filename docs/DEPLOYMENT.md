@@ -1,11 +1,23 @@
 # LeadRadar — Current Deployment
 
 **Status:** CANONICAL  
-**Snapshot date:** 2026-09-16
-**Deployment code baseline:** `ab36df17334f8eff57fe475c8090a29a6ac1243c`
-**Latest verified production evidence head:** `ab36df17334f8eff57fe475c8090a29a6ac1243c`
+**Snapshot date:** 2026-09-18
+**Deployment code baseline:** `b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`
+**Latest verified production evidence head:** `b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`
 
 This document records the current shared-server LeadRadar layout and deployment boundaries. Exact operational commands live in [`OPERATIONS.md`](OPERATIONS.md). A docs-only repository head can be newer than the implementation baseline without changing deployed code behavior.
+
+Current production is `b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`, Alembic
+`20260914_0043`, clean and stopped outside bounded work. The Owner notification
+service is installed/inactive; the timer is installed/disabled/inactive with no
+next trigger. Six scheduled service runs completed at the three-hour UTC
+boundaries with no manager failures, no Owner send, and no persistent process.
+The historical journal lacks a direct trigger-source field, so their attribution
+remains consistent with the natural timer but not directly field-proven. PR38's
+repository service contract adds `RefuseManualStart=yes`; it is not an installed
+unit change until separately authorized.
+
+## Historical PR34–PR37 context
 
 PR34 deployed Alembic revision `20260914_0043` and the separate
 `owner_source_candidate_probe_state` table. The migration created no inferred
@@ -24,9 +36,11 @@ timer and has already been merged on GitHub main at
 before the required independent-review and Owner merge-authorization gates were
 proven. Post-merge independent technical review passed the implementation as
 safe to keep on GitHub main with two medium corrections handled by PR37. The
-production checkout remains `ab36df17334f8eff57fe475c8090a29a6ac1243c`; the
-unit files are not installed in `/etc/systemd/system`, the timer is not enabled,
-and production recurring notification automation remains unauthorized.
+PR36/PR37 context ends here. Current production is
+`b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`: service/timer units are installed,
+the service is inactive, the timer is disabled/inactive with no next trigger,
+and PR38 hardening is not installed. No unit replacement, daemon-reload, or
+timer reactivation is currently authorized.
 
 Current fresh evidence includes PR34 merge/sync/migration, read-only cooldown
 PRELIVE, source-`18` stale cooldown validation, bounded Web replenishment
@@ -338,12 +352,12 @@ No exact latest-message timestamp is proven. No Owner card, reservation,
 lifecycle change, join/leave action, runtime-env edit, or persistent runtime
 occurred. Historical source `19`/`20` sent rows predate the strong-only selector.
 
-## PR34 cooldown deployment and validation state
+## Historical PR34 cooldown deployment and validation state
 
 ```text
 PR34_REVIEWED_HEAD=656443ea9e64a3f757ef05309a502c6661841523
 PR34_MERGE_COMMIT=d7f1248fdee62d6eee13e4256614ee15c4cc2846
-PRODUCTION_HEAD=ab36df17334f8eff57fe475c8090a29a6ac1243c
+HISTORICAL_PRODUCTION_HEAD=ab36df17334f8eff57fe475c8090a29a6ac1243c
 ALEMBIC_CURRENT=20260914_0043
 PERSISTENT_RUNTIME=STOPPED
 COOLDOWN_BACKOFF_PRODUCTION_VALIDATED=YES
@@ -384,9 +398,9 @@ Before production checkout changes:
 
 Do not sync to a newer-than-authorized `origin/main` and do not use local merge/rebase/destructive reset.
 
-## Next deployment-related gate
+## Historical PR36/PR37 deployment-gate record
 
-Current required order is:
+This following sequence is historical and not the current required order:
 
 ```text
 1. implement PR37 narrow corrections
@@ -413,31 +427,29 @@ establish the total current strong
 pool. Source `26` remains lifecycle `candidate`, and its membership is not
 proven.
 
-Current authorization state:
+## Current authorization state
 
 ```text
 PR36_MERGED=YES
 PR36_REVIEWED_HEAD=2044c92288733b5dcc4fc6906c08bdb7bc53873f
-PR36_MERGE_COMMIT=21842ef0fbc110babecd7c8b559c987076e795b0
-GITHUB_MAIN_HEAD=21842ef0fbc110babecd7c8b559c987076e795b0
-PRODUCTION_HEAD=ab36df17334f8eff57fe475c8090a29a6ac1243c
+PRODUCTION_HEAD=b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7
 ALEMBIC_CURRENT=20260914_0043
 COOLDOWN_BACKOFF_PRODUCTION_VALIDATED=YES
 RECURRING_NOTIFICATION_SCHEDULER_IMPLEMENTED=YES
-RECURRING_NOTIFICATION_AUTOMATION_DEPLOYED=NO
-RECURRING_NOTIFICATION_AUTOMATION_AUTHORIZED=NO
-RECURRING_NOTIFICATION_TIMER_ENABLED=NO
+OWNER_NOTIFICATION_SERVICE_INSTALLED=YES
+OWNER_NOTIFICATION_SERVICE_ACTIVE=NO
+OWNER_NOTIFICATION_TIMER_INSTALLED=YES
+OWNER_NOTIFICATION_TIMER_ENABLED=NO
+OWNER_NOTIFICATION_TIMER_ACTIVE=NO
+OWNER_NOTIFICATION_NEXT_TRIGGER_PRESENT=NO
+PR38_HARDENING_INSTALLED_IN_PRODUCTION=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 PERSISTENT_RUNTIME=STOPPED
-CURRENT_GATE=PR36_POST_MERGE_CORRECTIVE_PR_REVIEW
-AFTER_PR37_MERGE_NEXT_GATE=OWNER_ACCEPTANCE_OF_ALREADY_MERGED_PR36_GITHUB_STATE
-PR36_POST_MERGE_TECHNICAL_REVIEW=PASS
-PR36_CORRECTIVE_PR_REQUIRED=YES
-PR36_PRODUCTION_SYNC_COMPLETED=NO
-ORCHESTRATION_GATE_BYPASS=YES
-PRE_MERGE_INDEPENDENT_REVIEW_OCCURRED=NO
-PRE_MERGE_OWNER_AUTHORIZATION_PROVEN=NO
-POST_MERGE_INDEPENDENT_TECHNICAL_REVIEW=PASS_WITH_2_MEDIUM_CORRECTIONS
+CURRENT_GATE=PR38_FINAL_CORRECTIVE_REREVIEW
+TIMER_REACTIVATION_AUTHORIZED=NO
+NEW_SCHEDULED_FIRE_AUTHORIZED=NO
+PRODUCTION_SYNC_OF_PR38_AUTHORIZED=NO
+PR38_MERGE_AUTHORIZED=NO
 ```
 
 PR36 defines the future recurring target as a systemd timer plus bounded
@@ -457,9 +469,8 @@ Persistent=false
 ```
 
 It considers at most 5 candidates per pass; it does not promise exactly five
-sends. It is not deployed, not enabled, and not authorized in production. Steps
-6 and later in the required order are not authorized now. No installed systemd
-timer, cron schedule, persistent runtime, or active 3-hour automation exists.
+sends. Its units are installed; the timer is disabled/inactive, service inactive,
+and PR38 hardening is not installed. No live action is authorized.
 
 Keep `relevance_class=strong`; do not lower the threshold merely to produce a
 card. No production sync, migration, Telegram, Web, AI, scheduler, recurring

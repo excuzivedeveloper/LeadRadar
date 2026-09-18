@@ -1,29 +1,29 @@
 # LeadRadar — Production Operations
 
 **Status:** CANONICAL  
-**Last verified:** 2026-09-16
-**Implementation baseline:** PR35 production sync at `ab36df17334f8eff57fe475c8090a29a6ac1243c`
-**Latest verified production evidence head:** `ab36df17334f8eff57fe475c8090a29a6ac1243c`
+**Last verified:** 2026-09-18
+**Implementation baseline:** `b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`
+**Latest verified production evidence head:** `b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`
 
 This document is the operational source of truth for the current LeadRadar production environment. Fresh exact-head server evidence outranks this document; if later evidence disagrees, stop and reconcile docs before designing a new live task.
 
-## Deployed cooldown contract
+## Historical cooldown contract and current PR38 safety state
 
-Production is at repository head
-`ab36df17334f8eff57fe475c8090a29a6ac1243c` and Alembic revision
-`20260914_0043`. PR34 deployed `owner_source_candidate_probe_state` and
-exact-binding candidate probe cooldowns. Persistent runtime and recurring
-notification automation remain unauthorized.
+Current production is at repository head
+`b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7` and Alembic `20260914_0043`.
+The service/timer are installed; service is inactive, timer disabled/inactive,
+and no next trigger is present. PR38 `RefuseManualStart=yes` is repository-only
+and not loaded in production. No daemon-reload, unit replacement, re-enable, or
+live fire is authorized.
 
-GitHub main has advanced to the already-merged PR36 commit
+Historically, GitHub main advanced to the already-merged PR36 commit
 `21842ef0fbc110babecd7c8b559c987076e795b0`
 (`PR36_REVIEWED_HEAD=2044c92288733b5dcc4fc6906c08bdb7bc53873f`), but
 production has not been synced to that state. PR36 was merged before the
 required independent-review and Owner merge-authorization gates were proven.
 Post-merge independent technical review passed the implementation as safe to
-keep on GitHub main with two medium corrections handled by PR37. Current live
-operations remain bound to production head
-`ab36df17334f8eff57fe475c8090a29a6ac1243c`.
+keep on GitHub main with corrections handled by PR37. That is historical
+context, not the current production baseline.
 
 The source-`18` production validation live-proved the stale/empty path: one
 current Owner/profile/intent/revision-bound `stale_or_empty` row was recorded
@@ -53,25 +53,29 @@ Evidence boundary:
 STALE_24H_PATH_PRODUCTION_LIVE_PROVEN=YES
 UNRESOLVABLE_ESCALATION_IMPLEMENTED_AND_TESTED=YES
 UNRESOLVABLE_ESCALATION_INDEPENDENTLY_LIVE_PROVEN=NO
-RECURRING_NOTIFICATION_AUTOMATION_AUTHORIZED=NO
-RECURRING_NOTIFICATION_AUTOMATION_DEPLOYED=NO
-RECURRING_NOTIFICATION_TIMER_ENABLED=NO
+OWNER_NOTIFICATION_SERVICE_INSTALLED=YES
+OWNER_NOTIFICATION_SERVICE_ACTIVE=NO
+OWNER_NOTIFICATION_TIMER_INSTALLED=YES
+OWNER_NOTIFICATION_TIMER_ENABLED=NO
+OWNER_NOTIFICATION_TIMER_ACTIVE=NO
+OWNER_NOTIFICATION_NEXT_TRIGGER_PRESENT=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 PERSISTENT_RUNTIME=STOPPED
-PR36_MERGED=YES
-PR36_REVIEWED_HEAD=2044c92288733b5dcc4fc6906c08bdb7bc53873f
-PR36_MERGE_COMMIT=21842ef0fbc110babecd7c8b559c987076e795b0
-GITHUB_MAIN_HEAD=21842ef0fbc110babecd7c8b559c987076e795b0
-PRODUCTION_HEAD=ab36df17334f8eff57fe475c8090a29a6ac1243c
-CURRENT_GATE=PR36_POST_MERGE_CORRECTIVE_PR_REVIEW
-AFTER_PR37_MERGE_NEXT_GATE=OWNER_ACCEPTANCE_OF_ALREADY_MERGED_PR36_GITHUB_STATE
-PR36_POST_MERGE_TECHNICAL_REVIEW=PASS
-PR36_CORRECTIVE_PR_REQUIRED=YES
-PR36_PRODUCTION_SYNC_COMPLETED=NO
-ORCHESTRATION_GATE_BYPASS=YES
-PRE_MERGE_INDEPENDENT_REVIEW_OCCURRED=NO
-PRE_MERGE_OWNER_AUTHORIZATION_PROVEN=NO
-POST_MERGE_INDEPENDENT_TECHNICAL_REVIEW=PASS_WITH_2_MEDIUM_CORRECTIONS
+HISTORICAL_PR36_MERGED=YES
+HISTORICAL_PR36_REVIEWED_HEAD=2044c92288733b5dcc4fc6906c08bdb7bc53873f
+HISTORICAL_PR36_MERGE_COMMIT=21842ef0fbc110babecd7c8b559c987076e795b0
+HISTORICAL_GITHUB_MAIN_HEAD=21842ef0fbc110babecd7c8b559c987076e795b0
+PRODUCTION_HEAD=b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7
+CURRENT_GATE=PR38_FINAL_CORRECTIVE_REREVIEW
+OWNER_NOTIFICATION_SERVICE_INSTALLED=YES
+OWNER_NOTIFICATION_SERVICE_ACTIVE=NO
+OWNER_NOTIFICATION_TIMER_INSTALLED=YES
+OWNER_NOTIFICATION_TIMER_ENABLED=NO
+OWNER_NOTIFICATION_TIMER_ACTIVE=NO
+OWNER_NOTIFICATION_NEXT_TRIGGER_PRESENT=NO
+PR38_HARDENING_INSTALLED_IN_PRODUCTION=NO
+TIMER_REACTIVATION_AUTHORIZED=NO
+PERSISTENT_RUNTIME_AUTHORIZED=NO
 ```
 
 ## 1. Production layout
@@ -85,8 +89,8 @@ python=./.venv/bin/python
 python_version=3.14.7
 bare_python=ABSENT
 alembic_current=20260914_0043
-latest_verified_production_evidence_head=ab36df17334f8eff57fe475c8090a29a6ac1243c
-implementation_base=ab36df17334f8eff57fe475c8090a29a6ac1243c
+latest_verified_production_evidence_head=b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7
+implementation_base=b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7
 ```
 
 Do not modify global Python for LeadRadar work.
@@ -807,6 +811,22 @@ Do not use local merge, rebase, destructive reset or a newer-than-authorized tar
 
 ## 18. Current rollout and authorization state
 
+The latest production evidence is
+`PRODUCTION_HEAD=b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7` and
+`ALEMBIC_CURRENT=20260914_0043`. The tracked worktree was clean and persistent
+runtime stopped. The notification service is installed/inactive; the timer is
+installed, disabled, inactive, and has no next trigger. Six manager starts and
+six manager finishes matched three-hour UTC boundaries with no manager failure.
+All proven runs were bounded to five candidates or fewer; aggregate deltas were
+zero Owner notification rows/sends, zero Web/AI/Source-Audit/source-lifecycle
+work, and zero attributable join/leave, with six attributable Telegram
+ENTITY_ACCESS/HISTORY operations. The forensic verdict remains `INCOMPLETE`
+because a direct historical timer-trigger source field is unavailable.
+
+PR38's future service artifact requires `RefuseManualStart=yes`. Do not install
+it or run `daemon-reload` without separate authorization; this repository task
+does not authorize a start, a timer enable, a live fire, or production mutation.
+
 ```text
 PR24_MERGED=YES
 PR24_PRODUCTION_SYNCED=YES
@@ -878,15 +898,21 @@ REPEAT_NOTIFICATION_AUTHORIZED=NO
 SOURCE_19_20_JOIN_PERFORMED=NO
 SOURCE_19_20_LIFECYCLE_DECISION=NONE
 CANDIDATE_NOTIFICATION_RECURRING_AUTOMATION_AUTHORIZED=NO
-RECURRING_NOTIFICATION_AUTOMATION_DEPLOYED=NO
+RECURRING_NOTIFICATION_SERVICE_INSTALLED=YES
+RECURRING_NOTIFICATION_TIMER_INSTALLED=YES
 RECURRING_NOTIFICATION_TIMER_ENABLED=NO
+RECURRING_NOTIFICATION_TIMER_ACTIVE=NO
+PR38_HARDENING_INSTALLED_IN_PRODUCTION=NO
+TIMER_REACTIVATION_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 NEW_LIVE_ACTION_AUTHORIZED=NO
 ```
 
 The successful bounded gates do not authorize a repeat or a new operation.
 
-Required next ordering:
+## Historical PR36/PR37 ordering (not current)
+
+The following ordering is retained as historical context only:
 
 ```text
 1. implement PR37 narrow corrections
@@ -903,22 +929,21 @@ Required next ordering:
 12. verify bounded pass and no persistent runtime
 ```
 
-The intended future recurring target is implemented in repository artifacts as
+The intended future recurring target was represented in repository artifacts as
 a systemd timer plus `Type=oneshot` service: every 3 hours UTC, one bounded
 pass, max 5 candidates considered per pass, current profile/current intent,
 strong only, durable at-most-once notification dedupe, durable cooldown
-suppression, and silence when no candidate is eligible. It is not deployed,
-enabled, or authorized in production. Steps 6 and later in the required order
-are not authorized now. No installed systemd timer, cron schedule, persistent
-runtime, or active 3-hour automation exists. No live command or exact
-run key is authorized by the PR36 implementation. The PR32 and PR34 bounded
-canaries must not be retried.
+suppression, and silence when no candidate is eligible. Current production has
+the service/timer installed, but service inactive and timer disabled/inactive;
+the PR38 hardened artifact is not installed. No daemon-reload, update,
+reactivation, or live fire is authorized. The PR32 and PR34 bounded canaries
+must not be retried.
 
-## 19. Future recurring notification activation contract
+## 19. PR38 staged service-update and timer-reactivation contract
 
-The following commands are documentation for a future Owner-authorized
-production activation only. Do not run them as part of PR37 correction,
-review, or post-merge acceptance.
+The service and timer units are already installed. This is a future,
+Owner-authorized PR38 rollout contract only; do not run it during corrective
+review.
 
 Expected repository unit files:
 
@@ -927,31 +952,39 @@ deploy/systemd/leadradar-owner-candidate-notifications.service
 deploy/systemd/leadradar-owner-candidate-notifications.timer
 ```
 
-Expected production unit locations after a separately authorized activation:
+Current production unit locations:
 
 ```text
 /etc/systemd/system/leadradar-owner-candidate-notifications.service
 /etc/systemd/system/leadradar-owner-candidate-notifications.timer
 ```
 
-Future activation commands:
+A. After merge and separately authorized production sync, verify the repository
+contains the PR38 service artifact.
+
+B. Read-only PRELIVE: verify the installed service is still the old production
+artifact, repository service contains `RefuseManualStart=yes`, timer remains
+installed/disabled/inactive, and service is inactive.
+
+C. After separate Owner authorization, replace only the installed service file
+from the exact repository artifact, verify exact hash/content, then run
+`systemctl daemon-reload`.
+
+D. Read-only verify loaded `RefuseManualStart=yes`, timer still
+disabled/inactive, and service inactive.
+
+E. After separate Owner authorization, run:
 
 ```bash
-install -m 0644 \
-  deploy/systemd/leadradar-owner-candidate-notifications.service \
-  /etc/systemd/system/leadradar-owner-candidate-notifications.service
-
-install -m 0644 \
-  deploy/systemd/leadradar-owner-candidate-notifications.timer \
-  /etc/systemd/system/leadradar-owner-candidate-notifications.timer
-
-systemctl daemon-reload
 systemctl enable --now leadradar-owner-candidate-notifications.timer
 ```
 
-`enable --now` starts the timer, not a manual immediate service invocation; the
-first candidate pass should occur only at the next normal `OnCalendar`
-boundary.
+`enable --now` re-enables the already-installed timer; it does not manually
+start the service. The first candidate pass must occur at the next normal
+`OnCalendar` boundary.
+
+F. Observe exactly one natural scheduled fire and verify the bounded pass with
+no persistent runtime.
 
 Future rollback/stop commands:
 
@@ -961,7 +994,7 @@ systemctl disable --now leadradar-owner-candidate-notifications.timer
 
 Disabling or removing the timer must not mutate notification/database history.
 
-Future rollout gates:
+Historical rollout gates before the current PR38 correction:
 
 ```text
 1. implement PR37 narrow corrections
