@@ -2,12 +2,43 @@
 
 **Status:** CANONICAL  
 **Snapshot date:** 2026-09-18
-**Implementation baseline:** production evidence at `b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`
-**Latest verified production evidence head:** `b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`
+**Implementation baseline:** production evidence at `f196a14b73f9955acc267787402c6f4da2008d82`
+**Latest verified production evidence head:** `f196a14b73f9955acc267787402c6f4da2008d82`
 
 ## Executive status
 
-Production is at `b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7` with Alembic
+## Post-PR38 production validation — current state
+
+```text
+PRODUCTION_HEAD=f196a14b73f9955acc267787402c6f4da2008d82
+PR38_STATE=MERGED
+PR38_MERGE_COMMIT=f196a14b73f9955acc267787402c6f4da2008d82
+PR38_PRODUCTION_SYNCED=YES
+PR38_HARDENING_INSTALLED_IN_PRODUCTION=YES
+LOADED_REFUSE_MANUAL_START=yes
+PR38_CONTROLLED_NATURAL_SCHEDULED_FIRE_PROVEN=YES
+PR38_CONTROLLED_FIRE_BOUNDARY_UTC=2026-09-18T12:00:00Z
+PR38_CONTROLLED_FIRE_START_OFFSET_SECONDS=0
+EXACTLY_ONE_INVOCATION_PROVEN=YES
+SERVICE_RESULT=success
+SERVICE_EXEC_MAIN_STATUS=0
+CANDIDATES_CONSIDERED=2
+ACTIVITY_PROBES=2
+FRESH_WITHIN_10_DAYS=0
+STALE_OR_EMPTY=2
+STALE_COOLDOWN_RECORDED=2
+SENT=0
+FAILED=0
+CURRENT_GATE=OWNER_DECISION_ON_RECURRING_TIMER_STEADY_STATE
+NEXT_PRODUCT_GATE=OWNER_DECISION_ON_RECURRING_TIMER_STEADY_STATE
+STEADY_STATE_TIMER_ENABLE_AUTHORIZED=NO
+NEW_SCHEDULED_FIRE_AUTHORIZED=NO
+```
+
+The controlled fire proves its own prospective natural schedule only; the
+historical six-run forensic verdict remains `INCOMPLETE`.
+
+Production is at `f196a14b73f9955acc267787402c6f4da2008d82` with Alembic
 `20260914_0043`, a clean tracked worktree, and no persistent freelancer bot
 process. The Owner-notification service is installed but inactive; its timer is
 installed, disabled, inactive, and has no next trigger. Future scheduled fires
@@ -23,7 +54,7 @@ ENTITY_ACCESS / HISTORY probes. No live notification send is proven by these
 six runs.
 
 ```text
-PRODUCTION_HEAD=b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7
+HISTORICAL_SIX_RUN_PRODUCTION_HEAD=b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7
 ALEMBIC_CURRENT=20260914_0043
 TRACKED_WORKTREE=CLEAN
 PERSISTENT_RUNTIME=STOPPED
@@ -178,9 +209,9 @@ The authorization is consumed and retry is forbidden. Historical source
 ## Production contract
 
 ```text
-LATEST_VERIFIED_PRODUCTION_EVIDENCE_HEAD=b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7
-PRODUCTION_HEAD=b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7
-IMPLEMENTATION_BASE=b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7
+LATEST_VERIFIED_PRODUCTION_EVIDENCE_HEAD=f196a14b73f9955acc267787402c6f4da2008d82
+PRODUCTION_HEAD=f196a14b73f9955acc267787402c6f4da2008d82
+IMPLEMENTATION_BASE=f196a14b73f9955acc267787402c6f4da2008d82
 BRANCH=main
 TRACKED_WORKTREE=CLEAN
 PYTHON_VERSION=3.14.7
@@ -195,14 +226,14 @@ OWNER_NOTIFICATION_TIMER_ENABLED=NO
 OWNER_NOTIFICATION_TIMER_ACTIVE=NO
 OWNER_NOTIFICATION_NEXT_TRIGGER_PRESENT=NO
 FUTURE_SCHEDULED_FIRES_DISABLED=YES
-PR38_STATE=OPEN
+PR38_STATE=MERGED
 PR38_REFUSE_MANUAL_START_IMPLEMENTED_IN_REPOSITORY=YES
-PR38_HARDENING_INSTALLED_IN_PRODUCTION=NO
-CURRENT_GATE=PR38_FINAL_CORRECTIVE_REREVIEW
+PR38_HARDENING_INSTALLED_IN_PRODUCTION=YES
+CURRENT_GATE=OWNER_DECISION_ON_RECURRING_TIMER_STEADY_STATE
 TIMER_REACTIVATION_AUTHORIZED=NO
 NEW_SCHEDULED_FIRE_AUTHORIZED=NO
-PRODUCTION_SYNC_OF_PR38_AUTHORIZED=NO
-PR38_MERGE_AUTHORIZED=NO
+PR38_PRODUCTION_SYNCED=YES
+LOADED_REFUSE_MANUAL_START=yes
 PROFILE_DISCOVERY_INTENT_VERSION=profile-discovery-intent.v2
 ```
 
@@ -811,8 +842,10 @@ PERSISTENT_RUNTIME_AUTHORIZED=NO
 ## Current next gate
 
 ```text
-NEXT_PRODUCT_GATE=PR38_FINAL_CORRECTIVE_REREVIEW
+NEXT_PRODUCT_GATE=OWNER_DECISION_ON_RECURRING_TIMER_STEADY_STATE
 ```
+
+The PR38 rollout below is completed historical context, not pending work:
 
 ```text
 1. independent re-review of exact new PR38 corrective head
@@ -834,9 +867,9 @@ The intended future recurring target is every 3 hours, one bounded pass, at
 most 5 candidates considered per pass, up to 5 cards if all pass, current profile/current intent, strong only,
 durable at-most-once notification dedupe, durable cooldown suppression, and
 silence when no candidate is eligible. PR36 implemented deployable repository
-systemd artifacts. The service and timer are installed, but the timer is
-disabled/inactive, the service is inactive, and the PR38 hardened service unit
-is not yet installed. No activation is authorized.
+systemd artifacts. The service and timer are installed. The PR38 hardened service unit is installed
+and loaded; the timer is disabled/inactive, the service is inactive, and no
+steady-state activation is authorized.
 
 Steps 6 and later are not authorized now. No current implementation PR
 authorizes Telegram, Owner send, lifecycle mutation, Source Audit, Web, AI,

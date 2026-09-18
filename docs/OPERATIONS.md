@@ -2,19 +2,37 @@
 
 **Status:** CANONICAL  
 **Last verified:** 2026-09-18
-**Implementation baseline:** `b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`
-**Latest verified production evidence head:** `b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`
+**Implementation baseline:** `f196a14b73f9955acc267787402c6f4da2008d82`
+**Latest verified production evidence head:** `f196a14b73f9955acc267787402c6f4da2008d82`
 
 This document is the operational source of truth for the current LeadRadar production environment. Fresh exact-head server evidence outranks this document; if later evidence disagrees, stop and reconcile docs before designing a new live task.
+
+## Post-PR38 current operational state
+
+```text
+PRODUCTION_HEAD=f196a14b73f9955acc267787402c6f4da2008d82
+PR38_HARDENING_INSTALLED_IN_PRODUCTION=YES
+LOADED_REFUSE_MANUAL_START=yes
+SERVICE_ACTIVE=NO
+TIMER_ENABLED=NO
+TIMER_ACTIVE=NO
+NEXT_TRIGGER_PRESENT=NO
+PERSISTENT_RUNTIME=STOPPED
+PR38_CONTROLLED_NATURAL_SCHEDULED_FIRE_PROVEN=YES
+PR38_CONTROLLED_FIRE_RESULT=PASS
+CURRENT_GATE=OWNER_DECISION_ON_RECURRING_TIMER_STEADY_STATE
+STEADY_STATE_TIMER_ENABLE_AUTHORIZED=NO
+```
 
 ## Historical cooldown contract and current PR38 safety state
 
 Current production is at repository head
-`b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7` and Alembic `20260914_0043`.
-The service/timer are installed; service is inactive, timer disabled/inactive,
-and no next trigger is present. PR38 `RefuseManualStart=yes` is repository-only
-and not loaded in production. No daemon-reload, unit replacement, re-enable, or
-live fire is authorized.
+`f196a14b73f9955acc267787402c6f4da2008d82` and Alembic `20260914_0043`.
+The service/timer are installed; the PR38 hardened service is loaded with
+`RefuseManualStart=yes`, service is inactive, timer disabled/inactive, and no
+next trigger is present. One controlled natural scheduled fire passed and the
+timer was disabled afterward. Steady-state timer enablement remains separately
+Owner-gated.
 
 Historically, GitHub main advanced to the already-merged PR36 commit
 `21842ef0fbc110babecd7c8b559c987076e795b0`
@@ -65,15 +83,15 @@ HISTORICAL_PR36_MERGED=YES
 HISTORICAL_PR36_REVIEWED_HEAD=2044c92288733b5dcc4fc6906c08bdb7bc53873f
 HISTORICAL_PR36_MERGE_COMMIT=21842ef0fbc110babecd7c8b559c987076e795b0
 HISTORICAL_GITHUB_MAIN_HEAD=21842ef0fbc110babecd7c8b559c987076e795b0
-PRODUCTION_HEAD=b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7
-CURRENT_GATE=PR38_FINAL_CORRECTIVE_REREVIEW
+PRODUCTION_HEAD=f196a14b73f9955acc267787402c6f4da2008d82
+CURRENT_GATE=OWNER_DECISION_ON_RECURRING_TIMER_STEADY_STATE
 OWNER_NOTIFICATION_SERVICE_INSTALLED=YES
 OWNER_NOTIFICATION_SERVICE_ACTIVE=NO
 OWNER_NOTIFICATION_TIMER_INSTALLED=YES
 OWNER_NOTIFICATION_TIMER_ENABLED=NO
 OWNER_NOTIFICATION_TIMER_ACTIVE=NO
 OWNER_NOTIFICATION_NEXT_TRIGGER_PRESENT=NO
-PR38_HARDENING_INSTALLED_IN_PRODUCTION=NO
+PR38_HARDENING_INSTALLED_IN_PRODUCTION=YES
 TIMER_REACTIVATION_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 ```
@@ -89,8 +107,8 @@ python=./.venv/bin/python
 python_version=3.14.7
 bare_python=ABSENT
 alembic_current=20260914_0043
-latest_verified_production_evidence_head=b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7
-implementation_base=b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7
+latest_verified_production_evidence_head=f196a14b73f9955acc267787402c6f4da2008d82
+implementation_base=f196a14b73f9955acc267787402c6f4da2008d82
 ```
 
 Do not modify global Python for LeadRadar work.
@@ -812,20 +830,16 @@ Do not use local merge, rebase, destructive reset or a newer-than-authorized tar
 ## 18. Current rollout and authorization state
 
 The latest production evidence is
-`PRODUCTION_HEAD=b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7` and
+`PRODUCTION_HEAD=f196a14b73f9955acc267787402c6f4da2008d82` and
 `ALEMBIC_CURRENT=20260914_0043`. The tracked worktree was clean and persistent
 runtime stopped. The notification service is installed/inactive; the timer is
-installed, disabled, inactive, and has no next trigger. Six manager starts and
-six manager finishes matched three-hour UTC boundaries with no manager failure.
-All proven runs were bounded to five candidates or fewer; aggregate deltas were
-zero Owner notification rows/sends, zero Web/AI/Source-Audit/source-lifecycle
-work, and zero attributable join/leave, with six attributable Telegram
-ENTITY_ACCESS/HISTORY operations. The forensic verdict remains `INCOMPLETE`
-because a direct historical timer-trigger source field is unavailable.
-
-PR38's future service artifact requires `RefuseManualStart=yes`. Do not install
-it or run `daemon-reload` without separate authorization; this repository task
-does not authorize a start, a timer enable, a live fire, or production mutation.
+installed, disabled, inactive, and has no next trigger. The PR38 hardened
+service is installed and loaded with `RefuseManualStart=yes`. One controlled
+natural scheduled fire passed at `2026-09-18T12:00:00Z` and the timer was
+disabled afterward. Six earlier historical invocations were bounded, but their
+direct caller provenance remains unavailable, so that historical forensic
+verdict remains `INCOMPLETE`. Steady-state timer enablement remains separately
+Owner-gated.
 
 ```text
 PR24_MERGED=YES
@@ -902,8 +916,11 @@ RECURRING_NOTIFICATION_SERVICE_INSTALLED=YES
 RECURRING_NOTIFICATION_TIMER_INSTALLED=YES
 RECURRING_NOTIFICATION_TIMER_ENABLED=NO
 RECURRING_NOTIFICATION_TIMER_ACTIVE=NO
-PR38_HARDENING_INSTALLED_IN_PRODUCTION=NO
-TIMER_REACTIVATION_AUTHORIZED=NO
+PR38_HARDENING_INSTALLED_IN_PRODUCTION=YES
+LOADED_REFUSE_MANUAL_START=yes
+PR38_CONTROLLED_NATURAL_SCHEDULED_FIRE_PROVEN=YES
+PR38_CONTROLLED_FIRE_RESULT=PASS
+STEADY_STATE_TIMER_ENABLE_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 NEW_LIVE_ACTION_AUTHORIZED=NO
 ```
@@ -929,21 +946,20 @@ The following ordering is retained as historical context only:
 12. verify bounded pass and no persistent runtime
 ```
 
-The intended future recurring target was represented in repository artifacts as
-a systemd timer plus `Type=oneshot` service: every 3 hours UTC, one bounded
-pass, max 5 candidates considered per pass, current profile/current intent,
-strong only, durable at-most-once notification dedupe, durable cooldown
-suppression, and silence when no candidate is eligible. Current production has
-the service/timer installed, but service inactive and timer disabled/inactive;
-the PR38 hardened artifact is not installed. No daemon-reload, update,
-reactivation, or live fire is authorized. The PR32 and PR34 bounded canaries
-must not be retried.
+The intended recurring target is represented by a systemd timer plus
+`Type=oneshot` service: every 3 hours UTC, one bounded pass, max 5 candidates
+considered per pass, current profile/current intent, strong only, durable
+at-most-once notification dedupe, durable cooldown suppression, and silence when
+no candidate is eligible. Current production has the service/timer installed,
+the PR38 hardened service loaded, service inactive and timer disabled/inactive.
+The one-fire validation is complete; steady-state enablement is not yet
+authorized. The PR32 and PR34 bounded canaries must not be retried.
 
-## 19. PR38 staged service-update and timer-reactivation contract
+## 19. Historical PR38 staged service-update and one-fire validation contract
 
-The service and timer units are already installed. This is a future,
-Owner-authorized PR38 rollout contract only; do not run it during corrective
-review.
+The service and timer units are already installed. The sequence below is
+completed historical rollout evidence; do not re-run it without fresh explicit
+Owner authorization.
 
 Expected repository unit files:
 

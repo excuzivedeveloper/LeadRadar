@@ -2,15 +2,38 @@
 
 **Status:** CANONICAL / ACTIVE  
 **Last verified:** 2026-09-18
-**Implementation baseline:** `b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`
-**Latest verified production evidence head:** `b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`
+**Implementation baseline:** `f196a14b73f9955acc267787402c6f4da2008d82`
+**Latest verified production evidence head:** `f196a14b73f9955acc267787402c6f4da2008d82`
 
 This file defines execution order. Implemented capability does not imply authorization to activate it.
 
 ## Current production baseline
 
+## Post-PR38 production-validation state
+
 ```text
-CURRENT_PRODUCTION_HEAD=b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7
+PRODUCTION_HEAD=f196a14b73f9955acc267787402c6f4da2008d82
+ALEMBIC_CURRENT=20260914_0043
+PR38_STATE=MERGED
+PR38_PRODUCTION_SYNCED=YES
+PR38_HARDENING_INSTALLED_IN_PRODUCTION=YES
+LOADED_REFUSE_MANUAL_START=yes
+SERVICE_INSTALLED=YES
+SERVICE_ACTIVE=NO
+TIMER_INSTALLED=YES
+TIMER_ENABLED=NO
+TIMER_ACTIVE=NO
+NEXT_TRIGGER_PRESENT=NO
+PR38_CONTROLLED_NATURAL_SCHEDULED_FIRE_PROVEN=YES
+PR38_CONTROLLED_FIRE_RESULT=PASS
+CURRENT_GATE=OWNER_DECISION_ON_RECURRING_TIMER_STEADY_STATE
+STEADY_STATE_TIMER_ENABLE_AUTHORIZED=NO
+NEW_SCHEDULED_FIRE_AUTHORIZED=NO
+PERSISTENT_RUNTIME_AUTHORIZED=NO
+```
+
+```text
+CURRENT_PRODUCTION_HEAD=f196a14b73f9955acc267787402c6f4da2008d82
 CURRENT_ALEMBIC=20260914_0043
 BRANCH=main
 TRACKED_WORKTREE=CLEAN
@@ -133,18 +156,18 @@ OWNER_NOTIFICATION_TIMER_ENABLED=NO
 OWNER_NOTIFICATION_TIMER_ACTIVE=NO
 OWNER_NOTIFICATION_NEXT_TRIGGER_PRESENT=NO
 FUTURE_SCHEDULED_FIRES_DISABLED=YES
-PR38_STATE=OPEN
+PR38_STATE=MERGED
 PR38_REFUSE_MANUAL_START_IMPLEMENTED_IN_REPOSITORY=YES
-PR38_HARDENING_INSTALLED_IN_PRODUCTION=NO
+PR38_HARDENING_INSTALLED_IN_PRODUCTION=YES
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 PERSISTENT_RUNTIME=STOPPED
 PR36_MERGED=YES
 PR36_REVIEWED_HEAD=2044c92288733b5dcc4fc6906c08bdb7bc53873f
-CURRENT_GATE=PR38_FINAL_CORRECTIVE_REREVIEW
+CURRENT_GATE=OWNER_DECISION_ON_RECURRING_TIMER_STEADY_STATE
 TIMER_REACTIVATION_AUTHORIZED=NO
 NEW_SCHEDULED_FIRE_AUTHORIZED=NO
-PRODUCTION_SYNC_OF_PR38_AUTHORIZED=NO
-PR38_MERGE_AUTHORIZED=NO
+PR38_PRODUCTION_SYNCED=YES
+LOADED_REFUSE_MANUAL_START=yes
 ```
 
 Historically, PR34 completed independent review, merge, production sync, migration, read-only
@@ -502,7 +525,7 @@ RECURRING_NOTIFICATION_SERVICE_INSTALLED=YES
 RECURRING_NOTIFICATION_TIMER_INSTALLED=YES
 RECURRING_NOTIFICATION_TIMER_ENABLED=NO
 RECURRING_NOTIFICATION_TIMER_ACTIVE=NO
-PR38_HARDENING_INSTALLED_IN_PRODUCTION=NO
+HISTORICAL_PRE_PR38_HARDENING_INSTALLED_IN_PRODUCTION=NO
 TIMER_REACTIVATION_AUTHORIZED=NO
 HISTORICAL_NEXT_GATE=OWNER_MERGE_AUTHORIZATION_FOR_PR37
 NEW_LIVE_ACTION_AUTHORIZED=NO
@@ -514,10 +537,10 @@ PRE_MERGE_OWNER_AUTHORIZATION_PROVEN=NO
 POST_MERGE_INDEPENDENT_TECHNICAL_REVIEW=PASS_WITH_2_MEDIUM_CORRECTIONS
 ```
 
-## PR38 current gate
+## Historical PR38 rollout evidence
 
-Production evidence is reconciled at
-`b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`: six bounded, successful
+At the historical pre-PR38 production checkpoint
+`b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`, six bounded, successful
 three-hour-UTC service invocations occurred while the timer was enabled, with
 zero Owner sends and no persistent runtime remaining. Historical direct timer
 trigger attribution is unavailable, so the forensic verdict remains
@@ -530,7 +553,14 @@ NEW_SCHEDULED_FIRE_AUTHORIZED=NO
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 ```
 
-## Required sequence from here
+## Completed PR38 rollout sequence
+
+The following sequence is completed historical rollout evidence, not pending work:
+
+The PR38 rollout is complete. Forward work is: independently review this
+documentation reconciliation, merge only with Owner authorization, separately
+sync documentation if authorized, then have the Owner decide whether to retain
+the disabled timer or create a new bounded steady-state activation gate.
 
 ```text
 1. independent re-review of exact new PR38 corrective head
@@ -591,6 +621,7 @@ durable cooldown suppression
 silence if nothing eligible
 ```
 
-The service and timer units are installed in production, but the timer is
-disabled/inactive and the service inactive. PR38 hardening is repository-only
-until a separately authorized unit replacement and daemon-reload.
+The service and timer units are installed in production. The PR38 hardened
+service is installed and loaded with `RefuseManualStart=yes`; the timer is
+disabled/inactive, the service is inactive, and steady-state timer enablement
+remains separately Owner-gated.

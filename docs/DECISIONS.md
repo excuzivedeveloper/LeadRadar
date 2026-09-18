@@ -7,6 +7,11 @@ These decisions explain why the current architecture and execution order look
 the way they do. Reversing one should be an explicit reviewed decision, not an
 incidental refactor.
 
+The accepted PR38 manual-start constraint does not make timer enablement
+automatic; recurring steady-state activation remains separately Owner-gated.
+It refuses explicit manual service starts while preserving indirect timer or
+dependency activation.
+
 ## D-001 — Preserve useful upstream anti-noise behavior
 
 LeadRadar is a fork/adaptation, not a clean-sheet rewrite.
@@ -209,6 +214,8 @@ outside this automation, provides explicit OS-level schedule/enable/disable
 controls, and avoids a custom scheduler loop.
 
 **Consequence:** this decision does not reverse D-009. Repository unit files are
-not production activation. Installing/enabling the timer remains a separate
-Owner-authorized production gate, and persistent LeadRadar runtime remains
+not production activation. `RefuseManualStart=yes` is required on the bounded
+notification service: explicit manual starts are refused while indirect
+timer/dependency activation remains allowed. Timer enablement remains a separate
+Owner-authorized production action, and persistent LeadRadar runtime remains
 unauthorized unless explicitly approved.

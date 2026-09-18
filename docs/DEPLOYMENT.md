@@ -2,20 +2,26 @@
 
 **Status:** CANONICAL  
 **Snapshot date:** 2026-09-18
-**Deployment code baseline:** `b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`
-**Latest verified production evidence head:** `b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`
+**Post-PR38 validation:** hardening loaded; controlled natural fire passed; timer disabled afterward.
+**Deployment code baseline:** `f196a14b73f9955acc267787402c6f4da2008d82`
+**Latest verified production evidence head:** `f196a14b73f9955acc267787402c6f4da2008d82`
 
 This document records the current shared-server LeadRadar layout and deployment boundaries. Exact operational commands live in [`OPERATIONS.md`](OPERATIONS.md). A docs-only repository head can be newer than the implementation baseline without changing deployed code behavior.
 
-Current production is `b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`, Alembic
+PR38 is merged, synced, installed, and loaded with `RefuseManualStart=yes` at
+`f196a14b73f9955acc267787402c6f4da2008d82`. Service is inactive; timer is
+installed, disabled/inactive, and has no next trigger. One controlled natural
+fire at `2026-09-18T12:00:00Z` succeeded once and the timer was disabled again.
+
+Current production is `f196a14b73f9955acc267787402c6f4da2008d82`, Alembic
 `20260914_0043`, clean and stopped outside bounded work. The Owner notification
 service is installed/inactive; the timer is installed/disabled/inactive with no
 next trigger. Six scheduled service runs completed at the three-hour UTC
 boundaries with no manager failures, no Owner send, and no persistent process.
 The historical journal lacks a direct trigger-source field, so their attribution
 remains consistent with the natural timer but not directly field-proven. PR38's
-repository service contract adds `RefuseManualStart=yes`; it is not an installed
-unit change until separately authorized.
+installed service contract includes `RefuseManualStart=yes`; steady-state timer
+enablement remains separately Owner-authorized.
 
 ## Historical PR34–PR37 context
 
@@ -36,11 +42,10 @@ timer and has already been merged on GitHub main at
 before the required independent-review and Owner merge-authorization gates were
 proven. Post-merge independent technical review passed the implementation as
 safe to keep on GitHub main with two medium corrections handled by PR37. The
-PR36/PR37 context ends here. Current production is
-`b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`: service/timer units are installed,
-the service is inactive, the timer is disabled/inactive with no next trigger,
-and PR38 hardening is not installed. No unit replacement, daemon-reload, or
-timer reactivation is currently authorized.
+PR36/PR37 context ends here. At the historical pre-PR38 checkpoint
+`b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`, the service/timer units were
+installed, the service was inactive, the timer was disabled/inactive with no
+next trigger, and PR38 hardening had not yet been installed.
 
 Current fresh evidence includes PR34 merge/sync/migration, read-only cooldown
 PRELIVE, source-`18` stale cooldown validation, bounded Web replenishment
@@ -432,7 +437,7 @@ proven.
 ```text
 PR36_MERGED=YES
 PR36_REVIEWED_HEAD=2044c92288733b5dcc4fc6906c08bdb7bc53873f
-PRODUCTION_HEAD=b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7
+PRODUCTION_HEAD=f196a14b73f9955acc267787402c6f4da2008d82
 ALEMBIC_CURRENT=20260914_0043
 COOLDOWN_BACKOFF_PRODUCTION_VALIDATED=YES
 RECURRING_NOTIFICATION_SCHEDULER_IMPLEMENTED=YES
@@ -442,14 +447,15 @@ OWNER_NOTIFICATION_TIMER_INSTALLED=YES
 OWNER_NOTIFICATION_TIMER_ENABLED=NO
 OWNER_NOTIFICATION_TIMER_ACTIVE=NO
 OWNER_NOTIFICATION_NEXT_TRIGGER_PRESENT=NO
-PR38_HARDENING_INSTALLED_IN_PRODUCTION=NO
+PR38_HARDENING_INSTALLED_IN_PRODUCTION=YES
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 PERSISTENT_RUNTIME=STOPPED
-CURRENT_GATE=PR38_FINAL_CORRECTIVE_REREVIEW
+CURRENT_GATE=OWNER_DECISION_ON_RECURRING_TIMER_STEADY_STATE
 TIMER_REACTIVATION_AUTHORIZED=NO
 NEW_SCHEDULED_FIRE_AUTHORIZED=NO
-PRODUCTION_SYNC_OF_PR38_AUTHORIZED=NO
-PR38_MERGE_AUTHORIZED=NO
+PR38_PRODUCTION_SYNCED=YES
+LOADED_REFUSE_MANUAL_START=yes
+STEADY_STATE_TIMER_ENABLE_AUTHORIZED=NO
 ```
 
 PR36 defines the future recurring target as a systemd timer plus bounded
@@ -469,8 +475,9 @@ Persistent=false
 ```
 
 It considers at most 5 candidates per pass; it does not promise exactly five
-sends. Its units are installed; the timer is disabled/inactive, service inactive,
-and PR38 hardening is not installed. No live action is authorized.
+sends. Its units are installed; the PR38 hardened service is installed and
+loaded, the timer is disabled/inactive, the service is inactive, and steady-state
+timer enablement remains unauthorized.
 
 Keep `relevance_class=strong`; do not lower the threshold merely to produce a
 card. No production sync, migration, Telegram, Web, AI, scheduler, recurring

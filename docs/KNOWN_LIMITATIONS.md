@@ -2,20 +2,26 @@
 
 **Status:** CANONICAL  
 **Last verified:** 2026-09-18
-**Implementation baseline:** production evidence at `b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`
-**Latest verified production evidence head:** `b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`
+**Implementation baseline:** production evidence at `f196a14b73f9955acc267787402c6f4da2008d82`
+**Latest verified production evidence head:** `f196a14b73f9955acc267787402c6f4da2008d82`
 
 This document distinguishes code that exists from behavior that has actually been validated in the current deployment.
 
 ## PR38 scheduler provenance boundary
+
+PR38 hardening is installed and loaded, and one controlled natural scheduled
+fire is proven. The service/timer remain installed, but service is inactive and
+timer disabled/inactive. This does not prove useful fresh Owner delivery
+(`SENT=0`) or authorize steady-state timer enablement.
 
 The six historical scheduled fires are safe and bounded by available evidence,
 but their trigger provenance remains indirect rather than direct: the journal
 does not expose a per-job natural-timer caller field. This is an observability
 gap, not evidence of a manual start or of an unsafe/failed run. PR38 adds a
 systemd-level `RefuseManualStart=yes` contract so future explicit manual starts
-are refused while indirect timer activation remains allowed. The timer remains
-disabled pending full PR38 rollout and new activation authorization.
+are refused while indirect timer activation remains allowed. The historical
+six-run forensic verdict remains `INCOMPLETE`; the new controlled fire is
+prospective evidence only.
 
 ## Completed evidence status
 
@@ -62,7 +68,7 @@ PR36_MERGED=YES
 PR36_REVIEWED_HEAD=2044c92288733b5dcc4fc6906c08bdb7bc53873f
 HISTORICAL_PR36_MERGE_COMMIT=21842ef0fbc110babecd7c8b559c987076e795b0
 HISTORICAL_GITHUB_MAIN_HEAD=21842ef0fbc110babecd7c8b559c987076e795b0
-CURRENT_PRODUCTION_HEAD=b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7
+CURRENT_PRODUCTION_HEAD=f196a14b73f9955acc267787402c6f4da2008d82
 ALEMBIC_CURRENT=20260914_0043
 BOUNDED_PROFILE_WEB_REPLENISHMENT=PASS_NEW_STRONG
 NEW_CURRENT_STRONG_CANDIDATE_SOURCE_IDS=23,24,26
@@ -86,14 +92,15 @@ OWNER_NOTIFICATION_TIMER_INSTALLED=YES
 OWNER_NOTIFICATION_TIMER_ENABLED=NO
 OWNER_NOTIFICATION_TIMER_ACTIVE=NO
 OWNER_NOTIFICATION_TIMER_NEXT_TRIGGER_PRESENT=NO
-PR38_HARDENING_INSTALLED_IN_PRODUCTION=NO
+PR38_HARDENING_INSTALLED_IN_PRODUCTION=YES
 PERSISTENT_RUNTIME_AUTHORIZED=NO
 PERSISTENT_RUNTIME=STOPPED
-CURRENT_GATE=PR38_FINAL_CORRECTIVE_REREVIEW
+CURRENT_GATE=OWNER_DECISION_ON_RECURRING_TIMER_STEADY_STATE
 TIMER_REACTIVATION_AUTHORIZED=NO
 NEW_SCHEDULED_FIRE_AUTHORIZED=NO
-PRODUCTION_SYNC_OF_PR38_AUTHORIZED=NO
-PR38_MERGE_AUTHORIZED=NO
+PR38_PRODUCTION_SYNCED=YES
+LOADED_REFUSE_MANUAL_START=yes
+STEADY_STATE_TIMER_ENABLE_AUTHORIZED=NO
 ```
 
 Historically, PR36 was merged on GitHub main at
@@ -102,9 +109,9 @@ Historically, PR36 was merged on GitHub main at
 required independent-review and Owner merge-authorization gates were proven.
 Post-merge independent technical review passed the implementation as safe to
 keep on GitHub main with corrections handled historically by PR37. That history
-does not define the current gate: service/timer units are installed, timer is
-disabled/inactive, service is inactive, and PR38 hardening remains repository-
-only pending corrective review and explicit authorization.
+does not define the current gate: service/timer units are installed, the PR38
+hardened service is loaded, the timer is disabled/inactive, the service is
+inactive, and steady-state timer enablement remains separately Owner-gated.
 
 Useful personalized opportunity delivery remains a later product limitation. The narrower fact now proven is durable delivery persistence for source-candidate cards for sources `19` and `20`; that does not establish end-to-end matched-opportunity delivery or Owner review/action.
 
@@ -118,7 +125,7 @@ Useful personalized opportunity delivery remains a later product limitation. The
 6. **P1 — Telegram account/platform limits remain external.** FloodWait, ChannelsTooMuch, membership loss, source removal/rename and access changes can interrupt collection independently of PostgreSQL correctness.
 7. **P1 — Membership drift is not automatically reconciled.** Previously approved source membership was brought to 13/13, but there is no authorized automatic join/remediation mechanism. Sources `19` and `20` were not joined by the new bounded probe.
 8. **P1 — Candidate notification automation remains unauthorized.** PR32's bounded canary proved live current-profile/current-intent strong selection and freshness suppression, but produced no reservation or Owner card. PR34 later proved source-`18` stale 24-hour cooldown and immediate selector suppression. Historical source `19`/`20` sends predate the strong-only selector, and source `26` remains a candidate despite its sent card.
-9. **P1 — Durable cooldown has a narrower remaining validation boundary.** The stale/empty 24-hour cooldown plus immediate pre-LIMIT selector suppression are production-proven for source `18`; unresolvable 6/12/24/48-hour escalation is not separately live-proven. The 3-hour/max-5 scheduler units are installed, its timer is disabled/inactive, reactivation is unauthorized, and PR38 hardening is not yet installed.
+9. **P1 — Durable cooldown has a narrower remaining validation boundary.** The stale/empty 24-hour cooldown plus immediate pre-LIMIT selector suppression are production-proven for source `18`; unresolvable 6/12/24/48-hour escalation is not separately live-proven. The 3-hour/max-5 scheduler units and PR38 hardening are installed/loaded, the timer is disabled/inactive, and steady-state enablement remains separately Owner-gated.
 10. **P1 — Legacy filter substring behavior can create false positives.** The accumulated stop-word matcher remains substring-based. It is intentionally preserved until enough shadow data supports a narrow redesign.
 11. **P1 — Current shadow sample is small.** Live path correctness is proven, but one successful natural shadow row is not enough to tune thresholds/keywords confidently.
 12. **P1 — OpenRouter model availability/cost are external.** `minimax/minimax-m3:free` availability, pricing and rate/free-tier limits can change outside the repository and must be reverified before further live validation or expanded use.
@@ -138,7 +145,7 @@ Useful personalized opportunity delivery remains a later product limitation. The
 26. **P2 — One-shot query bounds do not bound autonomous discovery.** `--max-queries` bounds an explicit operator run; persistent Web discovery remains unauthorized and separately unproven.
 27. **P2 — Successful access/freshness probes do not validate the lifecycle service.** The source `19`/`20` gate intentionally did not call `SourceValidationService`; source and validation-table hashes remained unchanged. Treat it as access/freshness evidence only.
 28. **P2 — Historical inactive collector row `1` remains persisted.** The duplicate-active anomaly is resolved and collector `2` is the sole active row. Collector `1` remains inactive for historical/FK continuity; its dependent operation-state row and historical references were intentionally preserved. This is not a blocker by itself, and its exact historical Telegram-user origin remains unproven.
-29. **P2 — Recurring scheduling remains activation-limited.** Service/timer units are installed, but timer is disabled/inactive, service is inactive, and PR38 hardening is not installed. Six historical fires were bounded; direct caller provenance was unavailable. Reactivation requires PR38 corrective review and explicit authorization.
+29. **P2 — Recurring scheduler mechanics are production-validated, but steady-state activation remains Owner-gated.** Service/timer units and PR38 hardening are installed/loaded, and one controlled natural scheduled fire passed. The timer is currently disabled/inactive and the service inactive. Six earlier historical fires were bounded but lacked direct caller provenance, so their forensic verdict remains `INCOMPLETE`. The controlled PR38 fire had `SENT=0`, so useful fresh Owner delivery is not proven by that validation.
 
 ## PR27 bounded Web evidence boundary
 
@@ -238,12 +245,12 @@ forbidden.
 
 PR34 later recorded a nonterminal source-`18` stale probe-state row and proved
 immediate pre-LIMIT selector suppression before Telegram. The scheduler units
-are already installed and produced six bounded service invocations during the
-earlier enabled interval; the timer is now disabled/inactive. PR38
-`RefuseManualStart=yes` hardening exists only in the repository artifact and is
-not installed/loaded in production. A new timer fire remains unauthorized until
-PR38 review/merge/sync, installed-service update, daemon-reload/property
-verification, and separate Owner reactivation authorization.
+are installed and produced six bounded service invocations during the earlier
+enabled interval; their historical caller provenance remains incomplete. PR38
+`RefuseManualStart=yes` hardening is now installed and loaded. One separately
+authorized controlled natural scheduled fire passed at the expected boundary,
+after which the timer was disabled again. Any steady-state timer enablement
+still requires separate Owner authorization.
 
 ## What the historical membership investigation established
 
