@@ -20,8 +20,8 @@ next trigger. Six scheduled service runs completed at the three-hour UTC
 boundaries with no manager failures, no Owner send, and no persistent process.
 The historical journal lacks a direct trigger-source field, so their attribution
 remains consistent with the natural timer but not directly field-proven. PR38's
-repository service contract adds `RefuseManualStart=yes`; it is not an installed
-unit change until separately authorized.
+installed service contract includes `RefuseManualStart=yes`; steady-state timer
+enablement remains separately Owner-authorized.
 
 ## Historical PR34–PR37 context
 
