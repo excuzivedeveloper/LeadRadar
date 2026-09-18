@@ -1,11 +1,21 @@
 # LeadRadar — Known Limitations and Validation Gaps
 
 **Status:** CANONICAL  
-**Last verified:** 2026-09-16
-**Implementation baseline:** PR35 production sync at `ab36df17334f8eff57fe475c8090a29a6ac1243c`
-**Latest verified production evidence head:** `ab36df17334f8eff57fe475c8090a29a6ac1243c`
+**Last verified:** 2026-09-18
+**Implementation baseline:** production evidence at `b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`
+**Latest verified production evidence head:** `b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`
 
 This document distinguishes code that exists from behavior that has actually been validated in the current deployment.
+
+## PR38 scheduler provenance boundary
+
+The six historical scheduled fires are safe and bounded by available evidence,
+but their trigger provenance remains indirect rather than direct: the journal
+does not expose a per-job natural-timer caller field. This is an observability
+gap, not evidence of a manual start or of an unsafe/failed run. PR38 adds a
+systemd-level `RefuseManualStart=yes` contract so future explicit manual starts
+are refused while indirect timer activation remains allowed. The timer remains
+disabled pending full PR38 rollout and new activation authorization.
 
 ## Completed evidence status
 

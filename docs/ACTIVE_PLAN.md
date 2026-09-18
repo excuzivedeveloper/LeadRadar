@@ -508,21 +508,39 @@ PRE_MERGE_OWNER_AUTHORIZATION_PROVEN=NO
 POST_MERGE_INDEPENDENT_TECHNICAL_REVIEW=PASS_WITH_2_MEDIUM_CORRECTIONS
 ```
 
+## PR38 current gate
+
+Production evidence is reconciled at
+`b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`: six bounded, successful
+three-hour-UTC service invocations occurred while the timer was enabled, with
+zero Owner sends and no persistent runtime remaining. Historical direct timer
+trigger attribution is unavailable, so the forensic verdict remains
+`INCOMPLETE`, not PASS. PR38 is the narrow repository hardening that adds
+`RefuseManualStart=yes` to eliminate future explicit manual-start ambiguity.
+
+```text
+TIMER_REACTIVATION_AUTHORIZED=NO
+NEW_SCHEDULED_FIRE_AUTHORIZED=NO
+PERSISTENT_RUNTIME_AUTHORIZED=NO
+```
+
 ## Required sequence from here
 
 ```text
-1. implement PR37 narrow corrections
-2. independent review exact PR37 head
-3. explicit OWNER merge authorization for PR37
-4. merge exact reviewed PR37 head
-5. reconcile GitHub main to exact PR37 merge commit
-6. OWNER explicitly accepts already-merged PR36 technical state plus PR37 correction
-7. separate production git sync authorization
-8. production sync only
-9. read-only PRELIVE of systemd units, paths, env-path existence and timer inactive state
-10. separate OWNER authorization for unit install, daemon-reload and timer enable
-11. observe one real scheduled timer fire
-12. verify bounded pass and no persistent runtime
+1. implement PR38
+2. independent review of exact PR38 head
+3. fix/re-review if required
+4. OWNER merge authorization
+5. merge exact reviewed PR38 head
+6. separate production sync authorization
+7. production repository sync
+8. read-only PRELIVE: compare exact installed/repository units, confirm repository `RefuseManualStart=yes`, and confirm timer disabled/inactive
+9. separate authorization to update the installed service file and run daemon-reload
+10. verify loaded service property `RefuseManualStart=yes`
+11. separate OWNER authorization to re-enable the timer
+12. observe exactly one natural scheduled fire
+13. verify bounded pass and no persistent runtime
+14. documentation reconciliation
 ```
 
 Do not retry consumed canaries. Steps 6 and later are not authorized now. PR37

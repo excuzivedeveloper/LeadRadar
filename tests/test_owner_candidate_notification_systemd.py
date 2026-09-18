@@ -52,6 +52,7 @@ class OwnerCandidateNotificationSystemdTest(unittest.TestCase):
         self.assertEqual(
             unit["Description"], "LeadRadar bounded Owner candidate notifications"
         )
+        self.assertEqual(unit["RefuseManualStart"], "yes")
         self.assertEqual(service_section["Type"], "oneshot")
         self.assertEqual(
             service_section["WorkingDirectory"], "/opt/leadradar/LeadRadar"
@@ -80,6 +81,10 @@ class OwnerCandidateNotificationSystemdTest(unittest.TestCase):
 
     def test_service_excludes_unsafe_modes(self):
         text = SERVICE_PATH.read_text(encoding="utf-8")
+        unit_values = _read_unit_values(SERVICE_PATH)["Unit"]
+        self.assertEqual(unit_values["RefuseManualStart"], ["yes"])
+        self.assertNotIn("RefuseManualStart=no", text)
+        self.assertNotIn("RefuseManualStop=yes", text)
         forbidden = (
             "--run",
             "--collector-only",

@@ -7,6 +7,13 @@ This file records operational lessons that should shape future implementation, r
 
 ## Current lessons
 
+- **Schedule alignment is not direct trigger provenance.** A recurring systemd
+  timer can prove schedule alignment without historical journal providing a
+  direct caller field for each service Start job. When provenance matters,
+  prefer enforcing it by unit contract: `RefuseManualStart=yes` denies explicit
+  user starts while preserving indirect timer/dependency activation, reducing
+  future validation ambiguity without adding application-level runtime.
+
 - **Implementation state and production repository head are separate facts.** A docs-only commit can advance repository/server `HEAD` without changing runtime behavior. The latest verified production repository head is `ab36df17334f8eff57fe475c8090a29a6ac1243c`; PR34 has been reviewed, merged, synced, migrated to `20260914_0043`, and live-validated for the stale 24-hour cooldown path.
 - **Post-merge orchestration bypasses must be recorded as facts, not smoothed over.** PR36 reached GitHub main at `21842ef0fbc110babecd7c8b559c987076e795b0` before the required pre-merge independent-review and Owner merge-authorization gates were proven. The correction is to preserve production untouched, record `ORCHESTRATION_GATE_BYPASS=YES`, independently review and merge PR37 corrections, then ask the Owner to accept the already-merged PR36 GitHub state before any separate production sync is considered.
 - **Repository scheduler artifacts are not production activation.** A committed

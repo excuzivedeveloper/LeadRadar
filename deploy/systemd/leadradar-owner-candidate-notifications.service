@@ -1,5 +1,6 @@
 [Unit]
 Description=LeadRadar bounded Owner candidate notifications
+RefuseManualStart=yes
 
 [Service]
 Type=oneshot

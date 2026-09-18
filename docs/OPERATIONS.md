@@ -807,6 +807,22 @@ Do not use local merge, rebase, destructive reset or a newer-than-authorized tar
 
 ## 18. Current rollout and authorization state
 
+The latest production evidence is
+`PRODUCTION_HEAD=b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7` and
+`ALEMBIC_CURRENT=20260914_0043`. The tracked worktree was clean and persistent
+runtime stopped. The notification service is installed/inactive; the timer is
+installed, disabled, inactive, and has no next trigger. Six manager starts and
+six manager finishes matched three-hour UTC boundaries with no manager failure.
+All proven runs were bounded to five candidates or fewer; aggregate deltas were
+zero Owner notification rows/sends, zero Web/AI/Source-Audit/source-lifecycle
+work, and zero attributable join/leave, with six attributable Telegram
+ENTITY_ACCESS/HISTORY operations. The forensic verdict remains `INCOMPLETE`
+because a direct historical timer-trigger source field is unavailable.
+
+PR38's future service artifact requires `RefuseManualStart=yes`. Do not install
+it or run `daemon-reload` without separate authorization; this repository task
+does not authorize a start, a timer enable, a live fire, or production mutation.
+
 ```text
 PR24_MERGED=YES
 PR24_PRODUCTION_SYNCED=YES

@@ -1,11 +1,21 @@
 # LeadRadar — Current Deployment
 
 **Status:** CANONICAL  
-**Snapshot date:** 2026-09-16
-**Deployment code baseline:** `ab36df17334f8eff57fe475c8090a29a6ac1243c`
-**Latest verified production evidence head:** `ab36df17334f8eff57fe475c8090a29a6ac1243c`
+**Snapshot date:** 2026-09-18
+**Deployment code baseline:** `b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`
+**Latest verified production evidence head:** `b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`
 
 This document records the current shared-server LeadRadar layout and deployment boundaries. Exact operational commands live in [`OPERATIONS.md`](OPERATIONS.md). A docs-only repository head can be newer than the implementation baseline without changing deployed code behavior.
+
+Current production is `b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`, Alembic
+`20260914_0043`, clean and stopped outside bounded work. The Owner notification
+service is installed/inactive; the timer is installed/disabled/inactive with no
+next trigger. Six scheduled service runs completed at the three-hour UTC
+boundaries with no manager failures, no Owner send, and no persistent process.
+The historical journal lacks a direct trigger-source field, so their attribution
+remains consistent with the natural timer but not directly field-proven. PR38's
+repository service contract adds `RefuseManualStart=yes`; it is not an installed
+unit change until separately authorized.
 
 PR34 deployed Alembic revision `20260914_0043` and the separate
 `owner_source_candidate_probe_state` table. The migration created no inferred

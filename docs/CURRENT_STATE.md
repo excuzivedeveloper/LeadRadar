@@ -1,11 +1,74 @@
 # LeadRadar — Current State
 
 **Status:** CANONICAL  
-**Snapshot date:** 2026-09-16
-**Implementation baseline:** PR35 production sync at `ab36df17334f8eff57fe475c8090a29a6ac1243c`
-**Latest verified production evidence head:** `ab36df17334f8eff57fe475c8090a29a6ac1243c`
+**Snapshot date:** 2026-09-18
+**Implementation baseline:** production evidence at `b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`
+**Latest verified production evidence head:** `b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7`
 
 ## Executive status
+
+Production is at `b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7` with Alembic
+`20260914_0043`, a clean tracked worktree, and no persistent freelancer bot
+process. The Owner-notification service is installed but inactive; its timer is
+installed, disabled, inactive, and has no next trigger. Future scheduled fires
+are disabled.
+
+The enabled interval produced exactly six distinct service invocations. All
+six started on the configured three-hour UTC boundaries, completed successfully
+at the systemd manager, terminated, and remained bounded to five candidates or
+fewer. They sent no Owner notification, left no persistent process, and caused
+no attributable Web discovery, AI call, Source Audit, source lifecycle change,
+or Telegram join/leave. Their attributable Telegram work was limited to six
+ENTITY_ACCESS / HISTORY probes. No live notification send is proven by these
+six runs.
+
+```text
+PRODUCTION_HEAD=b9177efdf10c9a2d0c8f191c08cc9a09d2ba0fe7
+ALEMBIC_CURRENT=20260914_0043
+TRACKED_WORKTREE=CLEAN
+PERSISTENT_RUNTIME=STOPPED
+OWNER_NOTIFICATION_SERVICE_INSTALLED=YES
+OWNER_NOTIFICATION_SERVICE_ACTIVE=NO
+OWNER_NOTIFICATION_TIMER_INSTALLED=YES
+OWNER_NOTIFICATION_TIMER_ENABLED=NO
+OWNER_NOTIFICATION_TIMER_ACTIVE=NO
+OWNER_NOTIFICATION_NEXT_TRIGGER_PRESENT=NO
+FUTURE_SCHEDULED_FIRES_DISABLED=YES
+TOTAL_DISTINCT_SERVICE_INVOCATIONS=6
+EXTRA_INVOCATIONS_OUTSIDE_SIX=0
+ALL_SIX_STARTS_MATCH_3H_UTC_BOUNDARIES=YES
+MANAGER_START_COUNT=6
+MANAGER_FINISH_COUNT=6
+MANAGER_FAILURE_COUNT=0
+ALL_SIX_SERVICE_RUNS_TERMINATED=YES
+ALL_PROVEN_RUNS_BOUNDED_TO_5=YES
+OWNER_NOTIFICATION_ROWS_DELTA=0
+OWNER_NOTIFICATION_SENT_DELTA=0
+OWNER_PROBE_STATE_NET_DELTA=2
+TELEGRAM_OPERATION_EVENTS_DELTA=6
+WEB_DISCOVERY_DELTA=0
+AI_CALL_DELTA=0
+SOURCE_AUDIT_DELTA=0
+SOURCE_LIFECYCLE_DELTA=0
+TELEGRAM_JOIN_LEAVE_DELTA=0_ATTRIBUTABLE
+CURRENT_FREELANCER_BOT_PROCESS_REMAINING=NO
+RUN_1=candidates=2, probes=2, sent=0, stale_or_empty=2
+RUN_2=candidates=1, probes=1, sent=0, stale_or_empty=1
+RUN_3=candidates=0, probes=0, sent=0, cooldown_suppressed=3
+RUN_4=candidates=0, probes=0, sent=0, cooldown_suppressed=3
+RUN_5=candidates=0, probes=0, sent=0, cooldown_suppressed=3
+RUN_6=candidates=0, probes=0, sent=0, cooldown_suppressed=3
+SIX_RUN_RUNTIME_BEHAVIOR=SAFE_AND_BOUNDED_BY_AVAILABLE_EVIDENCE
+DIRECT_HISTORICAL_TIMER_TRIGGER_SOURCE_FIELD=UNAVAILABLE
+FORENSIC_TRIGGER_ATTRIBUTION=CONSISTENT_WITH_NATURAL_TIMER_BUT_NOT_DIRECTLY_FIELD_PROVEN
+FINAL_VERDICT=INCOMPLETE
+CRITICAL_FINDINGS_COUNT=1
+CRITICAL_FINDING_1=DIRECT_NATURAL_TRIGGER_SOURCE_FIELD_UNAVAILABLE
+```
+
+PR38 adds `RefuseManualStart=yes` to the service contract so future explicit
+manual starts are refused while timer/dependency activation remains possible.
+It does not change the timer cadence or authorize a production action.
 
 PR35 left production at `ab36df17334f8eff57fe475c8090a29a6ac1243c` with
 Alembic `20260914_0043` and persistent runtime stopped.
